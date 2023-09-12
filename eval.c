@@ -218,20 +218,14 @@ static struct eval_result eval_call(struct lisp_cons *call_ast,
   return eval_apply_tco(evaled_list->car, evaled_list->cdr, result);
 }
 
-static struct eval_result try_macro_expand(struct lisp_symbol *macro_sym,
-                                           struct lisp_val args,
-                                           struct lisp_env *env) {
-  struct eval_result res = {.status = EV_SUCCESS};
-
-  const struct lisp_env_binding *binding = lisp_env_get(env, macro_sym);
-  if (binding == NULL || !binding->is_macro) {
-    return res;
-  }
-
+static struct eval_result do_macro_expand(struct lisp_val macro_fn,
+                                          struct lisp_val args,
+                                          struct lisp_env *env) {
+  struct eval_result res;
   // TODO Extracted portion of eval_apply which doesn't need to do type
-  // checking
+  // checking?
   struct lisp_val expanded_ast;
-  res.status = eval_apply(binding->value, args, &expanded_ast);
+  res.status = eval_apply(macro_fn, args, &expanded_ast);
   if (res.status == EV_EXCEPTION) {
     return res;
   }
@@ -749,63 +743,71 @@ static struct eval_result eval_special_or_call(struct lisp_val ast,
     struct lisp_symbol *head_sym = lisp_val_as_obj(call_ast->car);
     struct lisp_val args = call_ast->cdr;
 
-    // SUCCESS means no macros expanded, so continue. Otherwise, go back to eval
-    // to re-process the result (EV_TAIL_CALL) or report the error EV_EXCEPTION.
-    struct eval_result res = try_macro_expand(head_sym, args, env);
-    if (res.status != EV_SUCCESS) {
-      return res;
-    }
+    const struct lisp_env_binding *binding = lisp_env_get(env, head_sym);
+    if (binding != NULL) {
+      if (binding->is_macro) {
+        // Doesn't need result since it always returns a tail call
+        return do_macro_expand(binding->value, args, env);
+      } else {
+        // Must be a function
+        // TODO Avoid looking up the symbol again
+        return eval_call(call_ast, env, result);
+      }
+    } else {
+      struct eval_result res;
 
-    // Special forms
-    if (lisp_symbol_eq(head_sym, SYMBOL_DO)) {
-      return eval_do(args, env, result);
-    }
-    if (lisp_symbol_eq(head_sym, SYMBOL_IF)) {
-      return eval_if(args, env, result);
-    }
-    if (lisp_symbol_eq(head_sym, SYMBOL_DEF)) {
-      res.status = eval_def(args, env, result);
-      return res;
-    }
-    if (lisp_symbol_eq(head_sym, SYMBOL_DEFMACRO)) {
-      res.status = eval_defmacro(args, env, result);
-      return res;
-    }
-    if (lisp_symbol_eq(head_sym, SYMBOL_FN)) {
-      res.status = eval_fn(args, env, result);
-      return res;
-    }
+      // Check special forms
+      if (lisp_symbol_eq(head_sym, SYMBOL_DO)) {
+        return eval_do(args, env, result);
+      }
+      if (lisp_symbol_eq(head_sym, SYMBOL_IF)) {
+        return eval_if(args, env, result);
+      }
+      if (lisp_symbol_eq(head_sym, SYMBOL_DEF)) {
+        res.status = eval_def(args, env, result);
+        return res;
+      }
+      if (lisp_symbol_eq(head_sym, SYMBOL_DEFMACRO)) {
+        res.status = eval_defmacro(args, env, result);
+        return res;
+      }
+      if (lisp_symbol_eq(head_sym, SYMBOL_FN)) {
+        res.status = eval_fn(args, env, result);
+        return res;
+      }
+      if (lisp_symbol_eq(head_sym, SYMBOL_QUOTE)) {
+        res.status = eval_quote(args, result);
+        return res;
+      }
+      // Non-matching case handled by eval_call below
 
-    if (lisp_symbol_eq(head_sym, SYMBOL_QUOTE)) {
-      res.status = eval_quote(args, result);
-      return res;
-    }
+      // TODO These actually need to be functions if they are to act as they do
+      // in scheme/clojure. I.e. they take in a quoted AST
+      // TODO The semantics of these are broken anyway
+      /*
+      if (lisp_symbol_eq(head_sym, SYMBOL_MACROEXPAND_1)) {
+        res.status = eval_macro_expand_once(args, env, result);
+        return res;
+      }
+      if (lisp_symbol_eq(head_sym, SYMBOL_MACROEXPAND)) {
+        res.status = eval_macro_expand_full(args, env, result);
+        return res;
+      }
+      if (lisp_symbol_eq(head_sym, SYMBOL_MACROEXPAND_REC)) {
+        res.status = eval_macro_expand_recursive(args, env, result);
+        return res;
+      }
+      */
 
-    // TODO These actually need to be functions if they are to act as they do in
-    // scheme/clojure. I.e. they take in a quoted AST
-    // TODO The semantics of these are broken anyway
-    /*
-    if (lisp_symbol_eq(head_sym, SYMBOL_MACROEXPAND_1)) {
-      res.status = eval_macro_expand_once(args, env, result);
-      return res;
+      // Implemented in prelude
+      // if (lisp_symbol_eq(head_sym, SYMBOL_QUASIQUOTE)) {
+      //   res.status = eval_quasiquote(args, result);
+      //   return res;
+      // }
     }
-    if (lisp_symbol_eq(head_sym, SYMBOL_MACROEXPAND)) {
-      res.status = eval_macro_expand_full(args, env, result);
-      return res;
-    }
-    if (lisp_symbol_eq(head_sym, SYMBOL_MACROEXPAND_REC)) {
-      res.status = eval_macro_expand_recursive(args, env, result);
-      return res;
-    }
-    */
-
-    // Implemented in prelude
-    // if (lisp_symbol_eq(head_sym, SYMBOL_QUASIQUOTE)) {
-    //   res.status = eval_quasiquote(args, result);
-    //   return res;
-    // }
   }
 
+  // Fallback if no special form matched
   return eval_call(call_ast, env, result);
 }
 
