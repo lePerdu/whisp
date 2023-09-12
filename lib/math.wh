@@ -63,34 +63,35 @@
 
 (def! ** (generic-binary-op int** real**))
 
-(defn! (neg? x) (< x 0))
-(defn! (pos? x) (> x 0))
+(defn! (positive? x) (> x 0))
+(defn! (negative? x) (< x 0))
+(defn! (zero? x) (== x 0))
 
-(defn! (min x . xs)
-  (if (null? xs)
-    x
-    (let ((x2 (car xs)))
-      (apply min
-        (if (<= x x2) x x2)
-        (cdr xs)))))
+(defn! (minimum l)
+  (if (null? l)
+    (error "minimum: must have at least 1 element")
+    (foldl
+      (car l)
+      (fn (x y) (if (<= x y) x y)
+      (cdr l)))))
 
-(defn! (max x . xs)
-  (if (null? xs)
-    x
-    (let ((x2 (car xs)))
-      (apply max
-        (if (>= x x2) x x2)
-        (cdr xs)))))
+(defn! (maximum l)
+  (if (null? l)
+    (error "maximum: must have at least 1 element")
+    (foldl
+      (car l)
+      (fn (x y) (if (>= x y) x y)
+      (cdr l)))))
 
-(defn! (maximum l) (apply max l))
-(defn! (minimum l) (apply min l))
+(defn! (min . xs) (minimum xs))
+(defn! (max . xs) (maximum xs))
 
 (defn! (sum l) (apply + l))
 (defn! (product l) (apply * l))
 
 (defn! (square x) (* x x))
 (defn! (cube x) (* x x x))
-(defn! (abs x) (if (< x 0) (- x) x))
+(defn! (abs x) (if (negative? x) (- x) x))
 
 (defn! (average . xs) (/ (apply + xs) (count xs)))
 
@@ -99,12 +100,14 @@
 (defn! (even? x) (divides? 2 x))
 (defn! (odd? x) (not (even? x)))
 
+; TODO Negative handling?
 (defn! (gcd a b)
   (if (= b 0)
     a
     (gcd b (rem a b))))
 
 (defn! (lcm a b)
+  ; TODO Use extended GCD to find this without division?
   (int* a (int/ b (gcd a b))))
 
 (defn! (prime? n) (do
