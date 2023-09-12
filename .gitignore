@@ -1,2 +1,9 @@
 build/
 bin/
+
+# Backup files
+*~
+
+# Editor/OS config
+.vscode
+.DS_Store
