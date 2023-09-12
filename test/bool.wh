@@ -1,0 +1,135 @@
+(defgroup! bool
+  (defgroup! equal?
+    ; TODO Move somewhere else?
+
+    (deftest! integers-equal
+      (assert-equal 5 5))
+    (deftest! integers-not-equal
+      (assert-not-equal 5 4))
+    (deftest! integer-not-equal-symbol
+      (assert-not-equal 5 'five))
+
+    (deftest! reals-equal
+      (assert-equal 5.0 5.0))
+    (deftest! real-not-equal-integer
+      ; TODO Change this behavior?
+      (assert-not-equal 5 5.0))
+
+    (deftest! chars-equal
+      (assert-equal #\f #\f))
+    (deftest! char-not-equal-integer
+      ; TODO Change this behavior?
+      (assert-not-equal #\f (char->int #\f)))
+
+    (deftest! symbols-equal
+      (assert-equal 'five 'five))
+    (deftest! symbol-from-string-equal
+      (assert-equal 'five (string->symbol "five")))
+    (deftest! symbols-not-equal
+      (assert-not-equal 'five 'five5))
+    (deftest! symbol-not-equal-string
+      (assert-not-equal 'five "five"))
+
+    (deftest! strings-equal
+      (assert-equal "abc" "abc"))
+    (deftest! strings-not-equal
+      (assert-not-equal "abc" "Abc"))
+    (deftest! string-not-equal-integer
+      (assert-not-equal "5" 5))
+    (deftest! nil-not-equal-0
+      (assert-not-equal nil 0))
+    (deftest! nil-not-equal-empty-string
+      (assert-not-equal nil ""))
+
+    (deftest! nil-equals-nil
+      (assert-equal nil nil))
+
+    (deftest! cons-equal
+      (assert-equal (cons 1 'a) (cons 1 'a)))
+    (deftest! cons-not-equal
+      (assert-not-equal (cons 1 'a) (cons 'a 1)))
+    (deftest! nested-cons-equal
+      (assert-equal
+        (cons (cons 1 (cons (cons 'b 0) 3)) 'a)
+        (cons (cons 1 (cons (cons 'b 0) 3)) 'a)))
+    (deftest! nested-cons-not-equal
+      (assert-not-equal
+        (cons (cons 1 (cons (cons 'b 0) 3)) 'a)
+        (cons (cons 1 (cons (cons 'c 0) 3)) 'a)))
+
+    (deftest! builtin-equal
+      (assert-equal car car))
+    (deftest! function-equal
+      ; TODO Ensure this is an actual function
+      (assert-equal map map))
+    (deftest! function-equal-with-different-name
+      (def! map-alias map)
+      (assert-equal map map-alias))
+
+    (deftest! atom-equal-self
+      (def! a (atom 4))
+      (assert-equal a a))
+    (deftest! atom-equal-self-with-alias
+      (def! a (atom 4))
+      (def! b a)
+      (assert-equal a b))
+    (deftest! atom-equal-self-with-alias-after-modification
+      (def! a (atom 4))
+      (def! b a)
+      (reset! b 5)
+      (assert-equal a b))
+    (deftest! atom-not-equal-another-atom
+      ; TODO Change this behavior?
+      (def! a (atom 4))
+      (def! b (atom 4))
+      (assert-not-equal a b)))
+
+  (defgroup! and
+    (deftest! empty-returns-true
+      (assert (and)))
+    (deftest! single-true-is-true
+      (assert (and true)))
+    (deftest! single-false-is-false
+      (assert (not (and false))))
+    (deftest! any-false-is-false
+      (assert (not (and true true false true))))
+    (deftest! short-circuits-on-false
+      (assert (not (and true false (error "and does not short-circuit"))))))
+
+  (defgroup! or
+    (deftest! empty-returns-false
+      (assert (not (or))))
+    (deftest! single-true-is-true
+      (assert (or true)))
+    (deftest! single-false-is-false
+      (assert (not (or false))))
+    (deftest! any-true-is-true
+      (assert (or false false true false)))
+    (deftest! short-circuits-on-true
+      (assert (or false true (error "does not short-circuit")))))
+
+  (defgroup! xor
+    (deftest! empty-returns-false
+      (assert (not (xor))))
+    (deftest! single-true-is-true
+      (assert (xor true)))
+    (deftest! single-false-is-false
+      (assert (not (xor false))))
+    (deftest! exactly-1-true-is-true
+      (assert (xor false true false false)))
+    (deftest! more-than-1-true-is-false
+      (assert (not (xor false true true false))))
+    (deftest! short-circuits-on-second-true
+      (assert (not (xor false true true (error "does not short-circuits"))))))
+
+  (defgroup! cond
+    (deftest! empty-returns-nil
+      (assert= nil (cond)))
+    (deftest! returns-nil-if-none-matching
+      (assert= nil (cond (false 1))))
+    (deftest! returns-first-matching
+      (assert= 1 (cond (true 1) (true 2))))
+    (deftest! returns-else-if-none-matching
+      (assert= 3 (cond (false 1) (false 2) (else 3))))
+    (deftest! short-circuits-on-matching
+      (assert= 1 (cond (true 1) (true (error "does not short-circuit")))))))

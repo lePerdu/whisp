@@ -1,0 +1,95 @@
+; TODO Support splice-unquote
+; TODO Implement as builtin (better perf, plus it may actually be easier since
+; mutations are possible)
+
+; Easy way to comment out a bunch of expressions
+; It does still have to return a value, so has to be used at top-level or in a
+; do block
+(defsyntax! (comment . ignore) nil)
+
+(defsyntax! (let bindings ast)
+  ; TODO Check structure
+  (cons
+    (list 'fn (map car bindings) ast)
+    (map cadr bindings)))
+
+; TODO Proper, native support for this
+(def! gensym
+  (let ((counter (atom 0)))
+    (fn ()
+      (string->symbol
+        (string-concat
+          "__gensym__"
+          (->string (swap! counter inc)))))))
+
+(defsyntax! (quasiquote ast) (do
+  (defn! (qq ast)
+    (if (cons? ast)
+      (let ((first (car ast)) (rest (cdr ast)))
+        (if (list? rest)
+          ; Proper list, check for unquote form
+          (if (= first 'unquote)
+            (if (null? (cdr rest))
+              (car rest)
+              (error "unquote: too many arguments"))
+            (qq-cons first rest))
+          (qq-cons first rest)))
+      (list 'quote ast)))
+
+  ; Structurally recurse into cons cell
+  (defn! (qq-cons first rest)
+    (list 'cons (qq first) (qq rest)))
+
+  (qq ast)))
+
+(defsyntax! (let* bindings ast)
+  (do
+    (defn! (helper bindings ast)
+      (if (null? bindings)
+        ast
+        `(let (~(car bindings))
+          ~(helper (cdr bindings) ast))))
+    (if (null? bindings)
+      ; Special case for no bindings so that it still generates a new scope
+      `(fn () ~ast)
+      (helper bindings ast))))
+
+; Version of let which extracts values from a cons cell
+; TODO Allow more than 1 pattern
+; TODO Allow nested / more complex patterns
+; (let-cons ((first . rest) (list 1 2 3)) expr) -> first=1, rest=(list 2 3)
+(defsyntax! (let-cons binding body)
+  ; TODO Check structure
+  (let
+    ((bind-pair (car binding))
+     (cons-sym (gensym)))
+    `(let
+      ((~cons-sym ~(cadr binding)))
+      (let
+       ((~(car bind-pair) (car ~cons-sym))
+        (~(cdr bind-pair) (cdr ~cons-sym)))
+       ~body))))
+
+; TODO Move these?
+
+; Light syntax over with-exception-handler
+(defsyntax! (guard binding body)
+  ; TODO Check structure
+  `(with-exception-handler
+    ; TODO Use generated symbols to extract sub-expressions
+    (fn (~(car binding)) ~(cadr binding))
+    (fn () ~body)))
+
+; Combination of guard and cond to easily match on an error
+; TODO Make this the only guard (like in scheme)
+(defsyntax! (guard-cond conditions body)
+  (let-cons ((binding . branches) conditions)
+    `(guard
+      (~binding
+        ~(cons 'cond
+          ; Include re-raise clause if none of the branches match
+          (concat branches `((else (raise ~binding))))))
+      ~body)))
+
+; TODO Make error wrap the value somehow
+(def! error raise)

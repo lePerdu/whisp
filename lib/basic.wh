@@ -1,0 +1,54 @@
+(def! list (fn args args))
+
+(defmacro! defsyntax!
+  (fn (pattern body)
+    (list 'defmacro! (car pattern)
+      (list 'fn (cdr pattern) body))))
+
+(defsyntax! (defn! pattern body)
+  (list 'def! (car pattern)
+    (list 'fn (cdr pattern) body)))
+
+(defn! (inc x) (int+ x 1))
+(defn! (dec x) (int- x 1))
+
+; TODO Generate these with a macro
+(defn! (cadr lst) (car (cdr lst)))
+(defn! (cdar lst) (cdr (car lst)))
+(defn! (caar lst) (car (car lst)))
+(defn! (cddr lst) (cdr (cdr lst)))
+(defn! (caddr lst) (car (cddr lst)))
+
+(defn! (list? l)
+  (if (cons? l)
+    (list? (cdr l))
+    (null? l)))
+
+(defn! (foldl init f l)
+  (if (null? l)
+    init
+    (foldl (f init (car l)) f (cdr l))))
+
+(defn! (foldr init f l)
+  (if (null? l)
+    init
+    (f (car l) (foldr init f (cdr l)))))
+
+(defn! (count l)
+  (foldl 0 (fn (acc _) (int+ acc 1)) l))
+
+(defn! (map f l)
+  ; Using foldr makes map run in reverse order. That's not inherently wrong
+  ; (the function shouldn't be stateful), but could be unexpected.
+  (if (null? l)
+    nil
+    (cons (f (car l)) (map f (cdr l)))))
+
+; Variadic concat
+(defn! (concat . lists)
+  ; Use foldr since it keeps prepending shorter lists instead of longer lists
+  (foldr nil (fn (l acc) (foldr acc cons l)) lists))
+
+(defn! (concat-map f l)
+  ; TODO Avoid foldr since it runs the map in reverse?
+  (foldr nil (fn (x acc) (concat (f x) acc)) l))

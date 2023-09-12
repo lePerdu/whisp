@@ -1,0 +1,91 @@
+(defgroup! string
+  (defgroup! int->string
+    (deftest! positive
+      (assert-equal "14" (->string 14)))
+    (deftest! negative
+      (assert-equal "-54" (->string -54))))
+
+  (defgroup! real->string
+    (deftest! integral-positive
+      (assert-equal "14.0" (->string 14.0)))
+    (deftest! integral-negative
+      (assert-equal "-54.0" (->string -54.0)))
+    (deftest! fractional
+      (assert-equal "-5.74" (->string -5.74)))
+    (deftest! very-small
+      (assert-equal "5.74e-05" (->string (real/ 5.74 100000.0))))
+    (deftest! very-large
+      (assert-equal "5.74e+16" (->string (real* 5.74 1e16))))
+    (deftest! very-large-negative
+      (assert-equal "-5.74e+16" (->string (real* -5.74 1e16)))))
+
+  (defgroup! string-count
+    (deftest! empty-string
+      (assert= 0 (string-count "")))
+    (deftest! non-empty-string
+      (assert= 6 (string-count "abcdef")))
+    (deftest! null-bytes-counted
+      (assert= 8 (string-count "ab\0cd\0ef"))))
+
+  (defgroup! string-get
+    (deftest! empty-string-always-error
+      (assert-error (string-get "" 0)))
+    (deftest! first-is-index-0
+      (assert-equal #\a (string-get "abcdef" 0)))
+    (deftest! last-is-n-minus-1
+      (assert-equal #\f (string-get "abcdef" 5)))
+    (deftest! error-for-negative
+      (assert-error (string-get "abcdef" -1)))
+    (deftest! error-for-oob
+      (assert-error (string-get "abcdef" 6)))
+    (deftest! error-for-real-index
+      (assert-error (string-get "abcdef" 3.0))))
+
+  (defgroup! string-concat
+    (deftest! no-args-is-empty-string
+      (assert-equal "" (string-concat)))
+    (deftest! many-args-with-specials-and-empties
+      (assert-equal
+        "abc 123\nlong-string-at-end"
+        (string-concat "ab" "c 12" "" "3" "\n" "long-string-at-end"))))
+
+  (defgroup! char->string
+    (deftest! simple-char
+      (assert-equal "a" (char->string #\a)))
+    (deftest! null-byte
+      (assert-equal "\0" (char->string #\null)))
+    (deftest! newline
+      (assert-equal "\n" (char->string #\newline)))
+    (deftest! newline
+      (assert-equal "\n" (char->string #\newline))))
+
+  (defgroup! string->list
+    (deftest! empty-string-is-empty-list
+      (assert= nil (string->list "")))
+    (deftest! in-correct-order
+     (assert-equal (list #\a #\b #\c) (string->list "abc")))
+    (deftest! string-with-null-is-not-empty-list
+      (assert-equal (list #\null) (string->list "\0"))))
+
+  (defgroup! list->string
+    (deftest! empty-string-is-empty-list
+      (assert-equal "" (list->string nil)))
+    (deftest! in-correct-order
+     (assert-equal "abc" (list->string (list #\a #\b #\c))))
+    (deftest! error-if-list-contains-non-char
+      (assert-error (list->string (list #\a #\b 56)))))
+
+  (defgroup! substring
+    (deftest! no-bounds-is-copy
+      (assert-equal "abc" (substring "abc")))
+    (deftest! single-bound-copies-til-end
+      (assert-equal "bc" (substring "abc" 1)))
+    (deftest! full-bounds-is-copy
+      (assert-equal "abc" (substring "abc" 0 3)))
+    (deftest! extract-middle
+      (assert-equal "cde" (substring "abcdef" 2 5)))
+    (deftest! start=end-is-empty-string
+      (assert-equal "" (substring "abcdef" 2 2))
+      (assert-equal "" (substring "abcdef" 0 0)))
+    (deftest! start=end+1-is-singleton
+      (assert-equal "c" (substring "abcdef" 2 3)))))

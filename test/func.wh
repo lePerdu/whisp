@@ -1,0 +1,91 @@
+(defgroup! function
+  ; Environment-related function tests are in env.wh
+
+  (defgroup! fn-syntax
+    (deftest! no-args
+      (assert= 1 ((fn () 1))))
+    (deftest! no-args-with-nil
+      (assert= 1 ((fn nil 1))))
+    (deftest! variadic-with-requied-args
+      (assert-equal (list 2 3) ((fn (a . rest) rest) 1 2 3)))
+    (deftest! variadic-without-requied-args
+      (assert-equal (list 1 2 3) ((fn all-args all-args) 1 2 3)))
+    (deftest! rejects-non-symbol-param
+      ; Wrap in eval so the test compiles
+      (assert-error (eval '(fn (a 1) a)))
+      (assert-error (eval '(fn (a (b c)) a)))
+      (assert-error (eval '(fn (a . 1) a)))))
+
+  (defgroup! variadic-fn
+    (deftest! accepts-0-args
+      (defn! (f . args) (count args))
+      (assert= 0 (f)))
+    (deftest! accepts-multiple-args
+      (defn! (f . args) (count args))
+      (assert= 4 (f 'a 2 (list 90 91) "123")))
+    (deftest! requires-non-variadic-args
+      (defn! (f a b . rest) (+ a b (count rest)))
+      (assert-error (f 1)))
+    (deftest! accepts-0-args-after-required
+      (defn! (f a b . rest) (+ a b (count rest)))
+      (assert= 3 (f 1 2)))
+    (deftest! accepts-multple-args-after-required
+      (defn! (f a b . rest) (+ a b (count rest)))
+      (assert= 6 (f 1 2 'a (list 90 91) "123"))))
+
+  (defsyntax! (def-apply-tests! group-name apply-fn)
+    `(defgroup! ~group-name
+      (deftest! apply-no-args
+        (defn! (f) 2)
+        (assert= 2 (~apply-fn f nil)))
+      (deftest! apply-1-arg
+        (defn! (f x) (+ x 2))
+        (assert= 3 (~apply-fn f (list 1))))
+      (deftest! apply-to-variadic-function
+        (defn! (f x . rest) (cons rest x))
+        (assert-equal (cons (list 2 3) 1) (~apply-fn f (list 1 2 3))))
+      (deftest! apply-too-few-args
+       (defn! (f x y) (+ x y))
+       (assert-error (~apply-fn f (list 1))))
+      (deftest! apply-too-many-args
+       (defn! (f x) (+ x 2))
+       (assert-error (~apply-fn f (list 1 2))))))
+
+  (def-apply-tests! apply apply)
+
+  (defgroup! apply*
+    (def-apply-tests! works-like-apply-with-1-arg apply*)
+
+    (deftest! apply-1-arg-and-empty-list
+      (defn! (f x) (+ x 2))
+      (assert= 3 (apply* f 1 nil)))
+    (deftest! apply-1-arg-and-singleton-list
+      (defn! (f x y) (+ x y))
+      (assert= 3 (apply* f 1 (list 2))))
+    (deftest! apply-2-args-and-empty-list
+      (defn! (f x y) (+ x y))
+      (assert= 3 (apply* f 1 2 nil)))
+    (deftest! apply-too-many-total-args
+      (defn! (f x y) (+ x y))
+      (assert-error (apply* f 1 (list 2 3)))))
+
+  (defgroup! compose
+    (deftest! no-functions-is-identity
+      (assert= 'x ((compose) 'x))
+      (assert-equal (cons 1 2) ((compose) (cons 1 2))))
+    (deftest! functions-applied-from-right-to-left
+      (def! f
+        (compose (fn (x) (* x 2)) (fn (x) (+ x 1))))
+      (assert= 6 (f 2))))
+
+  (defgroup! pipe
+    (deftest! no-functions-is-identity
+      (assert= 'x (pipe 'x))
+      (assert-equal (cons 1 2) (pipe (cons 1 2))))
+    (deftest! functions-applied-from-left-to-right
+      (assert=
+        5
+        (pipe
+          2
+          (fn (x) (* x 2))
+          (fn (x) (+ x 1)))))))

@@ -1,0 +1,148 @@
+(defn! (number? x) (or (int? x) (real? x)))
+
+(defn! (generic-binary-op int-op real-op)
+  (fn (x y)
+    (if (and (int? x) (int? y))
+      (int-op x y)
+      (real-op (real x) (real y)))))
+
+(defn! (generic-nary-op init int-op real-op)
+  (fn args
+    (foldl init (generic-binary-op int-op real-op) args)))
+
+(def! + (generic-nary-op 0 int+ real+))
+(def! * (generic-nary-op 1 int* real*))
+
+; Special handling for sub and div since they double as unary operators
+(defn! (generic-unary-or-nary-op init int-op real-op)
+  (let ((binary-op (generic-binary-op int-op real-op)))
+    (fn (first . rest)
+      (if (null? rest)
+        (binary-op init first)
+        (foldl first binary-op rest)))))
+
+(def! - (generic-unary-or-nary-op 0 int- real-))
+(def! / (generic-unary-or-nary-op 1 int/ real/))
+
+(defn! (compare-seq compare first rest)
+  (cond
+    ((null? rest) true)
+    ((compare first (car rest)) (compare-seq compare (car rest) (cdr rest)))
+    (else false)))
+
+(defn! (generic-nary-compare int-op real-op)
+  (let
+    ((binary-compare (generic-binary-op int-op real-op)))
+    (fn args
+      (or (null? args) (compare-seq binary-compare (car args) (cdr args))))))
+
+; TODO Define as primitive
+; TODO Define for reals as well?
+; TODO Negative handling?
+(defn! (rem x y) (int- x (int* (int/ x y) y)))
+
+(def! < (generic-nary-compare int< real<))
+(def! <= (generic-nary-compare int<= real<=))
+(def! > (generic-nary-compare int> real>))
+(def! >= (generic-nary-compare int>= real>=))
+(def! == (generic-nary-compare int= real=))
+
+(defn! (compare-num a b)
+  (cond
+    ((< a b) 'lt)
+    ((> a b) 'gt)
+    (else 'eq)))
+
+(defn! (int** b n) (do
+  (defn! (iter a b n)
+    (cond
+      ((= n 0) a)
+      ((even? n) (iter a (square b) (int/ n 2)))
+      (else (iter (int* a b) b (int- n 1)))))
+  (iter 1 b n)))
+
+(def! ** (generic-binary-op int** real**))
+
+(defn! (neg? x) (< x 0))
+(defn! (pos? x) (> x 0))
+
+(defn! (min x . xs)
+  (if (null? xs)
+    x
+    (let ((x2 (car xs)))
+      (apply min
+        (if (<= x x2) x x2)
+        (cdr xs)))))
+
+(defn! (max x . xs)
+  (if (null? xs)
+    x
+    (let ((x2 (car xs)))
+      (apply max
+        (if (>= x x2) x x2)
+        (cdr xs)))))
+
+(defn! (maximum l) (apply max l))
+(defn! (minimum l) (apply min l))
+
+(defn! (sum l) (apply + l))
+(defn! (product l) (apply * l))
+
+(defn! (square x) (* x x))
+(defn! (cube x) (* x x x))
+(defn! (abs x) (if (< x 0) (- x) x))
+
+(defn! (average . xs) (/ (apply + xs) (count xs)))
+
+(defn! (divides? a b) (= (rem b a) 0))
+
+(defn! (even? x) (divides? 2 x))
+(defn! (odd? x) (not (even? x)))
+
+(defn! (gcd a b)
+  (if (= b 0)
+    a
+    (gcd b (rem a b))))
+
+(defn! (lcm a b)
+  (int* a (int/ b (gcd a b))))
+
+(defn! (prime? n) (do
+  (defn! (find-divisor test)
+    (cond
+      ((int> (square test) n) n)
+      ((divides? test n) test)
+      (else (find-divisor (inc test)))))
+  (= n (find-divisor 2))))
+
+(defn! (factorial n) (do
+  (defn! (fact-iter acc n)
+    (if (int= n 0)
+      acc
+      (fact-iter (int* acc n) (int- n 1))))
+  (fact-iter 1 n)))
+
+(defn! (fib n) (do
+  (defn! (fib-iter a b n)
+    (if (= n 0)
+      b
+      (fib-iter (int+ a b) a (int- n 1))))
+  (fib-iter 0 1 n)))
+
+; Epsilon value for floating-point functions
+(def! *epsilon* 1e-9)
+
+(defn! (sqrt x) (do
+  (defn! (good-enough? guess)
+    (let ((g2 (square guess)))
+      (< (abs (/ (- g2 x) g2)) *epsilon*)))
+  (defn! (improve guess) (/ (+ guess (/ x guess)) 2.0))
+  (defn! (sqrt-iter guess)
+    (if (good-enough? guess)
+      guess
+      (sqrt-iter (improve guess))))
+  (if (< x 0)
+    (error "sqrt: cannot be negative")
+    (sqrt-iter (real x)))))
+
+(load-file "lib/ratio.wh")

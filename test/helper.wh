@@ -1,0 +1,98 @@
+(def! *all-tests* (atom nil))
+(def! *test-group-prefix* "")
+
+(defn! (make-test-entry name func)
+  (cons name func))
+
+(def! test-entry-name car)
+(def! test-entry-func cdr)
+
+(defsyntax! (deftest! name . body)
+  (let ((label (->string name)))
+    `(swap! *all-tests*
+      (fn (all-tests)
+        (cons
+          (make-test-entry
+            (string-concat *test-group-prefix* ~label)
+            (fn () ~(cons 'do body)))
+          all-tests)))))
+
+(defsyntax! (defgroup! name . body)
+  (let ((label (->string name)))
+    `(let
+      ((*test-group-prefix*
+        (string-concat *test-group-prefix* ~label " > ")))
+      ~(cons 'do body))))
+
+;; Run a test, returning any error encountered, or nil on success
+(defn! (run-test test)
+  (do
+    (print "RUNNING" (test-entry-name test))
+    (print " ... ")
+    (flush)
+    (guard
+      (err (do (println "FAIL") err))
+      (do
+        ((test-entry-func test))
+        (println "PASS")))))
+
+(defn! (run-all-tests)
+  (let*
+    ((tests-in-order (reverse @*all-tests*))
+     (tests-with-results
+      (map (fn (t) (cons t (run-test t))) tests-in-order))
+     (failing-tests-with-results
+      (filter (fn (res) (not (null? (cdr res)))) tests-with-results))
+     (total-count (count tests-with-results))
+     (fail-count (count failing-tests-with-results))
+     (pass-count (- total-count fail-count)))
+    (do
+      ; TODO Clear out tests?
+      (newline)
+      (println "TESTS RAN:" total-count)
+      (println "PASSED:" pass-count)
+      (println "FAILED:" fail-count)
+      (if (null? failing-tests-with-results)
+        (println "ALL TESTS PASSED!")
+        (do
+          (println "FAILING TESTS:")
+          (for-each
+            (fn (failed-tests)
+              (let-cons ((test . err) failed-tests)
+                (do
+                  (println (test-entry-name test) ":")
+                  (write err)
+                  (println))))
+            failing-tests-with-results)
+          (error 'test-suite-failed))))))
+
+; Assertion helpers
+
+(defn! (assert-make-error expr metadata)
+  (error (concat (list 'assert-failed expr) metadata)))
+
+(defsyntax! (assert expr . extra)
+  `(if (not ~expr)
+    (assert-make-error '~expr ~(cons 'list extra))))
+
+(defsyntax! (assert= expected actual)
+  `(assert (= ~expected ~actual) 'expected ~expected 'got ~actual))
+
+(defsyntax! (assert-not= expected actual)
+  `(assert (not (= ~expected ~actual)) 'expected-not ~expected))
+
+(defsyntax! (assert== expected actual)
+  `(assert (== ~expected ~actual) 'expected ~expected 'got ~actual))
+
+(defsyntax! (assert-not== expected actual)
+  `(assert (not (== ~expected ~actual)) 'expected-not ~expected))
+
+(defsyntax! (assert-not-equal expected actual)
+  `(assert (not (equal? ~expected ~actual)) 'expected-not ~expected))
+
+(defsyntax! (assert-equal expected actual)
+  `(assert (equal? ~expected ~actual) 'expected ~expected 'got ~actual))
+
+(defsyntax! (assert-error expr)
+  `(if (guard (err false) (do ~expr true))
+    (assert-make-error '~expr (list 'expected-error))))

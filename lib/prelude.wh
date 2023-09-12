@@ -1,0 +1,9 @@
+; Define easier ways to define things
+
+(load-file "lib/basic.wh")
+(load-file "lib/macros.wh")
+(load-file "lib/bool.wh")
+(load-file "lib/list.wh")
+(load-file "lib/func.wh")
+(load-file "lib/math.wh")
+(load-file "lib/string.wh")

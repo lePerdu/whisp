@@ -1,0 +1,112 @@
+; Variadic cons:
+; (list* 1 2 (list 3 4)) -> (1 2 3 4)
+; (list* 1 2 3) -> (1 2 . 3)
+; (list* 3) -> 3
+(defn! (list* first . rest)
+  (if (null? rest)
+    first
+    (cons first (apply list* rest))))
+
+(defn! (nth index lst)
+  (if (= index 0)
+    (car lst)
+    (nth (int- index 1) (cdr lst))))
+
+(defn! (reverse lst)
+  (foldl nil (fn (acc x) (cons x acc)) lst))
+
+(defn! (for-each f l)
+  (if (null? l)
+    nil
+    (do
+      (f (car l))
+      (for-each f (cdr l)))))
+
+(defn! (filter p l)
+  (if (null? l)
+    nil
+    (let ((first (car l)) (rest-filtered (filter p (cdr l))))
+      (if (p first) (cons first rest-filtered) rest-filtered))))
+
+(defn! (find p l)
+  (if (null? l)
+    ; TODO Throw error instead of returning nil?
+    nil
+    (let ((first (car l)))
+      (if (p first) first (find p (cdr l))))))
+
+;; Like find, but using buitin equality checking
+;; TODO Use equal?
+(defn! (contains x l)
+  ; Can't use find because there wouldn't be a way to distinguish between nil
+  ; and not found
+  (if (null? l)
+    false
+    (or (= first (car l)) (contains x (cdr l)))))
+
+;; TODO Use equal?
+(defn! (remove x l)
+  (filter (fn (item) (not (= x item))) l))
+
+(defn! (take n l)
+  (if (or (= n 0) (null? l))
+    nil
+    (cons (car l) (take (int- n 1) (cdr l)))))
+
+(defn! (drop n l)
+  (if (or (= n 0) (null? l))
+    l
+    (drop (int- n 1) (cdr l))))
+
+; TODO Return a pair or a 2-element list?
+; It would be more efficient, but less clear
+(defn! (split-at n l)
+  (cond
+    ((= n 0) (cons nil l))
+    ((null? l) (cons nil nil))
+    (else
+      (let ((split (split-at (int- n 1) (cdr l))))
+        (cons
+          (cons (car l) (car split))
+          (cdr split))))))
+
+(defn! (repeat x n)
+  (if (= n 0)
+    nil
+    (cons x (repeat x (int- n 1)))))
+
+(defn! (assq key l)
+  (cond
+    ((null? l) nil)
+    ((= key (caar l)) (car l))
+    (else (assq key (cdr l)))))
+
+(defn! (assoc key l)
+  (cond
+    ((null? l) nil)
+    ((equal? key (caar l)) (car l))
+    (else (assoc key (cdr l)))))
+
+(defn! (merge compare a b)
+  (cond
+    ((null? a) b)
+    ((null? b) a)
+    (else
+      (let
+        ((next-a (car a)) (next-b (car b)))
+        (if (= (compare next-a next-b) 'gt)
+          (cons next-b (merge compare a (cdr b)))
+          (cons next-a (merge compare (cdr a) b)))))))
+
+; Sort using a compare function that returns 'lt, 'gt, or 'eq
+(defn! (sort compare l)
+  (let
+    ((mid (int/ (count l) 2)))
+    (if (= mid 0)
+      l
+      (let*
+        ((halves (split-at mid l))
+         (left (car halves))
+         (right (cdr halves)))
+        (merge compare (sort compare left) (sort compare right))))))
+

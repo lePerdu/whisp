@@ -1,0 +1,77 @@
+(defgroup! atom
+  (deftest! atom?
+    (assert (atom? (atom 5))))
+
+  (deftest! atom?-for-non-atom
+    (assert (not (atom? 'x))))
+
+  (deftest! deref-function
+    (def! a (atom 'x))
+    (assert= 'x (deref a)))
+
+  (deftest! deref-@-syntax
+    (def! a (atom 'x))
+    (assert= 'x @a))
+
+  (deftest! deref-same-value-with-multiple-calls
+    (def! a (atom 'x))
+    (assert= @a @a))
+
+  (deftest! deref-changes-after-reset
+    (def! a (atom 'x))
+    (def! first @a)
+    (reset! a 'y)
+    (def! second @a)
+    (assert= 'x first)
+    (assert= 'y second))
+
+  (deftest! same-value-with-alias
+    (def! a (atom 'x))
+    (def! b a)
+    (reset! a 'y)
+    (assert= 'y @a)
+    (assert= 'y @b))
+
+  (deftest! not-same-value-with-copy
+    (def! a (atom 'x))
+    (def! b (atom 'x))
+    (reset! a 'y)
+    (assert= 'y @a)
+    (assert= 'x @b))
+
+  (deftest! reset-returns-new-value
+    (def! a (atom nil))
+    ; Use an object to ensure it is identically equal
+    (def! v (cons 1 2))
+    (assert= v (reset! a v))
+    (assert= v @a))
+
+  (deftest! atom-containing-atom
+    ; Assign through aliases
+    (def! outer (atom (atom 5)))
+    (def! inner @outer)
+
+    (assert= 5 @@outer)
+    (reset! inner 6)
+    (assert= 6 @@outer)
+    (reset! outer (atom 7))
+    (assert= 7 @@outer)
+
+    ; Inner atom is not attached to the outer one anymore, so outer shouldn't
+    ; reflect the change
+    (reset! inner 8)
+    (assert= 7 @@outer))
+
+  (defgroup! swap!
+    (deftest! function-with-1-arg
+      (def! a (atom 5))
+      (swap! a (fn (x) (+ x 2)))
+      (assert= 7 @a))
+    (deftest! function-with-extra-args
+      (def! a (atom 5))
+      (swap! a + 2 3)
+      (assert= 10 @a))
+    (deftest! reset-returns-new-value
+      (def! a (atom 2))
+      (assert= 3 (swap! a inc))
+      (assert= 3 @a))))

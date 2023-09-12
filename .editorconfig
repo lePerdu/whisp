@@ -1,0 +1,7 @@
+[*.{h,c}]
+indent_style = space
+indent_size = 2
+
+[*.wh]
+indent_style = space
+indent_size = 2

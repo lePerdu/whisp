@@ -1,0 +1,139 @@
+(defgroup! list
+  (defgroup! list?
+    (deftest! nil-is-list
+      (assert (list? nil)))
+    (deftest! regular-list
+      (assert (list? (list 1 2 3 4 5))))
+    (deftest! int-is-not-list
+      (assert (not (list? 1))))
+    (deftest! cons-is-not-list
+      (assert (not (list? (cons 1 2))))))
+
+  (defgroup! count
+    (deftest! empty
+      (assert= 0 (count nil)))
+    (deftest! singleton
+      (assert= 1 (count (list 1))))
+    (deftest! long-list
+      (assert= 1000 (count (repeat 5 1000))))
+    (deftest! error-on-non-list
+      (assert-error (count 5)))
+    (deftest! error-on-cons-non-list
+      (assert-error (count (cons 1 2)))))
+
+  (defgroup! nth
+    (deftest! first-at-0
+      (assert= 1 (nth 0 (list 1 2 3))))
+    (deftest! second-at-1
+      (assert= 2 (nth 1 (list 1 2 3))))
+    (deftest! last-at-count-minus-1
+      (assert= 3 (nth 2 (list 1 2 3))))
+    (deftest! error-if-index-is-oob
+      (assert-error (nth 3 (list 1 2 3)))))
+
+  (defgroup! concat
+    (deftest! no-lists
+      (assert= nil (concat)))
+    (deftest! single-empty-list
+      (assert= nil (concat nil)))
+    (deftest! single-list
+      (assert-equal (list 1 2 3) (concat (list 1 2 3))))
+    (deftest! multiple-lists
+      (assert-equal (list 1 2 3 4 5) (concat (list 1 2) (list 3) (list 4 5))))
+    (deftest! empty-has-no-effect
+      (assert-equal (list 1 2 3 4) (concat nil (list 1 2) nil (list 3 4) (list) nil (list)))))
+
+  (defgroup! reverse
+    (deftest! empty-list
+      (assert= nil (reverse nil)))
+    (deftest! singleton-list
+      (assert-equal (list 1) (reverse (list 1))))
+    (deftest! reverses-longer-list
+      (assert-equal
+        (list 0 1 2 3 4 5 6 7 8 9)
+        (reverse (list 9 8 7 6 5 4 3 2 1 0)))))
+
+  (defgroup! list*
+    (deftest! identity-with-1-arg
+      (assert= 3 (list* 3)))
+    (deftest! cons-with-2-args
+      (assert-equal (cons 1 2) (list* 1 2)))
+    (deftest! makes-list-if-last-arg-is-nil
+      (assert-equal (list 1 2) (list* 1 2 nil)))
+    (deftest! makes-list-if-last-arg-is-list
+      (assert-equal (list 1 2 3 4) (list* 1 2 (list 3 4))))
+    (deftest! does-not-concatenate-leading-list
+      (assert-equal (list (list 1 2) 3 4 5) (list* (list 1 2) 3 (list 4 5)))))
+
+  (defgroup! map
+    (deftest! func-not-called-on-empty-list
+      (assert= nil (map (fn (x) (error "should not be called")) nil)))
+    (deftest! map-list-to-same-type
+      (assert-equal
+        (list 3 4 5)
+        (map (fn (x) (int+ x 2)) (list 1 2 3))))
+    (deftest! map-list-to-different-type
+      (assert-equal
+        (list "1a" "2a" "3a")
+        (map (fn (x) (string-concat (->string x) "a")) (list 1 2 3))))
+    (deftest! lists-not-concatenated
+      (assert-equal
+        (list (list 1 1) (list 2 2) (list 3 3))
+        (map (fn (x) (list x x)) (list 1 2 3)))))
+
+  (defgroup! concat-map
+    (deftest! func-not-called-on-empty-list
+      (assert= nil (concat-map (fn (x) (error "should not be called")) nil)))
+    (deftest! map-to-empty-lists-results-in-empty-list
+      (assert= nil
+        (concat-map (fn (x) nil) (list 1 2 3))))
+    (deftest! concatenated-in-right-order
+      (assert-equal
+        (list 1 1 2 2 3 3)
+        (concat-map (fn (x) (list x x)) (list 1 2 3)))))
+
+  (defgroup! take
+    (deftest! take-0
+      (assert= nil (take 0 (list 1 2 3))))
+    (deftest! take-some
+      (assert-equal (list 1 2) (take 2 (list 1 2 3))))
+    (deftest! take-exact-length
+      (assert-equal (list 1 2 3) (take 3 (list 1 2 3))))
+    (deftest! take-more-than-length-stops
+      (assert-equal (list 1 2 3) (take 5 (list 1 2 3)))))
+
+  (defgroup! drop
+    (deftest! drop-0
+      (assert-equal (list 1 2 3) (drop 0 (list 1 2 3))))
+    (deftest! drop-some
+      (assert-equal (list 2 3) (drop 1 (list 1 2 3))))
+    (deftest! drop-exact-length
+      (assert-equal nil (drop 3 (list 1 2 3))))
+    (deftest! drop-more-than-length-stops
+      (assert-equal nil (drop 5 (list 1 2 3)))))
+
+  (defgroup! split-at
+    (deftest! split-at-0-returns-empty-on-left
+      (assert-equal (cons nil (list 1 2 3 4 5)) (split-at 0 (list 1 2 3 4 5))))
+    (deftest! split-at-middle
+      (assert-equal (cons (list 1 2 3) (list 4 5)) (split-at 3 (list 1 2 3 4 5))))
+    (deftest! split-past-end-stops
+      (assert-equal (cons (list 1 2 3 4 5) nil) (split-at 10 (list 1 2 3 4 5)))))
+
+  (defgroup! repeat
+    (deftest! repeat-0
+      (assert= nil (repeat 5 0)))
+    (deftest! repeat-long-list
+      (assert= 10000 (count (repeat 5 10000)))))
+
+  (defgroup! sort
+    (defn! (compare-never a b) (error "comparison should not be called"))
+
+    (deftest! empty-list-is-sorted
+      (assert= nil (sort compare-never nil)))
+    (deftest! singleton-list-is-sorted
+      (assert-equal (list 4) (sort compare-never (list 4))))
+    (deftest! numeric-list-is-sorted
+      (assert-equal
+        (list 1 11 18 25 25 25 28 41 43 44)
+        (sort compare-num (list 25 43 44 28 1 25 11 41 25 18))))))

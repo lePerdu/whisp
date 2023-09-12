@@ -1,0 +1,13 @@
+(load-file "test/helper.wh")
+
+(load-file "test/env.wh")
+(load-file "test/macro.wh")
+(load-file "test/list.wh")
+(load-file "test/bool.wh")
+(load-file "test/math.wh")
+(load-file "test/func.wh")
+(load-file "test/atom.wh")
+(load-file "test/string.wh")
+(load-file "test/error.wh")
+
+(run-all-tests)

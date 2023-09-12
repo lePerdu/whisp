@@ -1,0 +1,81 @@
+(defgroup! number
+  (defgroup! int
+    (deftest! add
+      (assert= 3 (+ 1 2)))
+    (deftest! negate
+      (assert= -4 (- 4)))
+    (deftest! negate-negative
+      (assert= 4 (- -4)))
+    (deftest! sub
+      (assert= 3 (- 4 1)))
+    (deftest! mul
+      (assert= 30 (* 5 6)))
+    (deftest! div
+      (assert= 4 (/ 22 5))))
+
+  (defsyntax! (assert-real= expected actual)
+    `(assert (real= ~expected ~actual) 'expected ~expected 'got ~actual))
+
+  (defgroup! real
+    ; TODO Use epsilon comparison for real numbers
+    (deftest! add
+      (assert-real= 3.2 (+ 1.1 2.1)))
+    (deftest! negate
+      (assert-real= -3.0 (- 3.0)))
+    (deftest! sub
+      (assert-real= 3.0 (- 4.5 1.5)))
+    (deftest! mul
+      (assert-real= 13.0 (* 4.0 3.25)))
+    (deftest! div
+      (assert-real= 4.4 (/ 22.0 5.0)))
+    (deftest! recip
+      (assert-real= 0.2 (/ 5.0)))
+    (defgroup! notation
+      (deftest! no-digits-after-decimal
+        (assert-real= 54.0 54.))
+      (deftest! no-digits-before-decimal
+        (assert-real= 0.23 .23))
+
+      (deftest! zero-exponent
+        (assert-real= 0.23 0.23e0))
+      (deftest! +zero-exponent
+        (assert-real= 0.23 0.23e+0))
+      (deftest! -zero-exponent
+        (assert-real= 0.23 0.23e-0))
+
+      (deftest! small-positive-exponent
+        (assert-real= 230.0 0.23e3))
+      (deftest! large-positive-exponent
+        (assert-real= 2300000000000000.0 0.23e+16))
+      (deftest! small-negative-exponent
+        (assert-real= 4.023 40.23e-01))
+      (deftest! large-negative-exponent
+        (assert-real= 0.00000000000000423 4.23e-15))))
+
+  (defgroup! mixed
+    (deftest! add
+      (assert-real= 3.2 (+ 1 0.2 2)))
+    (deftest! sub
+      (assert-real= 3.0 (- 6 3.0 0.0)))
+    (deftest! mul
+      (assert-real= 0.25 (* 0.5 4 0.5 0.5 0.5)))
+    (deftest! div
+      (assert-real= 4.0 (/ 8 2.0)))
+    (defgroup! lt
+      (deftest! empty-is-true
+        (assert (<)))
+      (deftest! singleton-arg-true
+        (assert (< -4.2)))
+      (deftest! in-order
+        (assert (< -1.2 0.0 3 3.0000001)))
+      (deftest! in-order
+        (assert (not (< -1.2 4.1 3 3.0000001)))))
+    (defgroup! equality
+      (deftest! int==int
+        (assert== 1 1))
+      (deftest! real==real
+        (assert== 5.4 5.4))
+      (deftest! real==int
+        (assert== 5.0 5))
+      (deftest! real!==int
+        (assert-not== 5.1 5)))))

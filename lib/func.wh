@@ -1,0 +1,39 @@
+(defn! (identity x) x)
+
+; Allow forms like (apply f a b (list c d)) -> (f a b c d)
+; TODO Is re-defining buitins good practice or well-defined?
+(defn! (apply* f . args)
+  (apply f (apply list* args)))
+
+; ((bind f a b) c) -> (f a b c)
+(defn! (bind f . args)
+  (fn other-args
+    (apply f (concat args other-args))))
+
+(defn! (compose . funcs)
+  ; TODO What's more efficient?
+  ; - Create a single compound closure
+  ; - Create a closure which calls fold
+  (fn (x) (foldr x (fn (f acc) (f acc)) funcs)))
+
+(defn! (pipe x . funcs)
+  (if (null? funcs)
+    x
+    (apply* pipe ((car funcs) x) (cdr funcs))))
+
+; TODO Move these somewhere else?
+
+(defn! (swap! a f . args)
+  ; TODO Define as primitive? Doesn't really need to be one unless parallelism
+  ; is possible
+  (reset! a (apply* f @a args)))
+
+(defn! (time f . args)
+  (let
+    ((start-time (runtime))
+     (result (apply f args))
+     (end-time (runtime)))
+    (do
+      (println "time:" (- end-time start-time))
+      result)))
+
