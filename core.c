@@ -1,3 +1,5 @@
+#include "core.h"
+
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
@@ -10,14 +12,12 @@
 #include <threads.h>
 #include <time.h>
 
-#include "core.h"
+#include "core_helper.h"
 #include "eval.h"
 #include "file.h"
 #include "printer.h"
 #include "reader.h"
 #include "types.h"
-
-#include "core_helper.h"
 
 MAKE_INT_BINARY(add, +);
 MAKE_INT_BINARY(sub, -);
@@ -323,15 +323,15 @@ DEF_BUILTIN(core_is_real) {
 
 enum eval_status convert_to_real(struct lisp_val arg, struct lisp_val *result) {
   switch (lisp_val_type(arg)) {
-  case LISP_INT:
-    *result = lisp_val_from_real((double)lisp_val_as_int(arg));
-    return EV_SUCCESS;
-  case LISP_REAL:
-    *result = arg;
-    return EV_SUCCESS;
-  default:
-    set_func_exception(ERROR_NUMBER_ARG);
-    return EV_EXCEPTION;
+    case LISP_INT:
+      *result = lisp_val_from_real((double)lisp_val_as_int(arg));
+      return EV_SUCCESS;
+    case LISP_REAL:
+      *result = arg;
+      return EV_SUCCESS;
+    default:
+      set_func_exception(ERROR_NUMBER_ARG);
+      return EV_EXCEPTION;
   }
 }
 
@@ -341,15 +341,15 @@ DEF_BUILTIN(core_to_real) {
 
 enum eval_status convert_to_int(struct lisp_val arg, struct lisp_val *result) {
   switch (lisp_val_type(arg)) {
-  case LISP_INT:
-    *result = arg;
-    return EV_SUCCESS;
-  case LISP_REAL:
-    *result = lisp_val_from_int((long)lisp_val_as_real(arg));
-    return EV_SUCCESS;
-  default:
-    set_func_exception(ERROR_NUMBER_ARG);
-    return EV_EXCEPTION;
+    case LISP_INT:
+      *result = arg;
+      return EV_SUCCESS;
+    case LISP_REAL:
+      *result = lisp_val_from_int((long)lisp_val_as_real(arg));
+      return EV_SUCCESS;
+    default:
+      set_func_exception(ERROR_NUMBER_ARG);
+      return EV_EXCEPTION;
   }
 }
 

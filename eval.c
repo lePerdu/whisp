@@ -1,9 +1,10 @@
+#include "eval.h"
+
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 
-#include "eval.h"
 #include "log.h"
 #include "memory.h"
 #include "printer.h"
@@ -32,12 +33,12 @@ void init_global_env(void) {
   global_env = lisp_env_create(NULL);
   gc_push_root_obj(global_env);
 
-#define DEF_GLOBAL_SYM(var, name)                                              \
-  do {                                                                         \
-    /* Intermediate var because the global vars are const */                   \
-    struct lisp_symbol *s = lisp_symbol_create_cstr(name);                     \
-    var = s;                                                                   \
-    gc_push_root_obj(s);                                                       \
+#define DEF_GLOBAL_SYM(var, name)                            \
+  do {                                                       \
+    /* Intermediate var because the global vars are const */ \
+    struct lisp_symbol *s = lisp_symbol_create_cstr(name);   \
+    var = s;                                                 \
+    gc_push_root_obj(s);                                     \
   } while (false)
 
   // TODO Store these in the environment instead?
@@ -152,7 +153,7 @@ static struct eval_result eval_call_closure(struct lisp_closure *cl,
 
 END:
   gc_pop_root_expect(lisp_val_from_obj(fn_env));
-  gc_pop_root(); // args variable is mutated
+  gc_pop_root();  // args variable is mutated
   gc_pop_root_expect(lisp_val_from_obj(cl));
 
   if (res.status != EV_EXCEPTION) {
@@ -822,38 +823,38 @@ enum eval_status eval(struct lisp_val ast, struct lisp_env *env,
 
     struct eval_result res;
     switch (lisp_val_type(ast)) {
-    case LISP_NIL:
-    case LISP_INT:
-    case LISP_REAL:
-    case LISP_CHAR:
-    case LISP_STRING:
-    case LISP_BUILTIN:
-    case LISP_CLOSURE:
-    case LISP_ATOM:
-      *result = ast;
-      res.status = EV_SUCCESS;
-      break;
-    case LISP_SYMBOL: {
-      struct lisp_symbol *sym = lisp_val_as_obj(ast);
-      const struct lisp_env_binding *found = lisp_env_get(env, sym);
-      if (found != NULL) {
-        *result = found->value;
+      case LISP_NIL:
+      case LISP_INT:
+      case LISP_REAL:
+      case LISP_CHAR:
+      case LISP_STRING:
+      case LISP_BUILTIN:
+      case LISP_CLOSURE:
+      case LISP_ATOM:
+        *result = ast;
         res.status = EV_SUCCESS;
-      } else {
-        set_func_exception("symbol '%s' not defined", lisp_symbol_name(sym));
-        res.status = EV_EXCEPTION;
+        break;
+      case LISP_SYMBOL: {
+        struct lisp_symbol *sym = lisp_val_as_obj(ast);
+        const struct lisp_env_binding *found = lisp_env_get(env, sym);
+        if (found != NULL) {
+          *result = found->value;
+          res.status = EV_SUCCESS;
+        } else {
+          set_func_exception("symbol '%s' not defined", lisp_symbol_name(sym));
+          res.status = EV_EXCEPTION;
+        }
+        break;
       }
-      break;
-    }
-    case LISP_CONS: {
-      res = eval_special_or_call(ast, env, result);
-      break;
-    }
-    default:
-      set_func_exception("cannot evaluate object of type: %s",
-                         lisp_val_type_name(ast));
-      res.status = EV_EXCEPTION;
-      break;
+      case LISP_CONS: {
+        res = eval_special_or_call(ast, env, result);
+        break;
+      }
+      default:
+        set_func_exception("cannot evaluate object of type: %s",
+                           lisp_val_type_name(ast));
+        res.status = EV_EXCEPTION;
+        break;
     }
 
     gc_pop_root_expect(lisp_val_from_obj(env));

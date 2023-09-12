@@ -1,3 +1,5 @@
+#include "reader.h"
+
 #include <ctype.h>
 #include <printf.h>
 #include <stdbool.h>
@@ -8,7 +10,6 @@
 
 #include "log.h"
 #include "memory.h"
-#include "reader.h"
 #include "types.h"
 
 enum token_type {
@@ -63,14 +64,14 @@ static bool is_lisp_space(char c) { return isspace(c) || c == ','; }
 
 static bool is_atom_char(char c) {
   switch (c) {
-  case 0:
-  case TOK_LPAREN:
-  case TOK_RPAREN:
-  case TOK_STRING:
-  case TOK_QUOTE:
-  case TOK_BACKTICK:
-  case COMMENT_CHAR:
-    return false;
+    case 0:
+    case TOK_LPAREN:
+    case TOK_RPAREN:
+    case TOK_STRING:
+    case TOK_QUOTE:
+    case TOK_BACKTICK:
+    case COMMENT_CHAR:
+      return false;
   }
   return !is_lisp_space(c);
 }
@@ -200,18 +201,18 @@ SUCCESS:
 
 static int translate_unescaped(char c) {
   switch (c) {
-  case '0':
-    return 0;
-  case '"':
-    return '"';
-  case '\\':
-    return '\\';
-  case 'n':
-    return '\n';
-  case 't':
-    return '\t';
-  default:
-    return -1;
+    case '0':
+      return 0;
+    case '"':
+      return '"';
+    case '\\':
+      return '\\';
+    case 'n':
+      return '\n';
+    case 't':
+      return '\t';
+    default:
+      return -1;
   }
 }
 
@@ -259,40 +260,40 @@ START:
 
   char c = r->input[r->pos];
   switch (c) {
-  case 0:
-    r->token.type = TOK_EOF;
-    return P_SUCCESS;
-  case COMMENT_CHAR:
-    skip_line(r);
-    goto START;
-  case TOK_LPAREN:
-  case TOK_RPAREN:
-  case TOK_QUOTE:
-  case TOK_BACKTICK:
-  case TOK_AT:
-    r->token.type = c;
-    r->pos++;
-    return P_SUCCESS;
-  case TOK_TILDE:
-    if (r->input[r->pos + 1] == TOK_AT) {
-      r->token.type = TOK_TILDE_AT;
-      r->pos += 2;
-    } else {
-      r->token.type = TOK_TILDE;
-      r->pos++;
-    }
-    return P_SUCCESS;
-  case TOK_DOT:
-    // These are special by themselves, but not if part of an atom
-    if (!is_atom_char(r->input[r->pos + 1])) {
+    case 0:
+      r->token.type = TOK_EOF;
+      return P_SUCCESS;
+    case COMMENT_CHAR:
+      skip_line(r);
+      goto START;
+    case TOK_LPAREN:
+    case TOK_RPAREN:
+    case TOK_QUOTE:
+    case TOK_BACKTICK:
+    case TOK_AT:
       r->token.type = c;
       r->pos++;
       return P_SUCCESS;
-    } else {
-      break;
-    }
-  case TOK_STRING:
-    return read_string_atom(r);
+    case TOK_TILDE:
+      if (r->input[r->pos + 1] == TOK_AT) {
+        r->token.type = TOK_TILDE_AT;
+        r->pos += 2;
+      } else {
+        r->token.type = TOK_TILDE;
+        r->pos++;
+      }
+      return P_SUCCESS;
+    case TOK_DOT:
+      // These are special by themselves, but not if part of an atom
+      if (!is_atom_char(r->input[r->pos + 1])) {
+        r->token.type = c;
+        r->pos++;
+        return P_SUCCESS;
+      } else {
+        break;
+      }
+    case TOK_STRING:
+      return read_string_atom(r);
   }
 
   return read_next_atom(r);
@@ -410,42 +411,42 @@ static struct lisp_val build_lisp_string(struct slice raw_string) {
 
 static enum parse_res read_form(struct reader *r, struct lisp_val *output) {
   switch (r->token.type) {
-  case TOK_INT:
-    *output = lisp_val_from_int(r->token.as_integer);
-    return P_SUCCESS;
-  case TOK_REAL:
-    *output = lisp_val_from_real(r->token.as_real);
-    return P_SUCCESS;
-  case TOK_CHAR:
-    *output = lisp_val_from_char(r->token.as_char);
-    return P_SUCCESS;
-  case TOK_SYMBOL: {
-    struct slice s = r->token.as_slice;
-    *output = lisp_val_from_obj(lisp_symbol_create(s.data, s.size));
-    return P_SUCCESS;
-  }
-  case TOK_STRING:
-    *output = build_lisp_string(r->token.as_slice);
-    return P_SUCCESS;
-  case TOK_NIL:
-    *output = LISP_VAL_NIL;
-    return P_SUCCESS;
-  case TOK_LPAREN:
-    return read_list_or_pair(r, output);
-  case TOK_RPAREN:
-    return P_FAILED;
-  case TOK_QUOTE:
-    return read_macro(r, "quote", output);
-  case TOK_BACKTICK:
-    return read_macro(r, "quasiquote", output);
-  case TOK_TILDE:
-    return read_macro(r, "unquote", output);
-  case TOK_AT:
-    return read_macro(r, "deref", output);
-  case TOK_TILDE_AT:
-    return read_macro(r, "splice-unquote", output);
-  default:
-    return P_FAILED;
+    case TOK_INT:
+      *output = lisp_val_from_int(r->token.as_integer);
+      return P_SUCCESS;
+    case TOK_REAL:
+      *output = lisp_val_from_real(r->token.as_real);
+      return P_SUCCESS;
+    case TOK_CHAR:
+      *output = lisp_val_from_char(r->token.as_char);
+      return P_SUCCESS;
+    case TOK_SYMBOL: {
+      struct slice s = r->token.as_slice;
+      *output = lisp_val_from_obj(lisp_symbol_create(s.data, s.size));
+      return P_SUCCESS;
+    }
+    case TOK_STRING:
+      *output = build_lisp_string(r->token.as_slice);
+      return P_SUCCESS;
+    case TOK_NIL:
+      *output = LISP_VAL_NIL;
+      return P_SUCCESS;
+    case TOK_LPAREN:
+      return read_list_or_pair(r, output);
+    case TOK_RPAREN:
+      return P_FAILED;
+    case TOK_QUOTE:
+      return read_macro(r, "quote", output);
+    case TOK_BACKTICK:
+      return read_macro(r, "quasiquote", output);
+    case TOK_TILDE:
+      return read_macro(r, "unquote", output);
+    case TOK_AT:
+      return read_macro(r, "deref", output);
+    case TOK_TILDE_AT:
+      return read_macro(r, "splice-unquote", output);
+    default:
+      return P_FAILED;
   }
 }
 

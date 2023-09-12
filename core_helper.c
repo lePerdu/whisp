@@ -2,13 +2,13 @@
 
 static double lisp_val_to_real(enum lisp_type type, struct lisp_val x) {
   switch (type) {
-  case LISP_INT:
-    return (double)lisp_val_as_int(x);
-  case LISP_REAL:
-    return lisp_val_as_real(x);
-  default:
-    assert(false);
-    return 0.0;
+    case LISP_INT:
+      return (double)lisp_val_as_int(x);
+    case LISP_REAL:
+      return lisp_val_as_real(x);
+    default:
+      assert(false);
+      return 0.0;
   }
 }
 
@@ -86,10 +86,10 @@ enum eval_status arith_compare(const char *func_name, struct lisp_val args,
   return EV_SUCCESS;
 }
 
-#define MAKE_ARITH_COMPARE(name, op)                                           \
-  static bool name(long a, long b) { return a op b; }                          \
-  DEF_BUILTIN(core_##name) {                                                   \
-    return arith_compare(__func__, args, name, result);                        \
+#define MAKE_ARITH_COMPARE(name, op)                    \
+  static bool name(long a, long b) { return a op b; }   \
+  DEF_BUILTIN(core_##name) {                            \
+    return arith_compare(__func__, args, name, result); \
   }
 
 enum eval_status type_pred(const char *func_name, enum lisp_type type,
@@ -180,11 +180,11 @@ enum eval_status unary_func_with_type(
   return transform(single_arg, result);
 }
 
-enum eval_status
-binary_func(const char *func_name,
-            enum eval_status (*transform)(struct lisp_val a, struct lisp_val b,
-                                          struct lisp_val *result),
-            struct lisp_val args, struct lisp_val *result) {
+enum eval_status binary_func(
+    const char *func_name,
+    enum eval_status (*transform)(struct lisp_val a, struct lisp_val b,
+                                  struct lisp_val *result),
+    struct lisp_val args, struct lisp_val *result) {
   if (lisp_val_type(args) != LISP_CONS) {
     set_helper_exception(ERROR_NOT_ENOUGH_ARGS);
     return EV_EXCEPTION;

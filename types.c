@@ -1,3 +1,5 @@
+#include "types.h"
+
 #include <assert.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -8,7 +10,6 @@
 #include <string.h>
 
 #include "memory.h"
-#include "types.h"
 
 enum ptr_tag {
   TAG_INT = 1,
@@ -729,9 +730,8 @@ static struct lisp_symbol_table *lisp_symbol_table_create(size_t capacity) {
   return map;
 }
 
-static struct lisp_hash_table_entry *
-symbol_table_lookup_entry(struct lisp_symbol_table *map, const char *key,
-                          size_t key_length) {
+static struct lisp_hash_table_entry *symbol_table_lookup_entry(
+    struct lisp_symbol_table *map, const char *key, size_t key_length) {
   hash_t hash_code = str_hash(key, key_length);
   unsigned bucket = hash_code & (map->capacity - 1);
   struct lisp_hash_table_entry *entry = map->entries[bucket];
@@ -748,9 +748,8 @@ symbol_table_lookup_entry(struct lisp_symbol_table *map, const char *key,
 /**
  * More optimized lookup which relies on symbol interning.
  */
-static struct lisp_hash_table_entry *
-symbol_table_lookup_symbol(struct lisp_symbol_table *map,
-                           const struct lisp_symbol *sym) {
+static struct lisp_hash_table_entry *symbol_table_lookup_symbol(
+    struct lisp_symbol_table *map, const struct lisp_symbol *sym) {
   unsigned bucket = sym->hash_code & (map->capacity - 1);
   struct lisp_hash_table_entry *entry = map->entries[bucket];
   while (entry != NULL) {
@@ -781,8 +780,8 @@ static void lisp_symbol_table_do_insert(struct lisp_symbol_table *map,
   map->size++;
 }
 
-static struct lisp_symbol_table *
-lisp_symbol_table_resize(struct lisp_symbol_table *map) {
+static struct lisp_symbol_table *lisp_symbol_table_resize(
+    struct lisp_symbol_table *map) {
   struct lisp_symbol_table *new = lisp_symbol_table_create(map->capacity * 2);
   for (unsigned i = 0; i < map->capacity; i++) {
     while (map->entries[i] != NULL) {
@@ -799,9 +798,8 @@ lisp_symbol_table_resize(struct lisp_symbol_table *map) {
  * Insert a new entry into the table. The entry should be GC-allocated. Only the
  * key need be initialized.
  */
-static struct lisp_symbol_table *
-lisp_symbl_table_insert(struct lisp_symbol_table *map,
-                        struct lisp_hash_table_entry *entry) {
+static struct lisp_symbol_table *lisp_symbl_table_insert(
+    struct lisp_symbol_table *map, struct lisp_hash_table_entry *entry) {
   // TODO Should the map be pushed? Is it expected to always be marked for other
   // reasons?
   gc_push_root_obj(map);

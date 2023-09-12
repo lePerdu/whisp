@@ -1,8 +1,9 @@
 #ifndef MEMORY_H_
 #define MEMORY_H_
 
-#include "types.h"
 #include <stddef.h>
+
+#include "types.h"
 
 void *lisp_alloc(size_t size);
 

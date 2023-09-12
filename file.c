@@ -1,10 +1,11 @@
+#include "file.h"
+
 #include <errno.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "eval.h"
-#include "file.h"
 #include "memory.h"
 #include "printer.h"
 #include "reader.h"
@@ -30,7 +31,7 @@ struct lisp_string *read_file(const char *filename) {
                            strerror(errno));
         error = true;
         break;
-      } // Else, it's EOF so the loop will end
+      }  // Else, it's EOF so the loop will end
     } else {
       str_builder_concat_n(&builder, buf, n_read);
     }

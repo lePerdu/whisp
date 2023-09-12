@@ -11,10 +11,9 @@
 #include "memory.h"
 #include "printer.h"
 #include "reader.h"
-#include "types.h"
-
 #include "readline/history.h"
 #include "readline/readline.h"
+#include "types.h"
 
 /*
 #define READLINE_BUF_SIZE 1024
@@ -180,13 +179,13 @@ int main(int argc, char *argv[]) {
   load_prelude();
 
   switch (mode) {
-  case PROG_REPL:
-    repl();
-    break;
-  case PROG_FILE: {
-    run_file(filename);
-    break;
-  }
+    case PROG_REPL:
+      repl();
+      break;
+    case PROG_FILE: {
+      run_file(filename);
+      break;
+    }
   }
 
   return 0;

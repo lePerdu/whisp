@@ -1,3 +1,5 @@
+#include "memory.h"
+
 #include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -6,7 +8,6 @@
 
 #include "eval.h"
 #include "log.h"
-#include "memory.h"
 #include "types.h"
 
 // #define GC_DEBUG

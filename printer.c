@@ -1,10 +1,11 @@
+#include "printer.h"
+
 #include <ctype.h>
 #include <float.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 
-#include "printer.h"
 #include "types.h"
 
 static void print_cons(struct str_builder *b, struct lisp_cons *cons,
@@ -32,21 +33,21 @@ static void print_char_literal(struct str_builder *b, char c) {
   // TODO Unify code with reader
   str_builder_concat_cstr(b, "#\\");
   switch (c) {
-  case 0:
-    str_builder_concat_cstr(b, "null");
-    break;
-  case ' ':
-    str_builder_concat_cstr(b, "space");
-    break;
-  case '\t':
-    str_builder_concat_cstr(b, "tab");
-    break;
-  case '\n':
-    str_builder_concat_cstr(b, "newline");
-    break;
-  default:
-    str_builder_append(b, c);
-    break;
+    case 0:
+      str_builder_concat_cstr(b, "null");
+      break;
+    case ' ':
+      str_builder_concat_cstr(b, "space");
+      break;
+    case '\t':
+      str_builder_concat_cstr(b, "tab");
+      break;
+    case '\n':
+      str_builder_concat_cstr(b, "newline");
+      break;
+    default:
+      str_builder_append(b, c);
+      break;
   }
 }
 
@@ -56,18 +57,18 @@ static void print_char_literal(struct str_builder *b, char c) {
  */
 static int translate_escaped(char c) {
   switch (c) {
-  case 0:
-    return '0';
-  case '"':
-    return '"';
-  case '\\':
-    return '\\';
-  case '\n':
-    return 'n';
-  case '\t':
-    return 't';
-  default:
-    return -1;
+    case 0:
+      return '0';
+    case '"':
+      return '"';
+    case '\\':
+      return '\\';
+    case '\n':
+      return 'n';
+    case '\t':
+      return 't';
+    default:
+      return -1;
   }
 }
 
@@ -136,65 +137,66 @@ static void print_function(struct str_builder *b, const char *name,
 
 void print_str_into(struct str_builder *b, struct lisp_val v, bool readable) {
   switch (lisp_val_type(v)) {
-  case LISP_NIL:
-    str_builder_concat_cstr(b, "nil");
-    break;
-  case LISP_INT:
-    str_builder_format(b, "%ld", lisp_val_as_int(v));
-    break;
-  case LISP_REAL:
-    print_real(b, lisp_val_as_real(v));
-    break;
-  case LISP_CHAR: {
-    char c = lisp_val_as_char(v);
-    if (readable) {
-      print_char_literal(b, c);
-    } else {
-      str_builder_append(b, c);
+    case LISP_NIL:
+      str_builder_concat_cstr(b, "nil");
+      break;
+    case LISP_INT:
+      str_builder_format(b, "%ld", lisp_val_as_int(v));
+      break;
+    case LISP_REAL:
+      print_real(b, lisp_val_as_real(v));
+      break;
+    case LISP_CHAR: {
+      char c = lisp_val_as_char(v);
+      if (readable) {
+        print_char_literal(b, c);
+      } else {
+        str_builder_append(b, c);
+      }
+      break;
     }
-    break;
-  }
-  case LISP_SYMBOL:
-    // TODO Utilize the known string length
-    str_builder_concat_cstr(b, lisp_symbol_name(lisp_val_as_obj(v)));
-    break;
-  case LISP_STRING: {
-    struct lisp_string *s = lisp_val_as_obj(v);
-    if (readable) {
-      print_escaped(b, s);
-    } else {
-      str_builder_concat(b, s);
+    case LISP_SYMBOL:
+      // TODO Utilize the known string length
+      str_builder_concat_cstr(b, lisp_symbol_name(lisp_val_as_obj(v)));
+      break;
+    case LISP_STRING: {
+      struct lisp_string *s = lisp_val_as_obj(v);
+      if (readable) {
+        print_escaped(b, s);
+      } else {
+        str_builder_concat(b, s);
+      }
+      break;
     }
-    break;
-  }
-  case LISP_CONS:
-    print_cons(b, lisp_val_as_obj(v), readable);
-    break;
-  case LISP_BUILTIN: {
-    struct lisp_builtin *builtin = lisp_val_as_obj(v);
-    print_function(b, builtin->name, builtin->arg_count, builtin->has_rest_arg);
-    break;
-  }
-  case LISP_CLOSURE: {
-    struct lisp_closure *closure = lisp_val_as_obj(v);
-    const struct lisp_symbol *name_sym = lisp_closure_name(closure);
-    const char *name =
-        name_sym != NULL ? lisp_symbol_name(name_sym) : "<unknown>";
-    bool variadic = lisp_closure_rest_param(closure) != NULL;
-    print_function(b, name, lisp_list_count(lisp_closure_params(closure)),
-                   variadic);
-    break;
-  }
-  case LISP_ATOM: {
-    const struct lisp_atom *atom = lisp_val_as_obj(v);
-    str_builder_concat_cstr(b, "#<atom ");
-    print_str_into(b, lisp_atom_deref(atom), readable);
-    str_builder_append(b, '>');
-    break;
-  }
-  default:
-    str_builder_concat_cstr(b, "#<unknown>");
-    break;
+    case LISP_CONS:
+      print_cons(b, lisp_val_as_obj(v), readable);
+      break;
+    case LISP_BUILTIN: {
+      struct lisp_builtin *builtin = lisp_val_as_obj(v);
+      print_function(b, builtin->name, builtin->arg_count,
+                     builtin->has_rest_arg);
+      break;
+    }
+    case LISP_CLOSURE: {
+      struct lisp_closure *closure = lisp_val_as_obj(v);
+      const struct lisp_symbol *name_sym = lisp_closure_name(closure);
+      const char *name =
+          name_sym != NULL ? lisp_symbol_name(name_sym) : "<unknown>";
+      bool variadic = lisp_closure_rest_param(closure) != NULL;
+      print_function(b, name, lisp_list_count(lisp_closure_params(closure)),
+                     variadic);
+      break;
+    }
+    case LISP_ATOM: {
+      const struct lisp_atom *atom = lisp_val_as_obj(v);
+      str_builder_concat_cstr(b, "#<atom ");
+      print_str_into(b, lisp_atom_deref(atom), readable);
+      str_builder_append(b, '>');
+      break;
+    }
+    default:
+      str_builder_concat_cstr(b, "#<unknown>");
+      break;
   }
 }
 

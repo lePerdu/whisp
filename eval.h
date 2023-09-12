@@ -11,7 +11,7 @@ extern struct lisp_val current_exception;
 
 void set_format_exception(const char *format, ...);
 
-#define set_func_exception(message, ...)                                       \
+#define set_func_exception(message, ...) \
   set_format_exception("%s: " message, __func__ __VA_OPT__(, ) __VA_ARGS__)
 
 enum eval_status eval(struct lisp_val ast, struct lisp_env *env,
