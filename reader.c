@@ -21,6 +21,7 @@ enum token_type {
   // Special token that can't be re-defined
   // TODO Treat this some other way?
   TOK_NIL,
+  TOK_TILDE_AT,
 
   TOK_STRING = '"',
   TOK_LPAREN = '(',
@@ -268,10 +269,18 @@ START:
   case TOK_RPAREN:
   case TOK_QUOTE:
   case TOK_BACKTICK:
-  case TOK_TILDE:
   case TOK_AT:
     r->token.type = c;
     r->pos++;
+    return P_SUCCESS;
+  case TOK_TILDE:
+    if (r->input[r->pos + 1] == TOK_AT) {
+      r->token.type = TOK_TILDE_AT;
+      r->pos += 2;
+    } else {
+      r->token.type = TOK_TILDE;
+      r->pos++;
+    }
     return P_SUCCESS;
   case TOK_DOT:
     // These are special by themselves, but not if part of an atom
@@ -433,8 +442,8 @@ static enum parse_res read_form(struct reader *r, struct lisp_val *output) {
     return read_macro(r, "unquote", output);
   case TOK_AT:
     return read_macro(r, "deref", output);
-  // case TOK_TILDE_AT:
-  //   return read_macro(r, "splice-unquote", output);
+  case TOK_TILDE_AT:
+    return read_macro(r, "splice-unquote", output);
   default:
     return P_FAILED;
   }

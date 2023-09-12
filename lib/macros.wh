@@ -22,25 +22,40 @@
           "__gensym__"
           (->string (swap! counter inc)))))))
 
-(defsyntax! (quasiquote ast) (do
-  (defn! (qq ast)
-    (if (cons? ast)
-      (let ((first (car ast)) (rest (cdr ast)))
-        (if (list? rest)
-          ; Proper list, check for unquote form
+(defmacro! quasiquote
+  (let () (do
+    (defn! (process-unquote-args args)
+      (if (cons? args)
+        (if (null? (cdr args))
+          (car args)
+          (error "unquote: too many arguments"))
+        (error "unquote: not enough arguments")))
+
+    (defn! (is-splice-unquote-form form)
+      (if (cons? form)
+        (if (= (car form) 'splice-unquote)
+          (if (cons? (cdr form))
+            (if (null? (cddr form))
+              true
+              (error "splice-unquote: too many arguments"))
+            (error "splice-unquote: not enough arguments")))))
+
+    (def! get-splice-unquote-arg cadr)
+
+    (defn! (qq ast)
+      (if (cons? ast)
+        (let ((first (car ast)) (rest (cdr ast)))
           (if (= first 'unquote)
-            (if (null? (cdr rest))
-              (car rest)
-              (error "unquote: too many arguments"))
-            (qq-cons first rest))
-          (qq-cons first rest)))
-      (list 'quote ast)))
+            (process-unquote-args rest)
+            (if (is-splice-unquote-form first)
+              (list
+                'concat 
+                (get-splice-unquote-arg first)
+                (qq rest))
+              (list 'cons (qq first) (qq rest)))))
+        (list 'quote ast)))
 
-  ; Structurally recurse into cons cell
-  (defn! (qq-cons first rest)
-    (list 'cons (qq first) (qq rest)))
-
-  (qq ast)))
+    qq)))
 
 (defsyntax! (let* bindings ast)
   (do
@@ -64,11 +79,18 @@
     ((bind-pair (car binding))
      (cons-sym (gensym)))
     `(let
-      ((~cons-sym ~(cadr binding)))
+      ((~cons-sym ~@(cdr binding)))
       (let
        ((~(car bind-pair) (car ~cons-sym))
         (~(cdr bind-pair) (cdr ~cons-sym)))
        ~body))))
+
+(defsyntax! (letrec* bindings body)
+  `(let ()
+    (do
+      ~@(map (fn (b) (cons 'def! b)) bindings)
+      ; TODO Add a nested (let () ...) to isolate the bindings?
+      ~body)))
 
 ; TODO Move these?
 
@@ -77,7 +99,7 @@
   ; TODO Check structure
   `(with-exception-handler
     ; TODO Use generated symbols to extract sub-expressions
-    (fn (~(car binding)) ~(cadr binding))
+    (fn (~(car binding)) ~@(cdr binding))
     (fn () ~body)))
 
 ; Combination of guard and cond to easily match on an error
@@ -86,9 +108,10 @@
   (let-cons ((binding . branches) conditions)
     `(guard
       (~binding
-        ~(cons 'cond
+        (cond
+          ~@branches
           ; Include re-raise clause if none of the branches match
-          (concat branches `((else (raise ~binding))))))
+          (else (raise ~binding))))
       ~body)))
 
 ; TODO Make error wrap the value somehow

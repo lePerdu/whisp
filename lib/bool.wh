@@ -6,22 +6,6 @@
 (defn! (map-if f x)
   (if x (f x)))
 
-(defsyntax! (and . conds)
-  (if (null? conds)
-    true
-    `(if ~(car conds) ~(cons 'and (cdr conds)) false)))
-(defsyntax! (or . conds)
-  (if (null? conds)
-    false
-    `(if ~(car conds) true ~(cons 'or (cdr conds)))))
-(defsyntax! (xor . conds)
-  (if (null? conds)
-    false
-    `(if ~(car conds)
-      ; Found a true value, the rest must be false
-      (not ~(cons 'or (cdr conds)))
-      ~(cons 'xor (cdr conds)))))
-
 (defsyntax! (unless c f)
   `(if ~c nil ~f))
 
@@ -41,8 +25,35 @@
         expr1
         `(if ~cond1 ~expr1 ~(cons 'cond (cdr branches)))))))
 
+; TODO Make these return values? It's useful sometimes and enables these forms
+; to be tail-call optimized, but adds in overhead without good optimizations
+(defsyntax! (and . conds)
+  (if (null? conds)
+    true
+    `(if ~(car conds) (and ~@(cdr conds)) false)))
+(defsyntax! (or . conds)
+  (if (null? conds)
+    false
+    `(if ~(car conds) true (or ~@(cdr conds)))))
+(defsyntax! (xor . conds)
+  (if (null? conds)
+    false
+    `(if ~(car conds)
+      ; Found a true value, the rest must be false
+      (not (or ~@(cdr conds)))
+      (xor ~@(cdr conds)))))
+
+(defsyntax! (let-if binding . branches)
+  ; TODO Generate temporary symbol so that the binding is not available in the
+  ; false branch
+  `(let (~binding)
+    (if ~(car binding) ~@branches)))
+
+(defsyntax! (let-cond binding . branches)
+  `(let (~binding)
+    (cond ~@branches)))
+
 ; Structural comparison
-; Compares 
 (defn! (equal? a b)
   (or
     ; Integers, symbols, functions, and atoms

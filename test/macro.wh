@@ -100,4 +100,87 @@
     (f)
 
     (def! a (atom 0))
-    (assert-error (twice (swap! a inc)))))
+    (assert-error (twice (swap! a inc))))
+
+  (defgroup! quasiquote
+    (deftest! backtick-syntax
+      (assert-equal (list 'quasiquote 3) '`3))
+    (deftest! tilde-syntax
+      (assert-equal (list 'unquote 'a) '~a))
+    (deftest! tilde-at-syntax
+      (assert-equal (list 'splice-unquote 'a) '~@a))
+
+    (deftest! string
+      (assert-equal "abc" `"abc"))
+    (deftest! number
+      (assert= 5 `5))
+    (deftest! plain-list
+      (assert-equal (list 1 "2" 'three 4.0) `(1 "2" three 4.0)))
+    (deftest! expression
+      (assert-equal (list '+ 1 2) `(+ 1 2)))
+    (deftest! nested-and-improper-lists
+      (assert-equal
+        (list* 'list
+          (list (cons 'x (cons 6 'z))) "3" 4)
+         `(list ((x . (6 . z))) "3" . 4)))
+    (deftest! nested-quote
+      (assert-equal
+        (list (list 'quote 'x))
+        `('x)))
+
+    (defgroup! unquote
+      (deftest! top-level
+        (assert= 4 `~(+ 1 3)))
+      (deftest! inside-list
+        (assert-equal
+          (list 2 4 6 8)
+          `(2 ~(+ 1 3) 6 ~(* 4 2))))
+      (deftest! inside-deep-list
+        (assert-equal
+          (list 1 (list 2 (list 3 4 5)) 6)
+          `(1 (2 (3 ~(- 6 2) 5)) 6))))
+
+    (defgroup! splice-unquote
+      (deftest! not-expanded-at-top-level
+        (assert-equal
+          (list 'splice-unquote (list 'list 1 2))
+          `~@(list 1 2)))
+      (deftest! expanded-at-start-of-list
+        (assert-equal
+          (list 1 2 'x)
+          `(~@(list (+ 0 1) 2) x)))
+      (deftest! expanded-at-end-of-list
+        (assert-equal
+          (list 'x 1 2)
+          `(x ~@(list (+ 0 1) (/ 4 2)))))
+      (deftest! expanded-in-middle-of-list
+        (assert-equal
+          (list 'x 1 2 'y)
+          `(x ~@(list (+ 0 1) (/ 4 2)) y)))
+      (deftest! expands-empty-list
+        (assert-equal
+          (list 'x 'y)
+          `(x ~@(list) y))))
+
+    (deftest! unquote-and-splice-unquote
+      (assert-equal
+        (list 5 4 3 2 1)
+        `(5 ~(+ 3 1) ~@(list 3 2) 1 ~@nil)))
+
+    (defgroup! nested-quasiquote
+      (deftest! unquote-expanded-in-outer
+        (assert-equal
+          (list
+            (list 'quasiquote
+              (list 'x 3 'z)))
+          `(`(x ~(+ 1 2) z))))
+      (deftest! splice-unquote-expanded-in-outer
+        (assert-equal
+          (list
+            (list 'quasiquote
+              (list 'x 'w 5 'z)))
+          `(`(x ~@(list 'w 5) z))))
+      (deftest! expanded-when-inside-unquote
+        (assert-equal
+          (list 'x (list (list 'w 4 5)) 'z)
+          `(x ~(list `(w ~(- 7 3) 5)) z))))))
