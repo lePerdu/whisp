@@ -60,7 +60,7 @@ static enum eval_status eval_print_many(struct lisp_val exprs) {
     exprs = cell->cdr;
 
     struct lisp_val result;
-    res = top_level_eval(cell->car, global_env, &result);
+    res = eval(cell->car, global_env, &result);
     if (res == EV_EXCEPTION) {
       struct lisp_string *printed_exc = print_str(current_exception, true);
       log("error: %s", lisp_string_as_cstr(printed_exc));

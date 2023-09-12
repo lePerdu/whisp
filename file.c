@@ -56,7 +56,7 @@ static enum eval_status eval_many(struct lisp_val exprs) {
     exprs = cell->cdr;
 
     struct lisp_val result;
-    res = top_level_eval(cell->car, global_env, &result);
+    res = eval(cell->car, global_env, &result);
     if (res == EV_EXCEPTION) {
       break;
     }

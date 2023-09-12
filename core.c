@@ -492,7 +492,7 @@ DEF_BUILTIN(core_eval) {
   }
 
   // TODO Enable TCO for builtins
-  return top_level_eval(ast, global_env, result);
+  return eval(ast, global_env, result);
 }
 
 static enum eval_status do_apply(struct lisp_val func, struct lisp_val args,
