@@ -1,4 +1,4 @@
-CFLAGS = -Wall -Wextra -std=c17 -g -Og
+CFLAGS = -Wall -Wextra -Werror -std=c17 -g -Og
 LDFLAGS = $(CFLAGS) -lreadline -lm
 
 BUILD = build

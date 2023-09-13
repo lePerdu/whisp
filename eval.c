@@ -747,5 +747,5 @@ static enum eval_status eval_tail(struct lisp_vm *vm, struct lisp_val ast) {
 enum eval_status eval(struct lisp_vm *vm, struct lisp_val ast) {
   vm_create_stack_frame(vm, vm_current_env(vm), 0);
 
-  eval_tail(vm, ast);
+  return eval_tail(vm, ast);
 }
