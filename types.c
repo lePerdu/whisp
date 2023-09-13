@@ -43,7 +43,7 @@ inline struct lisp_val lisp_val_from_obj(void *obj) {
   return (struct lisp_val){raw};
 }
 
-static void *lisp_obj_alloc(const struct lisp_vtable *vt, size_t size) {
+void *lisp_obj_alloc(const struct lisp_vtable *vt, size_t size) {
   struct lisp_obj *obj = lisp_alloc(size);
   obj->vt = vt;
   return obj;
@@ -59,11 +59,14 @@ static void visit_none(struct lisp_val object, visit_callback cb, void *ctx) {
   (void)ctx;
 }
 
+static void destroy_none(struct lisp_val object) { (void)object; }
+
 static const struct lisp_vtable INT_VTABLE = {
     .type = LISP_INT,
     .is_gc_managed = false,
     .name = "int",
     .visit_children = visit_none,
+    .destroy = destroy_none,
 };
 
 static const struct lisp_vtable NIL_VTABLE = {
@@ -71,6 +74,7 @@ static const struct lisp_vtable NIL_VTABLE = {
     .is_gc_managed = false,
     .name = "nil",
     .visit_children = visit_none,
+    .destroy = destroy_none,
 };
 
 // There's redundant structure here, but otherwise there are redundant checks.
@@ -179,6 +183,7 @@ static const struct lisp_vtable REAL_VTABLE = {
     .is_gc_managed = true,
     .name = "real",
     .visit_children = visit_none,
+    .destroy = destroy_none,
 };
 
 struct lisp_val lisp_val_from_real(double d) {
@@ -205,6 +210,7 @@ static const struct lisp_vtable CHAR_VTABLE = {
     .is_gc_managed = true,
     .name = "char",
     .visit_children = visit_none,
+    .destroy = destroy_none,
 };
 
 struct lisp_val lisp_val_from_char(lisp_char_t c) {
@@ -236,6 +242,7 @@ static const struct lisp_vtable ATOM_VTABLE = {
     .is_gc_managed = true,
     .name = "atom",
     .visit_children = lisp_atom_visit,
+    .destroy = destroy_none,
 };
 
 struct lisp_atom *lisp_atom_create(struct lisp_val v) {
@@ -261,6 +268,7 @@ static const struct lisp_vtable STRING_VTABLE = {
     .is_gc_managed = true,
     .name = "string",
     .visit_children = visit_none,
+    .destroy = destroy_none,
 };
 
 static struct lisp_string *lisp_string_alloc(size_t capacity) {
@@ -484,6 +492,7 @@ static const struct lisp_vtable SYMBOL_VTABLE = {
     .is_gc_managed = true,
     .name = "symbol",
     .visit_children = visit_none,
+    .destroy = destroy_none,
 };
 
 /**
@@ -533,6 +542,7 @@ static const struct lisp_vtable CONS_VTABLE = {
     .is_gc_managed = true,
     .name = "cons",
     .visit_children = lisp_cons_visit,
+    .destroy = destroy_none,
 };
 
 struct lisp_cons *lisp_cons_create(struct lisp_val car, struct lisp_val cdr) {
@@ -678,6 +688,7 @@ static const struct lisp_vtable HASH_TABLE_ENTRY_VTABLE = {
     .is_gc_managed = true,
     .name = "hash-table-entry",
     .visit_children = lisp_hash_table_entry_visit,
+    .destroy = destroy_none,
 };
 
 struct lisp_symbol_table {
@@ -716,6 +727,8 @@ static const struct lisp_vtable SYMBOL_TABLE_VTABLE = {
     .is_gc_managed = true,
     .name = "symbol_table",
     .visit_children = lisp_symbol_table_visit,
+    // TODO Make the symbol table separately allocate its hash table entries?
+    .destroy = destroy_none,
 };
 
 static struct lisp_symbol_table *lisp_symbol_table_create(size_t capacity) {
@@ -906,6 +919,7 @@ static const struct lisp_vtable ENV_VTABLE = {
     .is_gc_managed = true,
     .name = "environment",
     .visit_children = lisp_env_visit,
+    .destroy = destroy_none,
 };
 
 struct lisp_env_table_entry {
@@ -925,6 +939,7 @@ static const struct lisp_vtable ENV_TABLE_ENTRY_VTABLE = {
     .is_gc_managed = true,
     .name = "environment-entry",
     .visit_children = lisp_env_table_entry_visit,
+    .destroy = destroy_none,
 };
 
 struct lisp_env *lisp_env_create(struct lisp_env *outer) {
@@ -1035,6 +1050,7 @@ static const struct lisp_vtable CLOSURE_VTABLE = {
     .is_gc_managed = true,
     .name = "closure",
     .visit_children = lisp_closure_visit,
+    .destroy = destroy_none,
 };
 
 struct lisp_closure *lisp_closure_create(struct lisp_val params,
@@ -1090,6 +1106,7 @@ const struct lisp_vtable BUILTIN_VTABLE = {
     .is_gc_managed = false,
     .name = "bulitin",
     .visit_children = visit_none,
+    .destroy = destroy_none,
 };
 
 static const struct lisp_vtable *const TYPE_TO_VTABLE[] = {

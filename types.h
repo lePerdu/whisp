@@ -58,6 +58,14 @@ struct lisp_vtable {
    * Call the visitor on direct children (should not be recursive).
    */
   void (*visit_children)(struct lisp_val v, visit_callback callback, void *ctx);
+
+  /**
+   * Destroy the object by freeing any non-GC managed resources.
+   *
+   * This should NOT free the object itself; that will be handled by the garbage
+   * collector.
+   */
+  void (*destroy)(struct lisp_val v);
 };
 
 /**
@@ -66,6 +74,8 @@ struct lisp_vtable {
 struct lisp_obj {
   const struct lisp_vtable *vt;
 };
+
+void *lisp_obj_alloc(const struct lisp_vtable *vt, size_t size);
 
 /**
  * Return the object vtable. This works even for primitive, non-GC managed

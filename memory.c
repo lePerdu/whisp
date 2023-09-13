@@ -69,6 +69,9 @@ void *lisp_alloc(size_t size) {
 }
 
 static void alloc_header_destroy(struct alloc_header *header) {
+  struct lisp_obj *obj = header_to_obj(header);
+  obj->vt->destroy(lisp_val_from_obj(obj));
+
   allocated_bytes -= header->size;
 
 #ifdef GC_LOG
