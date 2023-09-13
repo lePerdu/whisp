@@ -1,18 +1,8 @@
 #include "eval.h"
 
-#include <stdarg.h>
-#include <stdbool.h>
-#include <stdio.h>
-#include <string.h>
-
-#include "log.h"
 #include "memory.h"
-#include "printer.h"
 #include "types.h"
-
-struct lisp_env *global_env = NULL;
-
-struct lisp_val current_exception;
+#include "vm.h"
 
 // Permenantly allocate symbols for special forms
 
@@ -29,10 +19,7 @@ static const struct lisp_symbol *SYMBOL_QUOTE;
 // static const struct lisp_symbol *SYMBOL_MACROEXPAND;
 // static const struct lisp_symbol *SYMBOL_MACROEXPAND_REC;
 
-void init_global_env(void) {
-  global_env = lisp_env_create(NULL);
-  gc_push_root_obj(global_env);
-
+void init_global_eval_state(void) {
 #define DEF_GLOBAL_SYM(var, name)                            \
   do {                                                       \
     /* Intermediate var because the global vars are const */ \
@@ -57,191 +44,12 @@ void init_global_env(void) {
 #undef DEF_GLOBAL_SYM
 }
 
-void set_format_exception(const char *format, ...) {
-  va_list ap;
-  va_start(ap, format);
-  current_exception = lisp_val_from_obj(lisp_string_vformat(format, ap));
-  va_end(ap);
-}
+static enum eval_status eval_tail(struct lisp_vm *vm, struct lisp_val ast);
 
-static enum eval_status eval_cons(struct lisp_cons *ast_list,
-                                  struct lisp_env *env,
-                                  struct lisp_cons **result,
-                                  bool *result_is_list) {
-  struct list_builder builder;
-  list_builder_init(&builder);
-  enum eval_status res = EV_SUCCESS;
-
-  struct lisp_val ast = lisp_val_from_obj(ast_list);
-
-  enum lisp_type ast_type;
-  // Check type at the end since we know it's a list to start off
-  do {
-    ast_list = lisp_val_as_obj(ast);
-
-    struct lisp_val next;
-    res = eval(ast_list->car, env, &next);
-    if (res == EV_EXCEPTION) {
-      goto ERROR;
-    }
-    list_builder_append(&builder, next);
-
-    ast = ast_list->cdr;
-  } while ((ast_type = lisp_val_type(ast)) == LISP_CONS);
-
-  if (ast_type != LISP_NIL) {
-    *result_is_list = false;
-    struct lisp_val end;
-    res = eval(ast, env, &end);
-    if (res == EV_EXCEPTION) {
-      goto ERROR;
-    }
-    list_builder_end_pair(&builder, end);
-  } else {
-    *result_is_list = true;
-  }
-
-  *result = lisp_val_as_obj(list_build(&builder));
-  return res;
-
-ERROR:
-  // Don't assign to result as it may not be the correct type
-  list_build(&builder);
-  return res;
-}
-
-static struct eval_result eval_call_closure(struct lisp_closure *cl,
-                                            struct lisp_val args,
-                                            struct lisp_val *result) {
-  // Make sure these don't go away while building up the environment (which can
-  // allocate)
-  gc_push_root(lisp_val_from_obj(cl));
-  gc_push_root(args);
-
-  struct lisp_env *fn_env = lisp_env_create(lisp_closure_env(cl));
-  gc_push_root(lisp_val_from_obj(fn_env));
-
-  struct eval_result res = {.status = EV_SUCCESS};
-
-  struct lisp_val param_names = lisp_closure_params(cl);
-  while (lisp_val_type(param_names) == LISP_CONS) {
-    struct lisp_cons *params_cons = lisp_val_as_obj(param_names);
-    // Assume parameters correctly set
-    struct lisp_symbol *param_name = lisp_val_as_obj(params_cons->car);
-    param_names = params_cons->cdr;
-
-    if (lisp_val_type(args) != LISP_CONS) {
-      set_func_exception("not enough arguments");
-      res.status = EV_EXCEPTION;
-      goto END;
-    }
-    struct lisp_cons *args_cons = lisp_val_as_obj(args);
-    struct lisp_val param_value = args_cons->car;
-    args = args_cons->cdr;
-
-    lisp_env_set(fn_env, param_name, param_value);
-  }
-
-  struct lisp_symbol *rest_param = lisp_closure_rest_param(cl);
-  if (rest_param != NULL) {
-    lisp_env_set(fn_env, rest_param, args);
-  } else if (lisp_val_type(args) != LISP_NIL) {
-    set_func_exception("too many arguments");
-    res.status = EV_EXCEPTION;
-    goto END;
-  }
-
-END:
-  gc_pop_root_expect(lisp_val_from_obj(fn_env));
-  gc_pop_root();  // args variable is mutated
-  gc_pop_root_expect(lisp_val_from_obj(cl));
-
-  if (res.status != EV_EXCEPTION) {
-    res.status = EV_TAIL_CALL;
-    res.ast = lisp_closure_ast(cl);
-    res.env = fn_env;
-    (void)result;
-  }
-  return res;
-}
-
-struct eval_result eval_apply_tco(struct lisp_val func, struct lisp_val args,
-                                  struct lisp_val *result) {
-  struct eval_result res;
-  enum lisp_type func_type = lisp_val_type(func);
-  if (func_type == LISP_BUILTIN) {
-    struct lisp_builtin *builtin = lisp_val_as_obj(func);
-    // Push the arguments in case the builtin allocates
-    gc_push_root(args);
-    res.status = builtin->func(args, result);
-    gc_pop_root_expect(args);
-  } else if (func_type == LISP_CLOSURE) {
-    struct lisp_closure *cl = lisp_val_as_obj(func);
-    res = eval_call_closure(cl, args, result);
-  } else {
-    set_func_exception("cannot call object of type: %s",
-                       lisp_val_type_name(func));
-    res.status = EV_EXCEPTION;
-  }
-  return res;
-}
-
-/**
- * Non-TCO-enabled version for use in builtins.
- * TODO Enable TCO from builtins?
- */
-enum eval_status eval_apply(struct lisp_val func, struct lisp_val args,
-                            struct lisp_val *result) {
-  struct eval_result res = eval_apply_tco(func, args, result);
-  if (res.status == EV_TAIL_CALL) {
-    return eval(res.ast, res.env, result);
-  } else {
-    return res.status;
-  }
-}
-
-static struct eval_result eval_call(struct lisp_cons *call_ast,
-                                    struct lisp_env *env,
-                                    struct lisp_val *result) {
-  struct lisp_cons *evaled_list;
-  bool is_list;
-  struct eval_result res;
-  res.status = eval_cons(call_ast, env, &evaled_list, &is_list);
-  if (res.status == EV_EXCEPTION) {
-    return res;
-  }
-  if (!is_list) {
-    set_func_exception("cannot call improper list");
-    res.status = EV_EXCEPTION;
-    return res;
-  }
-
-  return eval_apply_tco(evaled_list->car, evaled_list->cdr, result);
-}
-
-static struct eval_result do_macro_expand(struct lisp_val macro_fn,
-                                          struct lisp_val args,
-                                          struct lisp_env *env) {
-  struct eval_result res;
-  // TODO Extracted portion of eval_apply which doesn't need to do type
-  // checking?
-  struct lisp_val expanded_ast;
-  res.status = eval_apply(macro_fn, args, &expanded_ast);
-  if (res.status == EV_EXCEPTION) {
-    return res;
-  }
-
-  res.status = EV_TAIL_CALL;
-  res.ast = expanded_ast;
-  res.env = env;
-  return res;
-}
-
-static struct eval_result eval_if(struct lisp_val args, struct lisp_env *env,
-                                  struct lisp_val *result) {
+static struct eval_result eval_if(struct lisp_vm *vm, struct lisp_val args) {
   struct eval_result res;
   if (lisp_val_type(args) != LISP_CONS) {
-    set_func_exception("missing condition");
+    vm_raise_func_exception(vm, "missing condition");
     res.status = EV_EXCEPTION;
     return res;
   }
@@ -250,7 +58,7 @@ static struct eval_result eval_if(struct lisp_val args, struct lisp_env *env,
   args = cell->cdr;
 
   if (lisp_val_type(args) != LISP_CONS) {
-    set_func_exception("missing true branch");
+    vm_raise_func_exception(vm, "missing true branch");
     res.status = EV_EXCEPTION;
     return res;
   }
@@ -268,16 +76,16 @@ static struct eval_result eval_if(struct lisp_val args, struct lisp_env *env,
   }
 
   if (lisp_val_type(args) != LISP_NIL) {
-    set_func_exception("too many args");
+    vm_raise_func_exception(vm, "too many args");
     res.status = EV_EXCEPTION;
     return res;
   }
 
-  struct lisp_val cond_result;
-  res.status = eval(cond, env, &cond_result);
+  res.status = eval(vm, cond);
   if (res.status == EV_EXCEPTION) {
     return res;
   }
+  struct lisp_val cond_result = vm_stack_pop(vm);
 
   struct lisp_val chosen_branch;
   if (lisp_val_is_false(cond_result)) {
@@ -288,48 +96,36 @@ static struct eval_result eval_if(struct lisp_val args, struct lisp_env *env,
 
   res.status = EV_TAIL_CALL;
   res.ast = chosen_branch;
-  res.env = env;
-  (void)result;
   return res;
 }
 
-static struct eval_result eval_do(struct lisp_val args, struct lisp_env *env,
-                                  struct lisp_val *result) {
+static struct eval_result eval_do(struct lisp_vm *vm, struct lisp_val args) {
   struct eval_result res;
-  if (lisp_val_type(args) == LISP_NIL) {
-    *result = LISP_VAL_NIL;
+  struct lisp_cons *args_cons = lisp_val_cast(LISP_CONS, args);
+  if (args_cons == NULL) {
+    vm_stack_push(vm, LISP_VAL_NIL);
     res.status = EV_SUCCESS;
     return res;
   }
-  if (lisp_val_type(args) != LISP_CONS) {
-    res.status = EV_EXCEPTION;
-    return res;
-  }
 
-  struct lisp_cons *args_cons = lisp_val_as_obj(args);
   // Loop through all but the last as the last element needs to be TCO'd
   while (lisp_val_type(args_cons->cdr) == LISP_CONS) {
     // Write to result each time, but only the final itertion is kept
-    res.status = eval(args_cons->car, env, result);
+    res.status = eval(vm, args_cons->car);
     if (res.status == EV_EXCEPTION) {
       return res;
     }
+    // Ignore the value produced by eval
+    (void)vm_stack_pop(vm);
+
     args = args_cons->cdr;
     // Type is already checked by the while loop
     args_cons = lisp_val_as_obj(args);
   }
 
-  // TODO Check structure before evaluating anything
-  if (lisp_val_type(args_cons->cdr) != LISP_NIL) {
-    set_func_exception("cannot evaluate pair");
-    res.status = EV_EXCEPTION;
-    return res;
-  }
-
   // Tail call the last element
   res.status = EV_TAIL_CALL;
   res.ast = args_cons->car;
-  res.env = env;
   return res;
 }
 
@@ -352,16 +148,19 @@ static bool is_fn_def(struct lisp_val ast, struct lisp_env *env) {
   return head_sym == SYMBOL_FN;
 }
 
-static enum eval_status parse_def(struct lisp_val args, struct lisp_env *env,
-                                  struct lisp_symbol **bind_name,
-                                  struct lisp_val *bind_value) {
+/**
+ * Parse a def-like structure, extracting the name and evaluating the
+ * expression. The evaluated value is pushed onto the stack.
+ */
+static enum eval_status parse_def(struct lisp_vm *vm, struct lisp_val args,
+                                  struct lisp_symbol **bind_name) {
   if (lisp_val_type(args) != LISP_CONS) {
-    set_func_exception("missing symbol");
+    vm_raise_func_exception(vm, "missing symbol");
     return EV_EXCEPTION;
   }
   struct lisp_cons *cell = lisp_val_as_obj(args);
   if (lisp_val_type(cell->car) != LISP_SYMBOL) {
-    set_func_exception("first arg must be of type symbol");
+    vm_raise_func_exception(vm, "first arg must be of type symbol");
     return EV_EXCEPTION;
   }
 
@@ -369,7 +168,7 @@ static enum eval_status parse_def(struct lisp_val args, struct lisp_env *env,
   args = cell->cdr;
 
   if (lisp_val_type(args) != LISP_CONS) {
-    set_func_exception("missing value");
+    vm_raise_func_exception(vm, "missing value");
     return EV_EXCEPTION;
   }
   cell = lisp_val_as_obj(args);
@@ -377,19 +176,20 @@ static enum eval_status parse_def(struct lisp_val args, struct lisp_env *env,
   args = cell->cdr;
 
   if (lisp_val_type(args) != LISP_NIL) {
-    set_func_exception("too many args");
+    vm_raise_func_exception(vm, "too many args");
     return EV_EXCEPTION;
   }
 
-  enum eval_status res = eval(value_expr, env, bind_value);
+  enum eval_status res = eval(vm, value_expr);
   if (res != EV_SUCCESS) {
     return res;
   }
 
   // Special handling for functions so that they can know their names
   // This doesn't work in all cases, but does for basic patterns
-  if (is_fn_def(value_expr, env)) {
-    struct lisp_closure *closure = lisp_val_cast(LISP_CLOSURE, *bind_value);
+  if (is_fn_def(value_expr, vm_current_env(vm))) {
+    struct lisp_closure *closure =
+        lisp_val_cast(LISP_CLOSURE, vm_stack_top(vm));
     // The check went wrong in this case
     assert(closure != NULL);
     lisp_closure_set_name(closure, *bind_name);
@@ -397,161 +197,34 @@ static enum eval_status parse_def(struct lisp_val args, struct lisp_env *env,
   return res;
 }
 
-static enum eval_status eval_def(struct lisp_val args, struct lisp_env *env,
-                                 struct lisp_val *result) {
+static enum eval_status eval_def(struct lisp_vm *vm, struct lisp_val args) {
   struct lisp_symbol *bind_name;
-  struct lisp_val bind_value;
-  enum eval_status res = parse_def(args, env, &bind_name, &bind_value);
+  enum eval_status res = parse_def(vm, args, &bind_name);
   if (res != EV_SUCCESS) {
     return res;
   }
 
-  lisp_env_set(env, bind_name, bind_value);
-  *result = LISP_VAL_NIL;
+  lisp_env_set(vm_current_env(vm), bind_name, vm_stack_top(vm));
   return EV_SUCCESS;
 }
 
-static enum eval_status eval_defmacro(struct lisp_val args,
-                                      struct lisp_env *env,
-                                      struct lisp_val *result) {
+static enum eval_status eval_defmacro(struct lisp_vm *vm,
+                                      struct lisp_val args) {
   struct lisp_symbol *bind_name;
-  struct lisp_val bind_value;
-  enum eval_status res = parse_def(args, env, &bind_name, &bind_value);
+  enum eval_status res = parse_def(vm, args, &bind_name);
   if (res != EV_SUCCESS) {
     return res;
   }
 
+  struct lisp_val bind_value = vm_stack_top(vm);
   if (!lisp_val_is_func(bind_value)) {
-    set_func_exception("value must be a function");
+    vm_raise_func_exception(vm, "value must be a function");
     return EV_EXCEPTION;
   }
 
-  lisp_env_set_macro(env, bind_name, bind_value);
-  *result = LISP_VAL_NIL;
+  lisp_env_set_macro(vm_current_env(vm), bind_name, bind_value);
   return EV_SUCCESS;
 }
-
-/*
- * TODO Is undef! useful?
-static enum eval_status eval_undef(struct lisp_val args, struct lisp_env *env,
-                                   struct lisp_val *result) {
-  struct lisp_cons *args_cons = lisp_val_cast(LISP_CONS, args);
-  if (args_cons == NULL) {
-    set_func_exception("missing symbol");
-    return EV_EXCEPTION;
-  }
-
-  struct lisp_symbol *sym = lisp_val_cast(LISP_SYMBOL, args_cons->car);
-  if (sym == NULL) {
-    set_func_exception("argument must be of type symbol");
-    return EV_EXCEPTION;
-  }
-
-  if (!lisp_val_is_nil(args_cons->cdr)) {
-    set_func_exception("too many args");
-    return EV_EXCEPTION;
-  }
-
-  lisp_env_unset(env, sym);
-  *result = LISP_VAL_NIL;
-  return EV_SUCCESS;
-}
-*/
-
-/*
-static enum eval_status process_let_binding(struct lisp_val bindings,
-                                            struct lisp_env *let_env) {
-  while (lisp_val_type(bindings) == LISP_CONS) {
-    struct lisp_cons *bindings_head = lisp_val_as_obj(bindings);
-    struct lisp_val binding = bindings_head->car;
-    bindings = bindings_head->cdr;
-
-    if (lisp_val_type(binding) != LISP_CONS) {
-      set_func_exception("binding must be of type pair");
-      return EV_EXCEPTION;
-    }
-    struct lisp_cons *bind_cons = lisp_val_as_obj(binding);
-
-    if (lisp_val_type(bind_cons->car) != LISP_SYMBOL) {
-      set_func_exception("first element of binding must be of type symbol");
-      return EV_EXCEPTION;
-    }
-    struct lisp_symbol *bind_sym = lisp_val_as_obj(bind_cons->car);
-
-    binding = bind_cons->cdr;
-    if (lisp_val_type(binding) != LISP_CONS) {
-      set_func_exception("missing binding value");
-      return EV_EXCEPTION;
-    }
-    bind_cons = lisp_val_as_obj(binding);
-    struct lisp_val bind_expr = bind_cons->car;
-
-    if (lisp_val_type(bind_cons->cdr) != LISP_NIL) {
-      set_func_exception("binding must be of type list with 2 elements");
-      return EV_EXCEPTION;
-    }
-
-    struct lisp_val bind_val;
-    enum eval_status res = eval(bind_expr, let_env, &bind_val);
-    if (res == EV_EXCEPTION) {
-      return res;
-    }
-    lisp_env_set(let_env, bind_sym, bind_val);
-  }
-
-  if (lisp_val_type(bindings) != LISP_NIL) {
-    set_func_exception("bindings must be a list");
-    return EV_EXCEPTION;
-  }
-
-  return EV_SUCCESS;
-}
-
-static struct eval_result eval_let(struct lisp_val args,
-                                   struct lisp_env *outer_env,
-                                   struct lisp_val *result) {
-  struct eval_result res;
-  if (lisp_val_type(args) != LISP_CONS) {
-    set_func_exception("missing binding list");
-    res.status = EV_EXCEPTION;
-    return res;
-  }
-  struct lisp_cons *cell = lisp_val_as_obj(args);
-  struct lisp_val bindings = cell->car;
-  args = cell->cdr;
-
-  if (lisp_val_type(args) != LISP_CONS) {
-    set_func_exception("missing expression");
-    res.status = EV_EXCEPTION;
-    return res;
-  }
-  cell = lisp_val_as_obj(args);
-  struct lisp_val expr = cell->car;
-  args = cell->cdr;
-
-  if (lisp_val_type(args) != LISP_NIL) {
-    set_func_exception("too many args");
-    res.status = EV_EXCEPTION;
-    return res;
-  }
-
-  struct lisp_env *let_env = lisp_env_create(outer_env);
-  // Save env while building it up since the environment can re-allocate
-  gc_push_root(lisp_val_from_obj(let_env));
-  res.status = process_let_binding(bindings, let_env);
-  gc_pop_root_expect(lisp_val_from_obj(let_env));
-
-  if (res.status == EV_EXCEPTION) {
-    return res;
-  }
-
-  res.status = EV_TAIL_CALL;
-  res.ast = expr;
-  res.env = let_env;
-  (void)result; // Taken care of in the tail call
-  return res;
-}
-*/
 
 static bool param_list_contains(struct lisp_val param_list,
                                 const struct lisp_symbol *param) {
@@ -573,10 +246,12 @@ static bool param_list_contains(struct lisp_val param_list,
  * - (& rest) -> nil, rest
  * - (a & rest) -> (a), rest
  */
-static enum eval_status process_fn_params(struct lisp_val raw_params,
+static enum eval_status process_fn_params(struct lisp_vm *vm,
+                                          struct lisp_val raw_params,
                                           struct lisp_val *normal_params,
                                           struct lisp_symbol **rest_param) {
   // TODO Avoid building a new list if parameters are all "normal"
+  // TODO Store parameter names in a better data structure
   struct list_builder params_builder;
   list_builder_init(&params_builder);
 
@@ -591,13 +266,14 @@ static enum eval_status process_fn_params(struct lisp_val raw_params,
 
     struct lisp_symbol *sym_name = lisp_val_cast(LISP_SYMBOL, param_name);
     if (sym_name == NULL) {
-      set_func_exception("parameter names must be of type symbol");
+      vm_raise_func_exception(vm, "parameter names must be of type symbol");
       res = EV_EXCEPTION;
       break;
     }
 
     if (param_list_contains(list_builder_current(&params_builder), sym_name)) {
-      set_func_exception("duplicate parameter: %s", lisp_symbol_name(sym_name));
+      vm_raise_func_exception(vm, "duplicate parameter: %s",
+                              lisp_symbol_name(sym_name));
       res = EV_EXCEPTION;
       break;
     }
@@ -608,12 +284,12 @@ static enum eval_status process_fn_params(struct lisp_val raw_params,
   if (res == EV_SUCCESS && !lisp_val_is_nil(raw_params)) {
     *rest_param = lisp_val_cast(LISP_SYMBOL, raw_params);
     if (*rest_param == NULL) {
-      set_func_exception("parameter names must be of type symbol");
+      vm_raise_func_exception(vm, "parameter names must be of type symbol");
       res = EV_EXCEPTION;
     } else if (param_list_contains(list_builder_current(&params_builder),
                                    *rest_param)) {
-      set_func_exception("duplicate parameter: %s",
-                         lisp_symbol_name(*rest_param));
+      vm_raise_func_exception(vm, "duplicate parameter: %s",
+                              lisp_symbol_name(*rest_param));
       res = EV_EXCEPTION;
     }
   }
@@ -623,11 +299,9 @@ static enum eval_status process_fn_params(struct lisp_val raw_params,
   return res;
 }
 
-static enum eval_status eval_fn(struct lisp_val args,
-                                struct lisp_env *outer_env,
-                                struct lisp_val *result) {
+static enum eval_status eval_fn(struct lisp_vm *vm, struct lisp_val args) {
   if (lisp_val_type(args) != LISP_CONS) {
-    set_func_exception("missing binding list");
+    vm_raise_func_exception(vm, "missing binding list");
     return EV_EXCEPTION;
   }
   struct lisp_cons *cell = lisp_val_as_obj(args);
@@ -635,7 +309,7 @@ static enum eval_status eval_fn(struct lisp_val args,
   args = cell->cdr;
 
   if (lisp_val_type(args) != LISP_CONS) {
-    set_func_exception("missing expression");
+    vm_raise_func_exception(vm, "missing expression");
     return EV_EXCEPTION;
   }
   cell = lisp_val_as_obj(args);
@@ -643,141 +317,339 @@ static enum eval_status eval_fn(struct lisp_val args,
   args = cell->cdr;
 
   if (lisp_val_type(args) != LISP_NIL) {
-    set_func_exception("too many args");
+    vm_raise_func_exception(vm, "too many args");
     return EV_EXCEPTION;
   }
 
   struct lisp_val fn_params;
   struct lisp_symbol *fn_rest_param;
   enum eval_status res =
-      process_fn_params(raw_params, &fn_params, &fn_rest_param);
+      process_fn_params(vm, raw_params, &fn_params, &fn_rest_param);
   if (res == EV_EXCEPTION) {
     return res;
   }
 
-  *result = lisp_val_from_obj(
-      lisp_closure_create(fn_params, fn_rest_param, outer_env, expr));
+  vm_stack_push(vm, lisp_val_from_obj(lisp_closure_create(
+                        fn_params, fn_rest_param, vm_current_env(vm), expr)));
   return EV_SUCCESS;
 }
 
-static enum eval_status eval_quote(struct lisp_val args,
-                                   struct lisp_val *result) {
+static enum eval_status eval_quote(struct lisp_vm *vm, struct lisp_val args) {
   struct lisp_cons *cell = lisp_val_cast(LISP_CONS, args);
   if (cell == NULL) {
-    set_func_exception("missing argument");
+    vm_raise_func_exception(vm, "missing argument");
     return EV_EXCEPTION;
   }
   struct lisp_val quoted = cell->car;
 
   if (!lisp_val_is_nil(cell->cdr)) {
-    set_func_exception("too many args");
+    vm_raise_func_exception(vm, "too many args");
     return EV_EXCEPTION;
   }
 
-  *result = quoted;
+  vm_stack_push(vm, quoted);
   return EV_SUCCESS;
 }
 
-/*
-static enum eval_status eval_macro_expand_once(struct lisp_val args,
-                                               struct lisp_env *env,
-                                               struct lisp_val *result) {
-  struct lisp_cons *cell = lisp_val_cast(LISP_CONS, args);
-  if (cell == NULL) {
-    set_func_exception("missing argument");
-    return EV_EXCEPTION;
-  }
-  struct lisp_val ast = cell->car;
+static struct eval_result call_closure(struct lisp_vm *vm,
+                                       struct lisp_closure *cl,
+                                       unsigned stack_arg_count) {
+  // Save the closure while doing the environment operations since the closure
+  // could be an immediate value
+  gc_push_root_obj(cl);
 
-  if (!lisp_val_is_nil(cell->cdr)) {
-    set_func_exception("too many args");
-    return EV_EXCEPTION;
+  // Create new environment
+  struct lisp_env *func_env = lisp_env_create(lisp_closure_env(cl));
+  vm_create_tail_stack_frame(vm, func_env, stack_arg_count);
+
+  // Bind arguments to environment
+  struct eval_result res;
+
+  struct lisp_val params = lisp_closure_params(cl);
+  struct lisp_cons *params_cons;
+  unsigned param_index = 0;
+  while ((params_cons = lisp_val_cast(LISP_CONS, params)) != NULL) {
+    lisp_env_set(func_env, lisp_val_cast(LISP_SYMBOL, params_cons->car),
+                 vm_from_frame_pointer(vm, param_index));
+
+    params = params_cons->cdr;
+    param_index++;
   }
 
-  return macro_expand_once(ast, env, result);
+  struct lisp_symbol *rest_param = lisp_closure_rest_param(cl);
+  if (rest_param != NULL) {
+    lisp_env_set(func_env, rest_param, vm_from_stack_pointer(vm, 0));
+  }
+
+  // Don't need the stack items anymore now that they are bound
+  vm_stack_frame_clear(vm);
+
+  gc_pop_root_expect_obj(cl);
+
+  res.status = EV_TAIL_CALL;
+  res.ast = lisp_closure_ast(cl);
+  return res;
 }
 
-static enum eval_status eval_macro_expand_full(struct lisp_val args,
-                                               struct lisp_env *env,
-                                               struct lisp_val *result) {
-  struct lisp_cons *cell = lisp_val_cast(LISP_CONS, args);
-  if (cell == NULL) {
-    set_func_exception("missing argument");
-    return EV_EXCEPTION;
+static bool validate_function(struct lisp_val func, unsigned *arg_count,
+                              bool *is_variadic) {
+  enum lisp_type func_type = lisp_val_type(func);
+  if (func_type == LISP_BUILTIN) {
+    struct lisp_builtin *builtin = lisp_val_as_obj(func);
+    *arg_count = builtin->arg_count;
+    *is_variadic = builtin->has_rest_arg;
+    return true;
+  } else if (func_type == LISP_CLOSURE) {
+    struct lisp_closure *closure = lisp_val_as_obj(func);
+    *arg_count = lisp_closure_arg_count(closure);
+    *is_variadic = lisp_closure_rest_param(closure) != NULL;
+    return true;
+  } else {
+    return false;
   }
-  struct lisp_val ast = cell->car;
-
-  if (!lisp_val_is_nil(cell->cdr)) {
-    set_func_exception("too many args");
-    return EV_EXCEPTION;
-  }
-
-  return macro_expand_full(ast, env, result);
 }
 
-static enum eval_status eval_macro_expand_recursive(struct lisp_val args,
-                                                    struct lisp_env *env,
-                                                    struct lisp_val *result) {
-  struct lisp_cons *cell = lisp_val_cast(LISP_CONS, args);
-  if (cell == NULL) {
-    set_func_exception("missing argument");
-    return EV_EXCEPTION;
+static struct eval_result dispatch_call(struct lisp_vm *vm,
+                                        struct lisp_val func,
+                                        unsigned stack_arg_count) {
+  enum lisp_type func_type = lisp_val_type(func);
+  struct eval_result res;
+  if (func_type == LISP_BUILTIN) {
+    struct lisp_builtin *builtin = lisp_val_as_obj(func);
+    vm_create_tail_stack_frame(vm, vm_current_env(vm), stack_arg_count);
+    // TODO Enable tail calls from builtins
+    res.status = builtin->func(vm);
+    return res;
+  } else if (func_type == LISP_CLOSURE) {
+    return call_closure(vm, lisp_val_as_obj(func), stack_arg_count);
+  } else {
+    vm_raise_func_exception(vm, "cannot call value of type: %s",
+                            lisp_val_type_name(func));
+    // Should have already been checked
+    res.status = EV_EXCEPTION;
   }
-  struct lisp_val ast = cell->car;
-
-  if (!lisp_val_is_nil(cell->cdr)) {
-    set_func_exception("too many args");
-    return EV_EXCEPTION;
-  }
-
-  return macro_expand_recursive(ast, env, result);
+  return res;
 }
-*/
 
-static struct eval_result eval_special_or_call(struct lisp_val ast,
-                                               struct lisp_env *env,
-                                               struct lisp_val *result) {
+static enum eval_status eval_and_build_rest_args(struct lisp_vm *vm,
+                                                 struct lisp_val arg_exprs,
+                                                 struct lisp_val *arg_values) {
+  // TODO Use the VM stack to save the in-progess list instead of GC roots?
+  struct list_builder builder;
+  list_builder_init(&builder);
+  enum eval_status res = EV_SUCCESS;
+
+  struct lisp_cons *args_cons;
+  while ((args_cons = lisp_val_cast(LISP_CONS, arg_exprs)) != NULL) {
+    res = eval(vm, args_cons->car);
+    if (res == EV_EXCEPTION) {
+      break;
+    }
+    list_builder_append(&builder, vm_stack_pop(vm));
+
+    arg_exprs = args_cons->cdr;
+  }
+
+  *arg_values = list_build(&builder);
+  return res;
+}
+
+/**
+ * Call a function structure. The function and all arguments are first
+ * evaluated, then pushed on the stack.
+ */
+static struct eval_result eval_call(struct lisp_vm *vm,
+                                    struct lisp_val func_expr,
+                                    struct lisp_val args_expr) {
+  struct eval_result res;
+
+  // Evaluate function first to make sure it's callable and find the number of
+  // args
+  res.status = eval(vm, func_expr);
+  if (res.status == EV_EXCEPTION) {
+    return res;
+  }
+  struct lisp_val func = vm_stack_pop(vm);
+
+  unsigned arg_count;
+  bool is_variadic;
+  if (!validate_function(func, &arg_count, &is_variadic)) {
+    vm_raise_func_exception(vm, "cannot call object of type: %s",
+                            lisp_val_type_name(func));
+    res.status = EV_EXCEPTION;
+    return res;
+  }
+
+  gc_push_root(func);
+
+  for (unsigned i = 0; i < arg_count; i++) {
+    struct lisp_cons *args_cons = lisp_val_cast(LISP_CONS, args_expr);
+    if (args_cons == NULL) {
+      vm_raise_func_exception(vm, "not enough arguments");
+      res.status = EV_EXCEPTION;
+      goto ERROR;
+    }
+
+    res.status = eval(vm, args_cons->car);
+    if (res.status == EV_EXCEPTION) {
+      goto ERROR;
+    }
+
+    args_expr = args_cons->cdr;
+  }
+
+  if (is_variadic) {
+    struct lisp_val rest_args_values;
+    res.status = eval_and_build_rest_args(vm, args_expr, &rest_args_values);
+    if (res.status == EV_EXCEPTION) {
+      goto ERROR;
+    }
+    vm_stack_push(vm, rest_args_values);
+  } else if (!lisp_val_is_nil(args_expr)) {
+    vm_raise_func_exception(vm, "too many arguments");
+    res.status = EV_EXCEPTION;
+    goto ERROR;
+  }
+
+  gc_pop_root_expect(func);
+  // Total number of stack elements passed to the function
+  unsigned stack_arg_count = arg_count + (is_variadic ? 1 : 0);
+  return dispatch_call(vm, func, stack_arg_count);
+
+ERROR:
+  gc_pop_root_expect(func);
+  return res;
+}
+
+/**
+ * Apply a function to a list of arguments. Neither the function nor arguments
+ * are evaluated.
+ */
+static struct eval_result eval_apply_tco(struct lisp_vm *vm,
+                                         struct lisp_val func,
+                                         struct lisp_val args) {
+  struct eval_result res;
+
+  unsigned arg_count;
+  bool is_variadic;
+  if (!validate_function(func, &arg_count, &is_variadic)) {
+    vm_raise_func_exception(vm, "cannot call object of type: %s",
+                            lisp_val_type_name(func));
+    res.status = EV_EXCEPTION;
+    return res;
+  }
+
+  for (unsigned i = 0; i < arg_count; i++) {
+    struct lisp_cons *args_cons = lisp_val_cast(LISP_CONS, args);
+    if (args_cons == NULL) {
+      vm_raise_func_exception(vm, "not enough arguments");
+      res.status = EV_EXCEPTION;
+      return res;
+    }
+
+    vm_stack_push(vm, args_cons->car);
+    args = args_cons->cdr;
+  }
+
+  if (is_variadic) {
+    // Args are not evaluated, so the rest of the list can be used directly
+    vm_stack_push(vm, args);
+  } else if (!lisp_val_is_nil(args)) {
+    vm_raise_func_exception(vm, "too many arguments");
+    res.status = EV_EXCEPTION;
+    return res;
+  }
+
+  // Total number of stack elements passed to the function
+  unsigned stack_arg_count = arg_count + (is_variadic ? 1 : 0);
+  return dispatch_call(vm, func, stack_arg_count);
+}
+
+enum eval_status eval_apply(struct lisp_vm *vm, struct lisp_val func,
+                            struct lisp_val args) {
+  vm_create_stack_frame(vm, vm_current_env(vm), 0);
+  struct eval_result res = eval_apply_tco(vm, func, args);
+  switch (res.status) {
+    case EV_SUCCESS:
+      vm_stack_frame_return(vm);
+      return EV_SUCCESS;
+    case EV_TAIL_CALL:
+      res.status = eval_tail(vm, res.ast);
+      return res.status;
+    case EV_EXCEPTION:
+      return EV_EXCEPTION;
+    default:
+      return EV_EXCEPTION;
+  }
+}
+
+static struct eval_result do_macro_expand(struct lisp_vm *vm,
+                                          struct lisp_val macro_fn,
+                                          struct lisp_val args) {
+  struct eval_result res;
+  // TODO Extracted portion of eval_apply which doesn't need to do type
+  // checking?
+  res.status = eval_apply(vm, macro_fn, args);
+  if (res.status == EV_EXCEPTION) {
+    return res;
+  }
+
+  res.status = EV_TAIL_CALL;
+  res.ast = vm_stack_pop(vm);
+  return res;
+}
+
+static struct eval_result eval_special_or_call(struct lisp_vm *vm,
+                                               struct lisp_val ast) {
   struct lisp_cons *call_ast = lisp_val_as_obj(ast);
+  struct lisp_val head = call_ast->car;
+  struct lisp_val args = call_ast->cdr;
+
+  // Check the structure here to avoid doing it everywhere else
+  if (!lisp_val_is_list(args)) {
+    vm_raise_func_exception(vm, "cannot evaluate improper list");
+    return (struct eval_result){.status = EV_EXCEPTION};
+  }
 
   // Then special forms
-  if (lisp_val_type(call_ast->car) == LISP_SYMBOL) {
-    struct lisp_symbol *head_sym = lisp_val_as_obj(call_ast->car);
-    struct lisp_val args = call_ast->cdr;
+  if (lisp_val_type(head) == LISP_SYMBOL) {
+    struct lisp_symbol *head_sym = lisp_val_as_obj(head);
 
-    const struct lisp_env_binding *binding = lisp_env_get(env, head_sym);
+    const struct lisp_env_binding *binding =
+        lisp_env_get(vm_current_env(vm), head_sym);
     if (binding != NULL) {
       if (binding->is_macro) {
         // Doesn't need result since it always returns a tail call
-        return do_macro_expand(binding->value, args, env);
+        return do_macro_expand(vm, binding->value, args);
       } else {
         // Must be a function
         // TODO Avoid looking up the symbol again
-        return eval_call(call_ast, env, result);
+        return eval_call(vm, head, args);
       }
     } else {
       struct eval_result res;
 
       // Check special forms
       if (lisp_symbol_eq(head_sym, SYMBOL_DO)) {
-        return eval_do(args, env, result);
+        return eval_do(vm, args);
       }
       if (lisp_symbol_eq(head_sym, SYMBOL_IF)) {
-        return eval_if(args, env, result);
+        return eval_if(vm, args);
       }
       if (lisp_symbol_eq(head_sym, SYMBOL_DEF)) {
-        res.status = eval_def(args, env, result);
+        res.status = eval_def(vm, args);
         return res;
       }
       if (lisp_symbol_eq(head_sym, SYMBOL_DEFMACRO)) {
-        res.status = eval_defmacro(args, env, result);
+        res.status = eval_defmacro(vm, args);
         return res;
       }
       if (lisp_symbol_eq(head_sym, SYMBOL_FN)) {
-        res.status = eval_fn(args, env, result);
+        res.status = eval_fn(vm, args);
         return res;
       }
       if (lisp_symbol_eq(head_sym, SYMBOL_QUOTE)) {
-        res.status = eval_quote(args, result);
+        res.status = eval_quote(vm, args);
         return res;
       }
       // Non-matching case handled by eval_call below
@@ -787,15 +659,15 @@ static struct eval_result eval_special_or_call(struct lisp_val ast,
       // TODO The semantics of these are broken anyway
       /*
       if (lisp_symbol_eq(head_sym, SYMBOL_MACROEXPAND_1)) {
-        res.status = eval_macro_expand_once(args, env, result);
+        res.status = eval_macro_expand_once(vm, args);
         return res;
       }
       if (lisp_symbol_eq(head_sym, SYMBOL_MACROEXPAND)) {
-        res.status = eval_macro_expand_full(args, env, result);
+        res.status = eval_macro_expand_full(vm, args);
         return res;
       }
       if (lisp_symbol_eq(head_sym, SYMBOL_MACROEXPAND_REC)) {
-        res.status = eval_macro_expand_recursive(args, env, result);
+        res.status = eval_macro_expand_recursive(vm, args);
         return res;
       }
       */
@@ -809,14 +681,12 @@ static struct eval_result eval_special_or_call(struct lisp_val ast,
   }
 
   // Fallback if no special form matched
-  return eval_call(call_ast, env, result);
+  return eval_call(vm, head, args);
 }
 
-enum eval_status eval(struct lisp_val ast, struct lisp_env *env,
-                      struct lisp_val *result) {
+static enum eval_status eval_tail(struct lisp_vm *vm, struct lisp_val ast) {
   while (true) {
     gc_push_root(ast);
-    gc_push_root(lisp_val_from_obj(env));
 
     // struct lisp_string *printed = print_str(ast, true);
     // log("%s", lisp_string_as_cstr(printed));
@@ -831,41 +701,51 @@ enum eval_status eval(struct lisp_val ast, struct lisp_env *env,
       case LISP_BUILTIN:
       case LISP_CLOSURE:
       case LISP_ATOM:
-        *result = ast;
+        vm_stack_push(vm, ast);
         res.status = EV_SUCCESS;
         break;
       case LISP_SYMBOL: {
         struct lisp_symbol *sym = lisp_val_as_obj(ast);
-        const struct lisp_env_binding *found = lisp_env_get(env, sym);
+        const struct lisp_env_binding *found =
+            lisp_env_get(vm_current_env(vm), sym);
         if (found != NULL) {
-          *result = found->value;
+          vm_stack_push(vm, found->value);
           res.status = EV_SUCCESS;
         } else {
-          set_func_exception("symbol '%s' not defined", lisp_symbol_name(sym));
+          vm_raise_func_exception(vm, "symbol '%s' not defined",
+                                  lisp_symbol_name(sym));
           res.status = EV_EXCEPTION;
         }
         break;
       }
       case LISP_CONS: {
-        res = eval_special_or_call(ast, env, result);
+        res = eval_special_or_call(vm, ast);
         break;
       }
       default:
-        set_func_exception("cannot evaluate object of type: %s",
-                           lisp_val_type_name(ast));
+        vm_raise_func_exception(vm, "cannot evaluate object of type: %s",
+                                lisp_val_type_name(ast));
         res.status = EV_EXCEPTION;
         break;
     }
 
-    gc_pop_root_expect(lisp_val_from_obj(env));
     gc_pop_root_expect(ast);
 
-    if (res.status == EV_TAIL_CALL) {
-      ast = res.ast;
-      env = res.env;
-      continue;
-    } else {
-      return res.status;
+    switch (res.status) {
+      case EV_SUCCESS:
+        vm_stack_frame_return(vm);
+        return res.status;
+      case EV_TAIL_CALL:
+        ast = res.ast;
+        continue;
+      case EV_EXCEPTION:
+        return res.status;
     }
   }
+}
+
+enum eval_status eval(struct lisp_vm *vm, struct lisp_val ast) {
+  vm_create_stack_frame(vm, vm_current_env(vm), 0);
+
+  eval_tail(vm, ast);
 }

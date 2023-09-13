@@ -5,7 +5,7 @@ BUILD = build
 BIN = bin
 
 EXEC = $(BIN)/whisp
-SRCS = main.c types.c reader.c printer.c memory.c core.c core_helper.c eval.c file.c
+SRCS = main.c types.c reader.c printer.c memory.c core.c core_helper.c eval.c file.c vm.c
 OBJS = $(SRCS:%.c=$(BUILD)/%.o)
 
 all: $(EXEC)

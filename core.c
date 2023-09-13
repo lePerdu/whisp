@@ -18,26 +18,20 @@
 #include "printer.h"
 #include "reader.h"
 #include "types.h"
+#include "vm.h"
 
 MAKE_INT_BINARY(add, +);
 MAKE_INT_BINARY(sub, -);
 MAKE_INT_BINARY(mul, *);
 
-static enum eval_status do_int_div(struct lisp_val x, struct lisp_val y,
-                                   struct lisp_val *result) {
-  long dividend = lisp_val_as_int(x);
-  long divisor = lisp_val_as_int(y);
+DEF_BUILTIN(core_int_div) {
+  DEF_INT_ARG(dividend, 0);
+  DEF_INT_ARG(divisor, 1);
   if (divisor == 0) {
-    set_format_exception("cannot divide by 0");
+    vm_raise_func_exception(vm, "cannot divide by 0");
     return EV_EXCEPTION;
   }
-  *result = lisp_val_from_int(dividend / divisor);
-  return EV_SUCCESS;
-}
-
-DEF_BUILTIN(core_int_div) {
-  return binary_func_with_types(__func__, LISP_INT, LISP_INT, do_int_div, args,
-                                result);
+  BUILTIN_RETURN(lisp_val_from_int(dividend / divisor));
 }
 
 MAKE_INT_COMPARE(lt, <);
@@ -58,10 +52,9 @@ static enum eval_status do_real_exp(struct lisp_val x,
   return EV_SUCCESS;
 }
 
-static enum eval_status core_real_exp(struct lisp_val args,
-                                      struct lisp_val *result) {
-  return unary_func_with_type(__func__, LISP_REAL, do_real_exp, args, result);
-};
+DEF_BUILTIN(core_real_exp) {
+  return unary_func_with_type(vm, __func__, LISP_REAL, do_real_exp);
+}
 
 static enum eval_status do_real_log(struct lisp_val x,
                                     struct lisp_val *result) {
@@ -69,9 +62,8 @@ static enum eval_status do_real_log(struct lisp_val x,
   return EV_SUCCESS;
 }
 
-static enum eval_status core_real_log(struct lisp_val args,
-                                      struct lisp_val *result) {
-  return unary_func_with_type(__func__, LISP_REAL, do_real_log, args, result);
+DEF_BUILTIN(core_real_log) {
+  return unary_func_with_type(vm, __func__, LISP_REAL, do_real_log);
 };
 
 static enum eval_status do_real_pow(struct lisp_val x, struct lisp_val y,
@@ -80,11 +72,10 @@ static enum eval_status do_real_pow(struct lisp_val x, struct lisp_val y,
   return EV_SUCCESS;
 }
 
-static enum eval_status core_real_pow(struct lisp_val args,
-                                      struct lisp_val *result) {
-  return binary_func_with_types(__func__, LISP_REAL, LISP_REAL, do_real_pow,
-                                args, result);
-};
+DEF_BUILTIN(core_real_pow) {
+  return binary_func_with_types(vm, __func__, LISP_REAL, LISP_REAL,
+                                do_real_pow);
+}
 
 MAKE_REAL_COMPARE(lt, <);
 MAKE_REAL_COMPARE(lte, <=);
@@ -103,12 +94,12 @@ static long int_sub(long x, long y) { return x - y; }
 static double real_sub(double x, double y) { return x - y; }
 
 DEF_BUILTIN(core_add) {
-  return arith_nary(__func__, args, lisp_val_from_int(0), int_add, real_add,
+  return arith_nary(vm, __func__, args, lisp_val_from_int(0), int_add, real_add,
                     result);
 }
 
 DEF_BUILTIN(core_mul) {
-  return arith_nary(__func__, args, lisp_val_from_int(1), int_mul, real_mul,
+  return arith_nary(vm, __func__, args, lisp_val_from_int(1), int_mul, real_mul,
                     result);
 }
 
@@ -118,14 +109,14 @@ static struct lisp_val generic_sub(struct lisp_val x, struct lisp_val y) {
 
 DEF_BUILTIN(core_sub) {
   if (lisp_val_type(args) != LISP_CONS) {
-    set_func_exception(ERROR_NOT_ENOUGH_ARGS);
+    vm_raise_func_exception(vm, ERROR_NOT_ENOUGH_ARGS);
     return EV_EXCEPTION;
   }
 
   struct lisp_cons *cell = lisp_val_as_obj(args);
 
   if (!lisp_val_is_number(cell->car)) {
-    set_func_exception(ERROR_INT_ARGS);
+    vm_raise_func_exception(vm, ERROR_INT_ARGS);
     return EV_EXCEPTION;
   }
 
@@ -138,7 +129,7 @@ DEF_BUILTIN(core_sub) {
   }
 
   args = cell->cdr;
-  return arith_nary(__func__, args, total, int_sub, real_sub, result);
+  return arith_nary(vm, __func__, args, total, int_sub, real_sub, result);
 }
 
 **
@@ -152,7 +143,7 @@ static enum eval_status generic_div(struct lisp_val x, struct lisp_val y,
     // Only check for 0 for integers.
     long divisor = lisp_val_as_int(y);
     if (divisor == 0) {
-      set_format_exception("cannot divide by 0");
+      vm_raise_func_exception(vm, "cannot divide by 0");
       return EV_EXCEPTION;
     }
     *result = lisp_val_from_int(lisp_val_as_int(x) / divisor);
@@ -166,7 +157,7 @@ static enum eval_status generic_div(struct lisp_val x, struct lisp_val y,
 
 DEF_BUILTIN(core_div) {
   if (lisp_val_type(args) != LISP_CONS) {
-    set_func_exception(ERROR_NOT_ENOUGH_ARGS);
+    vm_raise_func_exception(vm, ERROR_NOT_ENOUGH_ARGS);
     return EV_EXCEPTION;
   }
 
@@ -174,7 +165,7 @@ DEF_BUILTIN(core_div) {
 
   struct lisp_val total = cell->car;
   if (!lisp_val_is_number(cell->car)) {
-    set_format_exception(ERROR_INT_ARGS);
+    vm_raise_func_exception(vm, ERROR_INT_ARGS);
     return EV_EXCEPTION;
   }
 
@@ -184,7 +175,7 @@ DEF_BUILTIN(core_div) {
     cell = lisp_val_as_obj(args);
     struct lisp_val divisor = cell->car;
     if (!lisp_val_is_number(divisor)) {
-      set_func_exception(ERROR_INT_ARGS);
+      vm_raise_func_exception(vm, ERROR_INT_ARGS);
       return EV_EXCEPTION;
     }
 
@@ -200,8 +191,9 @@ DEF_BUILTIN(core_div) {
 */
 
 DEF_BUILTIN(core_identical) {
+  struct lisp_val args = vm_stack_pop(vm);
   if (lisp_val_type(args) != LISP_CONS) {
-    *result = lisp_true();
+    vm_stack_push(vm, lisp_true());
     return EV_SUCCESS;
   }
 
@@ -215,13 +207,13 @@ DEF_BUILTIN(core_identical) {
     cell = lisp_val_as_obj(args);
 
     if (!lisp_val_identical(first, cell->car)) {
-      *result = lisp_false();
+      vm_stack_push(vm, lisp_false());
       return EV_SUCCESS;
     }
     args = cell->cdr;
   }
 
-  *result = lisp_true();
+  vm_stack_push(vm, lisp_true());
   return EV_SUCCESS;
 }
 
@@ -231,9 +223,7 @@ static enum eval_status make_cons(struct lisp_val first, struct lisp_val second,
   return EV_SUCCESS;
 }
 
-DEF_BUILTIN(core_make_cons) {
-  return binary_func(__func__, make_cons, args, result);
-}
+DEF_BUILTIN(core_make_cons) { return binary_func(vm, __func__, make_cons); }
 
 enum eval_status car(struct lisp_val arg, struct lisp_val *result) {
   *result = LISP_VAL_AS(struct lisp_cons, arg)->car;
@@ -246,14 +236,15 @@ enum eval_status cdr(struct lisp_val arg, struct lisp_val *result) {
 }
 
 DEF_BUILTIN(core_car) {
-  return unary_func_with_type(__func__, LISP_CONS, car, args, result);
+  return unary_func_with_type(vm, __func__, LISP_CONS, car);
 }
 
 DEF_BUILTIN(core_cdr) {
-  return unary_func_with_type(__func__, LISP_CONS, cdr, args, result);
+  return unary_func_with_type(vm, __func__, LISP_CONS, cdr);
 }
 
 DEF_BUILTIN(core_string_concat) {
+  struct lisp_val args = vm_stack_pop(vm);
   struct str_builder builder;
   str_builder_init(&builder);
 
@@ -264,14 +255,14 @@ DEF_BUILTIN(core_string_concat) {
 
     struct lisp_string *s = lisp_val_cast(LISP_STRING, cell->car);
     if (s == NULL) {
-      set_func_exception(ERROR_STRING_ARG);
+      vm_raise_func_exception(vm, ERROR_STRING_ARG);
       res = EV_EXCEPTION;
       break;
     }
     str_builder_concat(&builder, s);
   }
 
-  *result = lisp_val_from_obj(str_build(&builder));
+  vm_stack_push(vm, lisp_val_from_obj(str_build(&builder)));
   return res;
 }
 
@@ -281,111 +272,73 @@ enum eval_status string_count(struct lisp_val arg, struct lisp_val *result) {
 }
 
 DEF_BUILTIN(core_string_count) {
-  return unary_func_with_type(__func__, LISP_STRING, string_count, args,
-                              result);
-}
-
-static enum eval_status string_get(struct lisp_val str_val,
-                                   struct lisp_val index_val,
-                                   struct lisp_val *result) {
-  struct lisp_string *str = lisp_val_as_obj(str_val);
-  long index = lisp_val_as_int(index_val);
-
-  if (index < 0 || (long)lisp_string_length(str) <= index) {
-    set_func_exception("string index out of bounds: %ld", index);
-    return EV_EXCEPTION;
-  }
-
-  *result = lisp_val_from_char(lisp_string_get(str, index));
-  return EV_SUCCESS;
+  return unary_func_with_type(vm, __func__, LISP_STRING, string_count);
 }
 
 DEF_BUILTIN(core_string_get) {
-  return binary_func_with_types(__func__, LISP_STRING, LISP_INT, string_get,
-                                args, result);
-}
+  DEF_OBJ_ARG(struct lisp_string, str, LISP_STRING, 0);
+  DEF_INT_ARG(index, 1);
 
-DEF_BUILTIN(core_is_cons) {
-  return type_pred(__func__, LISP_CONS, args, result);
-}
-
-DEF_BUILTIN(core_is_null) {
-  return type_pred(__func__, LISP_NIL, args, result);
-}
-
-DEF_BUILTIN(core_is_integer) {
-  return type_pred(__func__, LISP_INT, args, result);
-}
-
-DEF_BUILTIN(core_is_real) {
-  return type_pred(__func__, LISP_REAL, args, result);
-}
-
-enum eval_status convert_to_real(struct lisp_val arg, struct lisp_val *result) {
-  switch (lisp_val_type(arg)) {
-    case LISP_INT:
-      *result = lisp_val_from_real((double)lisp_val_as_int(arg));
-      return EV_SUCCESS;
-    case LISP_REAL:
-      *result = arg;
-      return EV_SUCCESS;
-    default:
-      set_func_exception(ERROR_NUMBER_ARG);
-      return EV_EXCEPTION;
+  if (index < 0 || (long)lisp_string_length(str) <= index) {
+    vm_raise_func_exception(vm, "string index out of bounds: %ld", index);
+    return EV_EXCEPTION;
   }
+
+  BUILTIN_RETURN(lisp_val_from_char(lisp_string_get(str, index)));
 }
+
+DEF_BUILTIN(core_is_cons) { return type_pred(vm, __func__, LISP_CONS); }
+
+DEF_BUILTIN(core_is_null) { return type_pred(vm, __func__, LISP_NIL); }
+
+DEF_BUILTIN(core_is_integer) { return type_pred(vm, __func__, LISP_INT); }
+
+DEF_BUILTIN(core_is_real) { return type_pred(vm, __func__, LISP_REAL); }
 
 DEF_BUILTIN(core_to_real) {
-  return unary_func(__func__, convert_to_real, args, result);
-}
+  DEF_ARG(arg, 0);
 
-enum eval_status convert_to_int(struct lisp_val arg, struct lisp_val *result) {
   switch (lisp_val_type(arg)) {
     case LISP_INT:
-      *result = arg;
-      return EV_SUCCESS;
+      BUILTIN_RETURN(lisp_val_from_real((double)lisp_val_as_int(arg)));
     case LISP_REAL:
-      *result = lisp_val_from_int((long)lisp_val_as_real(arg));
-      return EV_SUCCESS;
+      BUILTIN_RETURN(arg);
     default:
-      set_func_exception(ERROR_NUMBER_ARG);
+      vm_raise_func_exception(vm, ERROR_NUMBER_ARG);
       return EV_EXCEPTION;
   }
 }
 
 DEF_BUILTIN(core_to_int) {
-  return unary_func(__func__, convert_to_int, args, result);
-}
+  DEF_ARG(arg, 0);
 
-static enum eval_status string_to_symbol(struct lisp_val arg,
-                                         struct lisp_val *result) {
-  if (lisp_val_type(arg) != LISP_STRING) {
-    set_format_exception(ERROR_STRING_ARG);
-    return EV_EXCEPTION;
-  }
-  struct lisp_string *str = lisp_val_as_obj(arg);
-  const char *name = lisp_string_as_cstr(str);
-  if (is_valid_symbol(name)) {
-    *result =
-        lisp_val_from_obj(lisp_symbol_create(name, lisp_string_length(str)));
-    return EV_SUCCESS;
-  } else {
-    set_format_exception("invalid symbol name: '%s'", name);
-    return EV_EXCEPTION;
+  switch (lisp_val_type(arg)) {
+    case LISP_INT:
+      BUILTIN_RETURN(arg);
+    case LISP_REAL:
+      BUILTIN_RETURN(lisp_val_from_int((long)lisp_val_as_real(arg)));
+    default:
+      vm_raise_func_exception(vm, ERROR_NUMBER_ARG);
+      return EV_EXCEPTION;
   }
 }
 
 DEF_BUILTIN(core_string_to_symbol) {
-  return unary_func(__func__, string_to_symbol, args, result);
+  DEF_OBJ_ARG(struct lisp_string, str, LISP_STRING, 0);
+
+  const char *name = lisp_string_as_cstr(str);
+  if (is_valid_symbol(name)) {
+    BUILTIN_RETURN(
+        lisp_val_from_obj(lisp_symbol_create(name, lisp_string_length(str))));
+  } else {
+    vm_raise_func_exception(vm, "invalid symbol name: '%s'", name);
+    return EV_EXCEPTION;
+  }
 }
 
-DEF_BUILTIN(core_is_symbol) {
-  return type_pred(__func__, LISP_SYMBOL, args, result);
-}
+DEF_BUILTIN(core_is_symbol) { return type_pred(vm, __func__, LISP_SYMBOL); }
 
-DEF_BUILTIN(core_is_char) {
-  return type_pred(__func__, LISP_CHAR, args, result);
-}
+DEF_BUILTIN(core_is_char) { return type_pred(vm, __func__, LISP_CHAR); }
 
 MAKE_CHAR_COMPARE(lt, <);
 MAKE_CHAR_COMPARE(lte, <=);
@@ -393,37 +346,24 @@ MAKE_CHAR_COMPARE(gt, >);
 MAKE_CHAR_COMPARE(gte, >=);
 MAKE_CHAR_COMPARE(eq, ==);
 
-static enum eval_status do_char_to_int(struct lisp_val arg,
-                                       struct lisp_val *result) {
-  *result = lisp_val_from_int(lisp_val_as_char(arg));
-  return EV_SUCCESS;
-}
-
 DEF_BUILTIN(core_char_to_int) {
-  return unary_func_with_type(__func__, LISP_CHAR, do_char_to_int, args,
-                              result);
+  DEF_CHAR_ARG(c, 0);
+  BUILTIN_RETURN(lisp_val_from_int(c));
 }
 
-static enum eval_status do_int_to_char(struct lisp_val arg,
-                                       struct lisp_val *result) {
+DEF_BUILTIN(core_int_to_char) {
+  DEF_INT_ARG(int_val, 0);
+
   // TODO Expand range when better char support is available
-  long int_val = lisp_val_as_int(arg);
   if (LISP_CHAR_MIN <= int_val && int_val <= LISP_CHAR_MAX) {
-    *result = lisp_val_from_char((lisp_char_t)int_val);
-    return EV_SUCCESS;
+    BUILTIN_RETURN(lisp_val_from_char((lisp_char_t)int_val));
   } else {
-    set_func_exception("integer value out of range: %ld", int_val);
+    vm_raise_func_exception(vm, "integer value out of range: %ld", int_val);
     return EV_EXCEPTION;
   }
 }
 
-DEF_BUILTIN(core_int_to_char) {
-  return unary_func_with_type(__func__, LISP_INT, do_int_to_char, args, result);
-}
-
-DEF_BUILTIN(core_is_string) {
-  return type_pred(__func__, LISP_STRING, args, result);
-}
+DEF_BUILTIN(core_is_string) { return type_pred(vm, __func__, LISP_STRING); }
 
 static enum eval_status do_string_eq(struct lisp_val x, struct lisp_val y,
                                      struct lisp_val *result) {
@@ -433,19 +373,16 @@ static enum eval_status do_string_eq(struct lisp_val x, struct lisp_val y,
   return EV_SUCCESS;
 }
 
-static enum eval_status core_string_eq(struct lisp_val args,
-                                       struct lisp_val *result) {
-  return binary_func_with_types(__func__, LISP_STRING, LISP_STRING,
-                                do_string_eq, args, result);
+DEF_BUILTIN(core_string_eq) {
+  return binary_func_with_types(vm, __func__, LISP_STRING, LISP_STRING,
+                                do_string_eq);
 }
 
 DEF_BUILTIN(core_is_function) {
-  return unary_pred(__func__, lisp_val_is_func, args, result);
+  return unary_pred(vm, __func__, lisp_val_is_func);
 }
 
-DEF_BUILTIN(core_is_atom) {
-  return type_pred(__func__, LISP_ATOM, args, result);
-}
+DEF_BUILTIN(core_is_atom) { return type_pred(vm, __func__, LISP_ATOM); }
 
 static enum eval_status make_atom(struct lisp_val arg,
                                   struct lisp_val *result) {
@@ -453,9 +390,7 @@ static enum eval_status make_atom(struct lisp_val arg,
   return EV_SUCCESS;
 }
 
-DEF_BUILTIN(core_make_atom) {
-  return unary_func(__func__, make_atom, args, result);
-}
+DEF_BUILTIN(core_make_atom) { return unary_func(vm, __func__, make_atom); }
 
 static enum eval_status do_deref(struct lisp_val arg, struct lisp_val *result) {
   *result = lisp_atom_deref(lisp_val_as_obj(arg));
@@ -463,7 +398,7 @@ static enum eval_status do_deref(struct lisp_val arg, struct lisp_val *result) {
 }
 
 DEF_BUILTIN(core_deref) {
-  return unary_func_with_type(__func__, LISP_ATOM, do_deref, args, result);
+  return unary_func_with_type(vm, __func__, LISP_ATOM, do_deref);
 }
 
 static enum eval_status do_reset(struct lisp_val atom,
@@ -474,42 +409,31 @@ static enum eval_status do_reset(struct lisp_val atom,
   return EV_SUCCESS;
 }
 
-DEF_BUILTIN(core_reset) {
-  return binary_func(__func__, do_reset, args, result);
-}
+DEF_BUILTIN(core_reset) { return binary_func(vm, __func__, do_reset); }
 
 DEF_BUILTIN(core_eval) {
-  if (lisp_val_type(args) != LISP_CONS) {
-    set_format_exception(ERROR_NOT_ENOUGH_ARGS);
-    return EV_EXCEPTION;
-  }
-  struct lisp_cons *args_cons = lisp_val_as_obj(args);
-  struct lisp_val ast = args_cons->car;
+  DEF_ARG(ast, 0);
 
-  if (lisp_val_type(args_cons->cdr) != LISP_NIL) {
-    set_format_exception(ERROR_TOO_MANY_ARGS);
-    return EV_EXCEPTION;
-  }
-
+  // Eval leaves the result on the stack
   // TODO Enable TCO for builtins
-  return eval(ast, global_env, result);
-}
-
-static enum eval_status do_apply(struct lisp_val func, struct lisp_val args,
-                                 struct lisp_val *result) {
-  if (!lisp_val_is_func(func)) {
-    set_format_exception(ERROR_FUNC_ARG);
-    return EV_EXCEPTION;
-  }
-  if (!lisp_val_is_list(args)) {
-    set_format_exception(ERROR_LIST_ARG);
-    return EV_EXCEPTION;
-  }
-  return eval_apply(func, args, result);
+  return eval(vm, ast);
 }
 
 DEF_BUILTIN(core_apply) {
-  return binary_func(__func__, do_apply, args, result);
+  DEF_ARG(func, 0);
+  DEF_ARG(args, 1);
+
+  if (!lisp_val_is_func(func)) {
+    vm_raise_func_exception(vm, ERROR_FUNC_ARG);
+    return EV_EXCEPTION;
+  }
+
+  if (!lisp_val_is_list(args)) {
+    vm_raise_func_exception(vm, ERROR_LIST_ARG);
+    return EV_EXCEPTION;
+  }
+
+  return eval_apply(vm, func, args);
 }
 
 static enum eval_status do_to_string(struct lisp_val arg,
@@ -521,9 +445,7 @@ static enum eval_status do_to_string(struct lisp_val arg,
 /**
  * Convert value to a string.
  */
-DEF_BUILTIN(core_to_string) {
-  return unary_func(__func__, do_to_string, args, result);
-}
+DEF_BUILTIN(core_to_string) { return unary_func(vm, __func__, do_to_string); }
 
 static enum eval_status do_write_str(struct lisp_val arg,
                                      struct lisp_val *result) {
@@ -534,9 +456,7 @@ static enum eval_status do_write_str(struct lisp_val arg,
 /**
  * Convert value to an AST string.
  */
-DEF_BUILTIN(core_write_str) {
-  return unary_func(__func__, do_write_str, args, result);
-}
+DEF_BUILTIN(core_write_str) { return unary_func(vm, __func__, do_write_str); }
 
 static enum eval_status do_write(struct lisp_val arg, struct lisp_val *result) {
   display_str(print_str(arg, true));
@@ -547,19 +467,14 @@ static enum eval_status do_write(struct lisp_val arg, struct lisp_val *result) {
 /**
  * Print AST.
  */
-DEF_BUILTIN(core_write) { return unary_func(__func__, do_write, args, result); }
+DEF_BUILTIN(core_write) { return unary_func(vm, __func__, do_write); }
 
 /**
  * Print values with ' ' separator.
  */
 DEF_BUILTIN(core_newline) {
-  if (!lisp_val_is_nil(args)) {
-    set_func_exception(ERROR_TOO_MANY_ARGS);
-    return EV_EXCEPTION;
-  }
   putchar('\n');
-  *result = LISP_VAL_NIL;
-  return EV_SUCCESS;
+  BUILTIN_RETURN(LISP_VAL_NIL);
 }
 
 static enum eval_status do_display(struct lisp_val arg,
@@ -572,157 +487,115 @@ static enum eval_status do_display(struct lisp_val arg,
 /**
  * Print value in non-readable format
  */
-DEF_BUILTIN(core_display) {
-  return unary_func(__func__, do_display, args, result);
-}
+DEF_BUILTIN(core_display) { return unary_func(vm, __func__, do_display); }
 
 DEF_BUILTIN(core_flush) {
-  if (!lisp_val_is_nil(args)) {
-    set_func_exception(ERROR_TOO_MANY_ARGS);
-    return EV_EXCEPTION;
-  }
-
   fflush(stdout);
-  *result = LISP_VAL_NIL;
-  return EV_SUCCESS;
-}
-
-static enum eval_status do_read_str(struct lisp_val arg,
-                                    struct lisp_val *result) {
-  enum parse_res res =
-      read_str(lisp_string_as_cstr(lisp_val_as_obj(arg)), result);
-  if (res == P_SUCCESS) {
-    return EV_SUCCESS;
-  } else {
-    set_format_exception("failed to parse string");
-    return EV_EXCEPTION;
-  }
+  BUILTIN_RETURN(LISP_VAL_NIL);
 }
 
 DEF_BUILTIN(core_read_str) {
-  return unary_func_with_type(__func__, LISP_STRING, do_read_str, args, result);
+  DEF_OBJ_ARG(struct lisp_string, arg, LISP_STRING, 0);
+  struct lisp_val result;
+  enum parse_res res = read_str(lisp_string_as_cstr(arg), &result);
+  if (res == P_SUCCESS) {
+    BUILTIN_RETURN(result);
+  } else {
+    vm_raise_func_exception(vm, "failed to parse string");
+    return EV_EXCEPTION;
+  }
 }
 
-static enum eval_status do_slurp(struct lisp_val arg, struct lisp_val *result) {
-  struct lisp_string *filename = lisp_val_as_obj(arg);
+DEF_BUILTIN(core_slurp) {
+  DEF_OBJ_ARG(struct lisp_string, filename, LISP_STRING, 0);
 
-  struct lisp_string *contents = read_file(lisp_string_as_cstr(filename));
+  struct lisp_string *contents = read_file(vm, lisp_string_as_cstr(filename));
   if (contents == NULL) {
     // Exception is set by read_file
     return EV_EXCEPTION;
   }
 
-  *result = lisp_val_from_obj(contents);
-  return EV_SUCCESS;
-}
-
-DEF_BUILTIN(core_slurp) {
-  return unary_func_with_type(__func__, LISP_STRING, do_slurp, args, result);
-}
-
-static enum eval_status do_load_file(struct lisp_val arg,
-                                     struct lisp_val *result) {
-  struct lisp_string *filename = lisp_val_as_obj(arg);
-
-  *result = LISP_VAL_NIL;
-  return load_file(lisp_string_as_cstr(filename));
+  BUILTIN_RETURN(lisp_val_from_obj(contents));
 }
 
 DEF_BUILTIN(core_load_file) {
-  return unary_func_with_type(__func__, LISP_STRING, do_load_file, args,
-                              result);
+  DEF_OBJ_ARG(struct lisp_string, filename, LISP_STRING, 0);
+
+  enum eval_status res = load_file(vm, lisp_string_as_cstr(filename));
+  if (res == EV_EXCEPTION) {
+    return res;
+  } else {
+    BUILTIN_RETURN(LISP_VAL_NIL);
+  }
 }
 
-static enum eval_status do_raise(struct lisp_val arg, struct lisp_val *result) {
-  current_exception = arg;
-  *result = LISP_VAL_NIL;
+DEF_BUILTIN(core_raise) {
+  DEF_ARG(exception, 0);
+  vm_raise_exception(vm, exception);
   return EV_EXCEPTION;
 }
 
-DEF_BUILTIN(core_raise) { return unary_func(__func__, do_raise, args, result); }
-
 DEF_BUILTIN(core_with_exception_handler) {
-  struct lisp_cons *args_cons = lisp_val_cast(LISP_CONS, args);
-  if (args_cons == NULL) {
-    set_func_exception("missing guard clause");
-    return EV_EXCEPTION;
-  }
-  struct lisp_val handler = args_cons->car;
+  DEF_ARG(handler, 0);
+  DEF_ARG(thunk, 1);
+
   // TODO Check number of function args
   if (!lisp_val_is_func(handler)) {
-    set_func_exception("handler must be a function");
+    vm_raise_func_exception(vm, "handler must be a function");
     return EV_EXCEPTION;
   }
 
-  args_cons = lisp_val_cast(LISP_CONS, args_cons->cdr);
-  if (lisp_val_type(args) != LISP_CONS) {
-    set_func_exception("missing thunk");
-    return EV_EXCEPTION;
-  }
-  struct lisp_val thunk = args_cons->car;
   // TODO Check number of function args
   if (!lisp_val_is_func(thunk)) {
-    set_func_exception("thunk must be a function");
+    vm_raise_func_exception(vm, "thunk must be a function");
     return EV_EXCEPTION;
   }
 
-  if (!lisp_val_is_nil(args_cons->cdr)) {
-    set_func_exception("too many arguments");
-    return EV_EXCEPTION;
-  }
+  struct stack_frame_state saved;
+  vm_stack_frame_save(vm, &saved);
 
   // Call with no arguments
-  enum eval_status res = eval_apply(thunk, LISP_VAL_NIL, result);
+  enum eval_status res = eval_apply(vm, thunk, LISP_VAL_NIL);
   if (res != EV_EXCEPTION) {
+    // Apply leaves the return value on the stack
     return res;
   } else {
-    struct lisp_val handler_args =
-        lisp_val_from_obj(lisp_cons_create(current_exception, LISP_VAL_NIL));
-    current_exception = LISP_VAL_NIL;
-    return eval_apply(handler, handler_args, result);
+    assert(vm_has_exception(vm));
+
+    struct lisp_val handler_args = lisp_val_from_obj(
+        lisp_cons_create(vm_current_exception(vm), LISP_VAL_NIL));
+    vm_clear_exception(vm);
+
+    vm_stack_frame_unwind_to(vm, &saved);
+
+    return eval_apply(vm, handler, handler_args);
   }
 }
 
 DEF_BUILTIN(core_runtime) {
-  if (!lisp_val_is_nil(args)) {
-    set_func_exception(ERROR_TOO_MANY_ARGS);
-    return EV_EXCEPTION;
-  }
-
   clock_t t = clock();
   // TODO Convert to consistent unit?
-  *result = lisp_val_from_int(t);
-  return EV_SUCCESS;
+  BUILTIN_RETURN(lisp_val_from_int(t));
 }
 
 DEF_BUILTIN(core_time_ms) {
-  if (!lisp_val_is_nil(args)) {
-    set_func_exception(ERROR_TOO_MANY_ARGS);
-    return EV_EXCEPTION;
-  }
-
   struct timespec ts;
   timespec_get(&ts, TIME_UTC);
-  *result = lisp_val_from_int(ts.tv_sec * 1000 + ts.tv_nsec / 1000);
-  return EV_SUCCESS;
+  BUILTIN_RETURN(lisp_val_from_int(ts.tv_sec * 1000 + ts.tv_nsec / 1000));
 }
 
-enum eval_status do_sleep(struct lisp_val arg, struct lisp_val *result) {
-  long millis = lisp_val_as_int(arg);
+DEF_BUILTIN(core_sleep) {
+  DEF_INT_ARG(millis, 0);
+
   long seconds = millis / 1000;
   long nanos = (millis - seconds * 1000) * 1000;
   struct timespec t = {.tv_sec = seconds, .tv_nsec = nanos};
   if (thrd_sleep(&t, NULL) < 0) {
-    set_func_exception("sleep interrupted");
+    vm_raise_func_exception(vm, "sleep interrupted");
     return EV_EXCEPTION;
   } else {
-    *result = LISP_VAL_NIL;
-    return EV_SUCCESS;
+    BUILTIN_RETURN(LISP_VAL_NIL);
   }
-}
-
-DEF_BUILTIN(core_sleep) {
-  return unary_func_with_type(__func__, LISP_INT, do_sleep, args, result);
 }
 
 struct lisp_builtin builtins[] = {
@@ -809,7 +682,7 @@ struct lisp_builtin builtins[] = {
     lisp_builtin_make("write", core_write, 1, false),
     lisp_builtin_make("write-str", core_write_str, 1, false),
     lisp_builtin_make("display", core_display, 1, false),
-    lisp_builtin_make("newline", core_newline, 1, false),
+    lisp_builtin_make("newline", core_newline, 0, false),
     lisp_builtin_make("flush", core_flush, 0, false),
     lisp_builtin_make("slurp", core_slurp, 1, false),
     lisp_builtin_make("load-file", core_load_file, 1, false),

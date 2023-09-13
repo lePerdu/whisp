@@ -183,8 +183,7 @@ void print_str_into(struct str_builder *b, struct lisp_val v, bool readable) {
       const char *name =
           name_sym != NULL ? lisp_symbol_name(name_sym) : "<unknown>";
       bool variadic = lisp_closure_rest_param(closure) != NULL;
-      print_function(b, name, lisp_list_count(lisp_closure_params(closure)),
-                     variadic);
+      print_function(b, name, lisp_closure_arg_count(closure), variadic);
       break;
     }
     case LISP_ATOM: {

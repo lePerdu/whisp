@@ -14,6 +14,7 @@
 #include "readline/history.h"
 #include "readline/readline.h"
 #include "types.h"
+#include "vm.h"
 
 /*
 #define READLINE_BUF_SIZE 1024
@@ -49,7 +50,8 @@ static char *read_prompt(void) {
   return input;
 }
 
-static enum eval_status eval_print_many(struct lisp_val exprs) {
+static enum eval_status eval_print_many(struct lisp_vm *vm,
+                                        struct lisp_val exprs) {
   gc_push_root(exprs);
 
   enum eval_status res = EV_SUCCESS;
@@ -58,17 +60,20 @@ static enum eval_status eval_print_many(struct lisp_val exprs) {
     assert(cell != NULL);
     exprs = cell->cdr;
 
-    struct lisp_val result;
-    res = eval(cell->car, global_env, &result);
+    res = eval(vm, cell->car);
     if (res == EV_EXCEPTION) {
-      struct lisp_string *printed_exc = print_str(current_exception, true);
+      assert(vm_has_exception(vm));
+
+      struct lisp_string *printed_exc =
+          print_str(vm_current_exception(vm), true);
+      vm_clear_exception(vm);
+
       log("error: %s", lisp_string_as_cstr(printed_exc));
-      current_exception = LISP_VAL_NIL;
       break;
     } else {
-      gc_push_root(result);
-      struct lisp_string *printed = print_str(result, true);
-      gc_pop_root_expect(result);
+      // Keep on the stack while printing so it is't GC'd
+      struct lisp_string *printed = print_str(vm_stack_top(vm), true);
+      (void)vm_stack_pop(vm);
 
       display_str(printed);
       putchar('\n');
@@ -89,8 +94,14 @@ static struct lisp_val create_argv_list(int argc, char *argv[]) {
   return list_build(&builder);
 }
 
-static void setup_environment(int argc, char **argv) {
-  init_global_env();
+static struct lisp_vm *setup_vm(int argc, char **argv) {
+  init_global_eval_state();
+
+  struct lisp_vm *vm = vm_create();
+  // Save the VM permenantly
+  gc_push_root_obj(vm);
+
+  struct lisp_env *global_env = vm_current_env(vm);
 
   // TODO Make these constants or part of the reader?
 
@@ -113,22 +124,24 @@ static void setup_environment(int argc, char **argv) {
   gc_push_root(argv_list);
   lisp_env_set(global_env, lisp_symbol_create_cstr("*ARGV*"), argv_list);
   gc_pop_root_expect(argv_list);
+
+  return vm;
 }
 
 #define PRELUDE_FILENAME "lib/prelude.wh"
 
-static void run_file(const char *filename) {
-  enum eval_status res = load_file(filename);
+static void run_file(struct lisp_vm *vm, const char *filename) {
+  enum eval_status res = load_file(vm, filename);
   if (res != EV_SUCCESS) {
-    struct lisp_string *printed_exc = print_str(current_exception, true);
+    struct lisp_string *printed_exc = print_str(vm_current_exception(vm), true);
     log("error: %s", lisp_string_as_cstr(printed_exc));
     exit(EXIT_FAILURE);
   }
 }
 
-static void load_prelude(void) { run_file(PRELUDE_FILENAME); }
+static void load_prelude(struct lisp_vm *vm) { run_file(vm, PRELUDE_FILENAME); }
 
-static void rep(const char *input) {
+static void rep(struct lisp_vm *vm, const char *input) {
   struct lisp_val ast;
   enum parse_res read_res = read_str_many(input, &ast);
   if (read_res == P_EMPTY) {
@@ -138,10 +151,10 @@ static void rep(const char *input) {
     return;
   }
 
-  eval_print_many(ast);
+  eval_print_many(vm, ast);
 }
 
-static void repl(void) {
+static void repl(struct lisp_vm *vm) {
   init_repl();
   while (true) {
     char *input = read_prompt();
@@ -150,7 +163,7 @@ static void repl(void) {
       break;
     }
 
-    rep(input);
+    rep(vm, input);
     free(input);
   }
 }
@@ -175,15 +188,15 @@ int main(int argc, char *argv[]) {
   argc -= consumed_args;
   argv += consumed_args;
 
-  setup_environment(argc, argv);
-  load_prelude();
+  struct lisp_vm *vm = setup_vm(argc, argv);
+  load_prelude(vm);
 
   switch (mode) {
     case PROG_REPL:
-      repl();
+      repl(vm);
       break;
     case PROG_FILE: {
-      run_file(filename);
+      run_file(vm, filename);
       break;
     }
   }

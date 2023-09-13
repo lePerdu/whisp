@@ -164,9 +164,6 @@ static void gc_clear_gray_set(void) {
 }
 
 static void gc_mark(void) {
-  // Assume these are initialized before GC is run
-  mark_gray(current_exception);
-
   for (unsigned i = 0; i < gc_roots.size; i++) {
     mark_gray(gc_roots.data[i]);
   }

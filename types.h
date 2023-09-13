@@ -99,14 +99,14 @@ void *lisp_val_cast(enum lisp_type type, struct lisp_val v);
 #define LISP_CONVERT_C_TYPE(t) \
   _Generic((t *)NULL, \
     long *: LISP_INT, \
+    lisp_char_t *: LISP_CHAR, \
     double *: LISP_REAL, \
     struct lisp_symbol *: LISP_SYMBOL, \
     struct lisp_string *: LISP_STRING, \
     struct lisp_cons *: LISP_CONS, \
+    struct lisp_atom *: LISP_ATOM, \
     struct lisp_builtin *: LISP_BUILTIN, \
-    struct lisp_map *: LISP_MAP, \
     struct lisp_closure *: LISP_CLOSURE, \
-    struct lisp_env *: LISP_ENV \
   )
 // clang-format on
 
@@ -128,8 +128,8 @@ enum eval_status {
 
 struct eval_result {
   enum eval_status status;
+  /** AST to eval in case of tail call */
   struct lisp_val ast;
-  struct lisp_env *env;
 };
 
 bool lisp_val_is_nil(struct lisp_val v);
@@ -300,9 +300,10 @@ void list_mapper_append_next(struct list_mapper *m, struct lisp_val next);
  */
 struct lisp_val list_mapper_build(struct list_mapper *m);
 
+struct lisp_vm;  // Pre-declare
+
 // args can either be a list or nil
-typedef enum eval_status (*lisp_builtin_fn)(struct lisp_val args,
-                                            struct lisp_val *result);
+typedef enum eval_status (*lisp_builtin_fn)(struct lisp_vm *vm);
 
 struct lisp_builtin {
   struct lisp_obj header;
@@ -354,6 +355,7 @@ struct lisp_closure *lisp_closure_create(struct lisp_val params,
                                          struct lisp_env *outer_env,
                                          struct lisp_val ast);
 struct lisp_symbol *lisp_closure_name(const struct lisp_closure *c);
+unsigned lisp_closure_arg_count(const struct lisp_closure *c);
 struct lisp_val lisp_closure_params(const struct lisp_closure *c);
 struct lisp_symbol *lisp_closure_rest_param(const struct lisp_closure *c);
 struct lisp_env *lisp_closure_env(const struct lisp_closure *c);

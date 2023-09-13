@@ -1085,6 +1085,10 @@ void lisp_closure_set_name(struct lisp_closure *c, struct lisp_symbol *name) {
   c->name = name;
 }
 
+unsigned lisp_closure_arg_count(const struct lisp_closure *c) {
+  return lisp_list_count(c->params);
+}
+
 struct lisp_val lisp_closure_params(const struct lisp_closure *c) {
   return c->params;
 }

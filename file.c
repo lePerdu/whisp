@@ -9,12 +9,13 @@
 #include "memory.h"
 #include "printer.h"
 #include "reader.h"
+#include "vm.h"
 
-struct lisp_string *read_file(const char *filename) {
+struct lisp_string *read_file(struct lisp_vm *vm, const char *filename) {
   FILE *file = fopen(filename, "r");
   if (file == NULL) {
-    set_func_exception("failed to open file '%s': %s", filename,
-                       strerror(errno));
+    vm_raise_func_exception(vm, "failed to open file '%s': %s", filename,
+                            strerror(errno));
     return NULL;
   }
 
@@ -27,8 +28,8 @@ struct lisp_string *read_file(const char *filename) {
     size_t n_read = fread(buf, 1, sizeof(buf), file);
     if (n_read == 0) {
       if (ferror(file)) {
-        set_func_exception("error reading file '%s': %s", filename,
-                           strerror(errno));
+        vm_raise_func_exception(vm, "error reading file '%s': %s", filename,
+                                strerror(errno));
         error = true;
         break;
       }  // Else, it's EOF so the loop will end
@@ -38,8 +39,8 @@ struct lisp_string *read_file(const char *filename) {
   }
 
   if (fclose(file) != 0) {
-    set_func_exception("error closing file '%s': %s", filename,
-                       strerror(errno));
+    vm_raise_func_exception(vm, "error closing file '%s': %s", filename,
+                            strerror(errno));
     error = true;
   }
 
@@ -47,7 +48,7 @@ struct lisp_string *read_file(const char *filename) {
   return error ? NULL : result;
 }
 
-static enum eval_status eval_many(struct lisp_val exprs) {
+static enum eval_status eval_many(struct lisp_vm *vm, struct lisp_val exprs) {
   gc_push_root(exprs);
 
   enum eval_status res = EV_SUCCESS;
@@ -56,21 +57,21 @@ static enum eval_status eval_many(struct lisp_val exprs) {
     assert(cell != NULL);
     exprs = cell->cdr;
 
-    struct lisp_val result;
-    res = eval(cell->car, global_env, &result);
+    res = eval(vm, cell->car);
     if (res == EV_EXCEPTION) {
       break;
     }
+    (void)vm_stack_pop(vm);
   }
 
   gc_pop_root();
   return res;
 }
 
-enum eval_status load_file(const char *filename) {
-  struct lisp_string *contents = read_file(filename);
+enum eval_status load_file(struct lisp_vm *vm, const char *filename) {
+  struct lisp_string *contents = read_file(vm, filename);
   if (contents == NULL) {
-    set_func_exception("cannot read file '%s'", filename);
+    vm_raise_func_exception(vm, "cannot read file '%s'", filename);
     return EV_EXCEPTION;
   } else {
     gc_push_root_obj(contents);
@@ -80,11 +81,11 @@ enum eval_status load_file(const char *filename) {
     gc_pop_root_expect_obj(contents);
 
     if (read_res != P_SUCCESS) {
-      set_func_exception("cannot parse file '%s'", filename);
+      vm_raise_func_exception(vm, "cannot parse file '%s'", filename);
       return EV_EXCEPTION;
     }
 
     // Eval but don't print
-    return eval_many(ast);
+    return eval_many(vm, ast);
   }
 }
