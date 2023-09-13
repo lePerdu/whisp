@@ -191,7 +191,8 @@ DEF_BUILTIN(core_div) {
 */
 
 DEF_BUILTIN(core_identical) {
-  struct lisp_val args = vm_stack_pop(vm);
+  DEF_ARG(args, 0);
+
   if (lisp_val_type(args) != LISP_CONS) {
     vm_stack_push(vm, lisp_true());
     return EV_SUCCESS;
@@ -244,7 +245,8 @@ DEF_BUILTIN(core_cdr) {
 }
 
 DEF_BUILTIN(core_string_concat) {
-  struct lisp_val args = vm_stack_pop(vm);
+  DEF_ARG(args, 0);
+
   struct str_builder builder;
   str_builder_init(&builder);
 
