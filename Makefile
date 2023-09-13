@@ -1,5 +1,5 @@
 CFLAGS = -Wall -Wextra -Werror -std=c17 -g -Og
-LDFLAGS = $(CFLAGS) -lreadline -lm
+LDFLAGS = $(CFLAGS) -L/usr/local/lib -I/usr/local/include -lreadline -lm
 
 BUILD = build
 BIN = bin
