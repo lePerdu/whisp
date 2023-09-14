@@ -10,53 +10,55 @@
   (deftest! nested-macro-replaced
     (assert= 2 (noop-macro (replace-with-2 abc))))
 
-  (comment
-    (defgroup! macroexpand-1
-      (deftest! expands-only-layer
-        (assert=
-          2
-          (macroexpand-1 (replace-with-2 abc))))
-      (deftest! expands-1-layer
-        (assert-equal
-          (list 'replace-with-2 'abc)
-          (macroexpand-1 (noop-macro (replace-with-2 abc)))))
+  (defgroup! macroexpand-1
+    (deftest! expands-only-layer
+      (assert=
+        2
+        (macroexpand-1 '(replace-with-2 abc))))
+    (deftest! expands-1-layer
+      (assert-equal
+        (list 'replace-with-2 'abc)
+        (macroexpand-1 '(noop-macro (replace-with-2 abc)))))
 
-      (deftest! does-not-expand-non-head-position
-        (assert-equal
-          (list 'if 1 (list 'replace-with-2 'abc))
-          (macroexpand-1 (if 1 (replace-with-2 abc))))))
+    (deftest! does-not-expand-non-head-position
+      (assert-equal
+        (list 'if 1 (list 'replace-with-2 'abc))
+        (macroexpand-1 '(if 1 (replace-with-2 abc))))))
 
-    (defgroup! macroexpand
-      (deftest! expands-only-layer
-        (assert=
-          2
-          (macroexpand (replace-with-2 abc))))
-      (deftest! expands-2-layers
-        (assert-equal
-          2
-          (macroexpand (noop-macro (replace-with-2 abc)))))
-      (deftest! does-not-expand-non-head-position
-        (assert-equal
-          (list 'if 1 (list 'replace-with-2 'abc))
-          (macroexpand (if 1 (replace-with-2 abc))))))
+  (defgroup! macroexpand
+    (deftest! expands-only-layer
+      (assert=
+        2
+        (macroexpand '(replace-with-2 abc))))
+    (deftest! expands-2-layers
+      (assert-equal
+        2
+        (macroexpand '(noop-macro (replace-with-2 abc)))))
+    (deftest! does-not-expand-non-head-position
+      (assert-equal
+        (list 'if 1 (list 'replace-with-2 'abc))
+        (macroexpand '(if 1 (replace-with-2 abc))))))
 
-    (defgroup! macroexpand-rec
-      (deftest! expands-only-layer
-        (assert=
-          2
-          (macroexpand-rec (replace-with-2 abc))))
-      (deftest! expands-2-layers
-        (assert-equal
-          2
-          (macroexpand-rec (noop-macro (replace-with-2 abc)))))
-      (deftest! expands-non-head-position
-        (assert-equal
-          (list 'if 1 2)
-          (macroexpand-rec (if 1 (replace-with-2 abc)))))
-      (deftest! does-not-expand-in-quote
-        (assert-equal
-          (list 'quote (list 'replace-with-2 'abc))
-          (macroexpand-rec '(replace-with-2 abc))))))
+  ; TODO Figure out semantics for this. Ideally it should work exactly like
+  ; evaluation, but that's hard to do since it needs to not expand inside
+  ; special forms, but only if those special forms are not shadowed.
+  (comment defgroup! macroexpand-all
+    (deftest! expands-only-layer
+      (assert=
+        2
+        (macroexpand-all '(replace-with-2 abc))))
+    (deftest! expands-2-layers
+      (assert-equal
+        2
+        (macroexpand-all '(noop-macro (replace-with-2 abc)))))
+    (deftest! expands-non-head-position
+      (assert-equal
+        (list 'if 1 2)
+        (macroexpand-all '(if 1 (replace-with-2 abc)))))
+    (deftest! does-not-expand-in-quote
+      (assert-equal
+        (list 'quote (list 'replace-with-2 'abc))
+        (macroexpand-all '(quote (replace-with-2 abc))))))
 
   (deftest! quote-special-syntax-same-as-form
     (assert-equal '(1 2) (quote (1 2))))

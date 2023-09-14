@@ -49,7 +49,7 @@
             (process-unquote-args rest)
             (if (is-splice-unquote-form first)
               (list
-                'concat 
+                'concat
                 (get-splice-unquote-arg first)
                 (qq rest))
               (list 'cons (qq first) (qq rest)))))
@@ -113,6 +113,12 @@
           ; Include re-raise clause if none of the branches match
           (else (raise ~binding))))
       ~body)))
+
+(defn! (macroexpand ast)
+  (let ((expanded (macroexpand-1 ast)))
+    (if (= expanded ast)
+      expanded
+      (macroexpand expanded))))
 
 ; TODO Make error wrap the value somehow
 (def! error raise)

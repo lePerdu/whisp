@@ -600,6 +600,28 @@ DEF_BUILTIN(core_sleep) {
   }
 }
 
+DEF_BUILTIN(core_macroexpand_1) {
+  DEF_ARG(ast, 0);
+
+  struct lisp_cons *ast_cons = lisp_val_cast(LISP_CONS, ast);
+  if (ast_cons == NULL) {
+    BUILTIN_RETURN(ast);
+  }
+
+  struct lisp_symbol *head_sym = lisp_val_cast(LISP_SYMBOL, ast_cons->car);
+  if (head_sym == NULL) {
+    BUILTIN_RETURN(ast);
+  }
+
+  const struct lisp_env_binding *binding =
+      lisp_env_get(vm_current_env(vm), head_sym);
+  if (binding == NULL || !binding->is_macro) {
+    BUILTIN_RETURN(ast);
+  }
+
+  return eval_apply(vm, binding->value, ast_cons->cdr);
+}
+
 struct lisp_builtin builtins[] = {
     lisp_builtin_make("int?", core_is_integer, 1, false),
     lisp_builtin_make("int", core_to_int, 1, false),
@@ -694,6 +716,8 @@ struct lisp_builtin builtins[] = {
     lisp_builtin_make("runtime", core_runtime, 0, false),
     lisp_builtin_make("time-ms", core_time_ms, 0, false),
     lisp_builtin_make("sleep", core_sleep, 1, false),
+
+    lisp_builtin_make("macroexpand-1", core_macroexpand_1, 1, false),
 
     lisp_builtin_make(NULL, NULL, 0, false),
 };
