@@ -4,6 +4,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+// These imports need to be after stdio.h but clang-format sorts them first
+// clang-format off
+#include <readline/history.h>
+#include <readline/readline.h>
+// clang-format on
+
 #include "core.h"
 #include "eval.h"
 #include "file.h"
@@ -11,8 +17,6 @@
 #include "memory.h"
 #include "printer.h"
 #include "reader.h"
-#include "readline/history.h"
-#include "readline/readline.h"
 #include "types.h"
 #include "vm.h"
 
