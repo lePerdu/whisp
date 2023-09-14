@@ -13,11 +13,6 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install build-essential libreadline-dev
-
     - name: Build
       run: make
 
