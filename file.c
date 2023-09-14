@@ -9,6 +9,7 @@
 #include "memory.h"
 #include "printer.h"
 #include "reader.h"
+#include "types.h"
 #include "vm.h"
 
 struct lisp_string *read_file(struct lisp_vm *vm, const char *filename) {
@@ -57,11 +58,13 @@ static enum eval_status eval_many(struct lisp_vm *vm, struct lisp_val exprs) {
     assert(cell != NULL);
     exprs = cell->cdr;
 
-    res = eval(vm, cell->car);
-    if (res == EV_EXCEPTION) {
+    res = eval_handle_exception(vm, cell->car);
+    if (res == EV_SUCCESS) {
+      (void)vm_stack_pop(vm);
+    } else {
+      // Keep the exception marked in the VM
       break;
     }
-    (void)vm_stack_pop(vm);
   }
 
   gc_pop_root();

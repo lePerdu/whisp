@@ -64,8 +64,15 @@ static enum eval_status eval_print_many(struct lisp_vm *vm,
     assert(cell != NULL);
     exprs = cell->cdr;
 
-    res = eval(vm, cell->car);
-    if (res == EV_EXCEPTION) {
+    res = eval_handle_exception(vm, cell->car);
+    if (res == EV_SUCCESS) {
+      // Keep on the stack while printing so it is't GC'd
+      struct lisp_string *printed = print_str(vm_stack_top(vm), true);
+      (void)vm_stack_pop(vm);
+
+      display_str(printed);
+      putchar('\n');
+    } else {
       assert(vm_has_exception(vm));
 
       struct lisp_string *printed_exc =
@@ -74,13 +81,6 @@ static enum eval_status eval_print_many(struct lisp_vm *vm,
 
       log("error: %s", lisp_string_as_cstr(printed_exc));
       break;
-    } else {
-      // Keep on the stack while printing so it is't GC'd
-      struct lisp_string *printed = print_str(vm_stack_top(vm), true);
-      (void)vm_stack_pop(vm);
-
-      display_str(printed);
-      putchar('\n');
     }
   }
 
@@ -136,8 +136,9 @@ static struct lisp_vm *setup_vm(int argc, char **argv) {
 
 static void run_file(struct lisp_vm *vm, const char *filename) {
   enum eval_status res = load_file(vm, filename);
-  if (res != EV_SUCCESS) {
+  if (res == EV_EXCEPTION) {
     struct lisp_string *printed_exc = print_str(vm_current_exception(vm), true);
+    vm_clear_exception(vm);
     log("error: %s", lisp_string_as_cstr(printed_exc));
     exit(EXIT_FAILURE);
   }

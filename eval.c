@@ -749,3 +749,14 @@ enum eval_status eval(struct lisp_vm *vm, struct lisp_val ast) {
 
   return eval_tail(vm, ast);
 }
+
+enum eval_status eval_handle_exception(struct lisp_vm *vm,
+                                       struct lisp_val ast) {
+  struct stack_frame_state stack_state;
+  vm_stack_frame_save(vm, &stack_state);
+  enum eval_status res = eval(vm, ast);
+  if (res == EV_EXCEPTION) {
+    vm_stack_frame_unwind_to(vm, &stack_state);
+  }
+  return res;
+}
