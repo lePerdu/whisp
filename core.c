@@ -34,6 +34,21 @@ DEF_BUILTIN(core_int_div) {
   BUILTIN_RETURN(lisp_val_from_int(dividend / divisor));
 }
 
+MAKE_INT_BINARY(bitand, &);
+MAKE_INT_BINARY(bitor, |);
+MAKE_INT_BINARY(bitxor, ^);
+
+static enum eval_status core_int_bitshift(struct lisp_vm *vm) {
+  DEF_INT_ARG(x, 0);
+  DEF_INT_ARG(shift, 1);
+
+  BUILTIN_RETURN(lisp_val_from_int(
+      shift >= 0 ? (unsigned long)(x << shift)
+                 // Cast to unsigned to avoid sign extension
+                 // TODO Figure out if this is necessary
+                 : ((unsigned long)x >> (unsigned long)-shift)));
+}
+
 MAKE_INT_COMPARE(lt, <);
 MAKE_INT_COMPARE(lte, <=);
 MAKE_INT_COMPARE(gt, >);
@@ -629,6 +644,11 @@ struct lisp_builtin builtins[] = {
     lisp_builtin_make("int-", core_int_sub, 2, false),
     lisp_builtin_make("int*", core_int_mul, 2, false),
     lisp_builtin_make("int/", core_int_div, 2, false),
+    lisp_builtin_make("bitand", core_int_bitand, 2, false),
+    lisp_builtin_make("bitor", core_int_bitor, 2, false),
+    lisp_builtin_make("bitxor", core_int_bitxor, 2, false),
+    lisp_builtin_make("bitshift", core_int_bitshift, 2, false),
+
     lisp_builtin_make("int<", core_int_lt, 2, false),
     lisp_builtin_make("int<=", core_int_lte, 2, false),
     lisp_builtin_make("int>", core_int_gt, 2, false),
