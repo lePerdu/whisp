@@ -1,5 +1,6 @@
 CFLAGS = -Wall -Wextra -Werror -std=c17 -g -Og
-LDFLAGS = $(CFLAGS) -L/usr/local/lib -I/usr/local/include -lreadline -lm
+LDFLAGS = $(CFLAGS)
+LDLIBS = -lreadline -lm
 
 BUILD = build
 BIN = bin
@@ -26,7 +27,7 @@ clean:
 .PHONY: run debug clean
 
 $(EXEC): $(OBJS) | $(BIN)
-	$(CC) $(LDFLAGS) -o $@ $^
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 $(BUILD)/%.o: %.c | $(BUILD)
 	$(CC) $(CFLAGS) -MMD -c -o $@ $<
