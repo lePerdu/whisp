@@ -1,0 +1,121 @@
+(def! *vector-trie-bits* 5)
+(def! *vector-trie-width* (bitshift 1 *vector-trie-bits*))
+(def! *vector-trie-mask* (int- *vector-trie-width* 1))
+
+(def! *vector-marker* (gensym))
+
+(defn! (build-vector len shift root)
+  (array *vector-marker* len shift root))
+
+(def! empty-vector (build-vector 0 0 (array)))
+
+(defn! (vector? v)
+  (and
+    (array? v)
+    (= (array-length v) 4)
+    (= (array-get v 0) *vector-marker*)))
+
+(defn! (vector-length v) (array-get v 1))
+(defn! (vector-shift v) (array-get v 2))
+(defn! (vector-root v) (array-get v 3))
+
+(defn! (vector-replace-root v root)
+  (array-set v 3 root))
+(defn! (vector-replace-tail v tail)
+  (array-set v 4 tail))
+
+(defn! (vector-check-bounds v i)
+  (<= 0 i (dec (vector-length v))))
+
+(defn! (vector-dec-bits level) (int- level *vector-trie-bits*))
+
+(defn! (vector-level-index i level)
+  (bitand
+    (bitshift i (int- 0 level))
+    *vector-trie-mask*))
+
+; Resolve the underlying array
+(defn! (vector-find-node v i)
+  (if (vector-check-bounds v i)
+    (let-named search-iter
+      ((level (vector-shift v)) (node (vector-root v)))
+      (if (= level 0)
+        node
+        (search-iter
+          (vector-dec-bits level)
+          (array-get node (vector-level-index i level)))))
+    (error "vector-get: index out of bounds")))
+
+(defn! (vector-get v i)
+  (let ((node (vector-find-node v i)))
+    (array-get node (bitand i *vector-trie-mask*))))
+
+; Destructive set
+(defn! (vector-set! v i value)
+  (let ((node (vector-find-node v i)))
+    (array-set! node (bitand i *vector-trie-mask*) value)))
+
+; Persistent set (returns a new vector)
+(defn! (vector-set v i value)
+  (if (vector-check-bounds v i)
+    (do
+      (defn! (trie-set level node)
+        (let ((cur-index (vector-level-index i level)))
+          (array-set
+            node
+            cur-index
+            (if (= level 0)
+              value
+              (trie-set
+                (vector-dec-bits level)
+                (array-get node cur-index))))))
+
+      (vector-replace-root v
+        (trie-set (vector-shift v) (vector-root v))))
+    (error "vector-get: index out of bounds")))
+
+(defn! (make-new-branch shift single-elem)
+  (do
+    ; TODO Make iterative?
+    (defn! (rec level)
+      (if (= level 0)
+        single-elem
+        (array (rec (int- level *vector-trie-bits*)))))
+    (rec shift)))
+
+(defn! (vector-append v value)
+  (do
+    (def! len (vector-length v))
+    (defn! (last-child-full? node level)
+      (=
+        (vector-index-shift len level)
+        (bitand (array-length node) *vector-index-mask*)))
+    (defn! (trie-append shift node)
+      (if (last-child-full? node)
+        (array-append
+          node
+          (make-new-branch shift value))
+        (trie-append
+          (int- shift *vector-trie-bits*)
+          (array-get node (dec (array-length node))))))
+
+    (let*
+      ((root (vector-root v))
+       (root-full?
+        (and
+          (= (array-length root) *vector-trie-width*)
+          (last-child-full? root 0))))
+      (if root-full?
+        (let ((new-shift (int+ (vector-shift v) *vector-trie-bits*)))
+          (build-vector
+            (inc len)
+            new-shift
+            (array root (make-new-branch new-shift value))))
+        (let ((cur-shift (vector-shift v)))
+          (build-vector
+            (inc len)
+            cur-shift
+            (trie-append cur-shift root)))))))
+
+(defn! (list->vector lst)
+  (foldl empty-vector vector-append lst))
