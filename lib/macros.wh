@@ -92,6 +92,13 @@
       ; TODO Add a nested (let () ...) to isolate the bindings?
       ~body)))
 
+; "Named let" from scheme
+; TODO Change name? Keep as separate from the basic let?
+(defsyntax! (let-named name bindings body)
+  `(letrec*
+    ((~name (fn ~(map car bindings) ~body)))
+    (~name ~@(map cadr bindings))))
+
 ; TODO Move these?
 
 ; Light syntax over with-exception-handler
