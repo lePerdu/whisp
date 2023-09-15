@@ -409,6 +409,51 @@ static enum eval_status do_reset(struct lisp_val atom,
 
 DEF_BUILTIN(core_reset) { return binary_func(vm, __func__, do_reset); }
 
+DEF_BUILTIN(core_is_array) { return type_pred(vm, __func__, LISP_ARRAY); }
+
+DEF_BUILTIN(core_make_array) {
+  DEF_INT_ARG(length, 0);
+
+  if (length >= 0) {
+    BUILTIN_RETURN(lisp_val_from_obj(lisp_array_create(length)));
+  } else {
+    vm_raise_func_exception(vm, "length must be non-negative");
+    return EV_EXCEPTION;
+  }
+}
+
+DEF_BUILTIN(core_array_length) {
+  DEF_OBJ_ARG(struct lisp_array, arr, LISP_ARRAY, 0);
+
+  BUILTIN_RETURN(lisp_val_from_int(lisp_array_length(arr)));
+}
+
+DEF_BUILTIN(core_array_get) {
+  DEF_OBJ_ARG(struct lisp_array, arr, LISP_ARRAY, 0);
+  DEF_INT_ARG(index, 1);
+
+  if (0 <= index && index < (long)lisp_array_length(arr)) {
+    BUILTIN_RETURN(lisp_array_get(arr, index));
+  } else {
+    vm_raise_func_exception(vm, "index out of bounds: %ld", index);
+    return EV_EXCEPTION;
+  }
+}
+
+DEF_BUILTIN(core_array_set) {
+  DEF_OBJ_ARG(struct lisp_array, arr, LISP_ARRAY, 0);
+  DEF_INT_ARG(index, 1);
+  DEF_ARG(value, 2);
+
+  if (0 <= index && index < (long)lisp_array_length(arr)) {
+    lisp_array_set(arr, index, value);
+    BUILTIN_RETURN(LISP_VAL_NIL);
+  } else {
+    vm_raise_func_exception(vm, "index out of bounds: %ld", index);
+    return EV_EXCEPTION;
+  }
+}
+
 static enum eval_status do_to_string(struct lisp_val arg,
                                      struct lisp_val *result) {
   *result = lisp_val_from_obj(print_str(arg, false));
@@ -729,6 +774,12 @@ enum intrinsic_id {
   INTRINSIC_DEREF,
   INTRINSIC_RESET,
 
+  INTRINSIC_IS_ARRAY,
+  INTRINSIC_MAKE_ARRAY,
+  INTRINSIC_ARRAY_LENGTH,
+  INTRINSIC_ARRAY_GET,
+  INTRINSIC_ARRAY_SET,
+
   INTRINSIC_READ_STR,
   INTRINSIC_WRITE,
   INTRINSIC_WRITE_STR,
@@ -838,6 +889,12 @@ static const struct builtin_config builtins[] = {
     [INTRINSIC_MAKE_ATOM] = {"atom", core_make_atom, 1, false},
     [INTRINSIC_DEREF] = {"deref", core_deref, 1, false},
     [INTRINSIC_RESET] = {"reset!", core_reset, 2, false},
+
+    [INTRINSIC_IS_ARRAY] = {"array?", core_is_array, 1, false},
+    [INTRINSIC_MAKE_ARRAY] = {"make-array", core_make_array, 1, false},
+    [INTRINSIC_ARRAY_LENGTH] = {"array-length", core_array_length, 1, false},
+    [INTRINSIC_ARRAY_GET] = {"array-get", core_array_get, 2, false},
+    [INTRINSIC_ARRAY_SET] = {"array-set!", core_array_set, 3, false},
 
     [INTRINSIC_READ_STR] = {"read-str", core_read_str, 1, false},
     [INTRINSIC_WRITE] = {"write", core_write, 1, false},

@@ -7,3 +7,5 @@
 (load-file "lib/func.wh")
 (load-file "lib/math.wh")
 (load-file "lib/string.wh")
+(load-file "lib/array.wh")
+(load-file "lib/vector.wh")

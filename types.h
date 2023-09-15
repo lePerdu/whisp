@@ -34,10 +34,16 @@ enum lisp_type {
    * TODO Implement atom in lisp since it's basically just an array of length 1?
    */
   LISP_ATOM,
-
   /**
-   * Compiled lisp-defined closure.
+   * Fixed-sized, mutable array of lisp values.
+   *
+   * This isn't intended to be used directly very often except as an
+   * optimization. It is intended to be wrapped in safer structures such as
+   * records or persistent vectors.
    */
+  LISP_ARRAY,
+
+  /** Lisp-defined function. */
   LISP_CLOSURE,
 
   /**
@@ -135,7 +141,8 @@ void *lisp_val_cast(enum lisp_type type, struct lisp_val v);
     struct lisp_string *: LISP_STRING, \
     struct lisp_cons *: LISP_CONS, \
     struct lisp_atom *: LISP_ATOM, \
-    struct lisp_eval_closure *: LISP_EVAL_CLOSURE, \
+    struct lisp_array *: LISP_ARRAY, \
+    struct lisp_closure *: LISP_CLOSURE, \
   )
 // clang-format on
 
@@ -189,14 +196,25 @@ struct lisp_val lisp_atom_deref(const struct lisp_atom *a);
 void lisp_atom_reset(struct lisp_atom *a, struct lisp_val v);
 bool lisp_atom_eq(const struct lisp_atom *a, const struct lisp_atom *b);
 
+struct lisp_array;
+
+/**
+ * Create a new array filled with nil values.
+ */
+struct lisp_array *lisp_array_create(size_t length);
+
+size_t lisp_array_length(const struct lisp_array *arr);
+struct lisp_val lisp_array_get(const struct lisp_array *arr, size_t index);
+void lisp_array_set(struct lisp_array *arr, size_t index, struct lisp_val new);
+
 struct lisp_symbol;
 
 struct lisp_symbol *lisp_symbol_create(const char *s, size_t len);
 /**
  * Create symbol from null-terminated string.
  *
- * The contents of the string are not checked for invalid characters/format, so
- * checking should be done up-front.
+ * The contents of the string are not checked for invalid characters/format,
+ * so checking should be done up-front.
  */
 struct lisp_symbol *lisp_symbol_create_cstr(const char *s);
 const char *lisp_symbol_name(const struct lisp_symbol *s);
@@ -266,7 +284,8 @@ unsigned lisp_list_count(struct lisp_val list);
  * called befor the builder goes out of scope.
  */
 struct list_builder {
-  // Store an atom since the list is initially nil, but then becomes the head
+  // Store an atom since the list is initially nil, but then becomes the
+  // head
   // TODO Avoid GC'd atom here
   struct lisp_atom *list_atom;
   struct lisp_cons *tail;
@@ -331,14 +350,15 @@ const struct lisp_env_binding *lisp_env_get(const struct lisp_env *env,
                                             struct lisp_symbol *sym);
 
 /**
- * Lookup a value in just the most local environment (does not recurse to outer
- * environments). Returns NULL (not LISP_VAL_NIL) if the symbol is not mapped.
+ * Lookup a value in just the most local environment (does not recurse to
+ * outer environments). Returns NULL (not LISP_VAL_NIL) if the symbol is not
+ * mapped.
  */
 const struct lisp_env_binding *lisp_env_get_local(const struct lisp_env *env,
                                                   struct lisp_symbol *sym);
 
-// Mutate the environment. If the value cannot be set (i.e. if tring to set a
-// constant), returns false
+// Mutate the environment. If the value cannot be set (i.e. if tring to set
+// a constant), returns false
 
 void lisp_env_set(struct lisp_env *env, struct lisp_symbol *sym,
                   struct lisp_val val);

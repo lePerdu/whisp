@@ -183,6 +183,9 @@ void print_str_into(struct str_builder *b, struct lisp_val v, bool readable) {
       str_builder_append(b, '>');
       break;
     }
+    case LISP_ARRAY:
+      str_builder_concat_cstr(b, "#<array>");
+      break;
     default:
       str_builder_concat_cstr(b, "#<unknown>");
       break;

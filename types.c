@@ -253,6 +253,50 @@ struct lisp_val lisp_atom_deref(const struct lisp_atom *a) { return a->value; }
 
 void lisp_atom_reset(struct lisp_atom *a, struct lisp_val v) { a->value = v; }
 
+struct lisp_array {
+  struct lisp_obj header;
+  size_t length;
+  struct lisp_val data[];
+};
+
+static void lisp_array_visit(struct lisp_val v, visit_callback cb, void *ctx) {
+  struct lisp_array *arr = lisp_val_as_obj(v);
+  for (size_t i = 0; i < arr->length; i++) {
+    cb(ctx, arr->data[i]);
+  }
+}
+
+static const struct lisp_vtable ARRAY_VTABLE = {
+    .type = LISP_ARRAY,
+    .is_gc_managed = true,
+    .name = "array",
+    .visit_children = lisp_array_visit,
+    .destroy = destroy_none,
+};
+
+struct lisp_array *lisp_array_create(size_t length) {
+  struct lisp_array *arr = lisp_obj_alloc(
+      &ARRAY_VTABLE, sizeof(*arr) + length * sizeof(arr->data[0]));
+  arr->length = length;
+  // TODO Write as memset(0) if the compiler isn't smart enough to figure it out
+  for (size_t i = 0; i < length; i++) {
+    arr->data[i] = LISP_VAL_NIL;
+  }
+  return arr;
+}
+
+size_t lisp_array_length(const struct lisp_array *arr) { return arr->length; }
+
+struct lisp_val lisp_array_get(const struct lisp_array *arr, size_t index) {
+  assert(index < arr->length);
+  return arr->data[index];
+}
+
+void lisp_array_set(struct lisp_array *arr, size_t index, struct lisp_val new) {
+  assert(index < arr->length);
+  arr->data[index] = new;
+}
+
 struct lisp_string {
   struct lisp_obj header;
   size_t size;
