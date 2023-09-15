@@ -11,16 +11,34 @@
 
 // TODO Get rid of type enum in favor of vtables?
 enum lisp_type {
+  /** Singleton nil type. */
   LISP_NIL,
+  /** Fixed-sized integer. */
   LISP_INT,
+  /** Double-precision floating point number. */
   LISP_REAL,
+  /** Single character (only supports 8-bit for now) */
   LISP_CHAR,
+  /**
+   * Symbol used for all identifiers.
+   * These are always interned so that comparison is just a pointer comparison.
+   */
   LISP_SYMBOL,
+  /** Immutable array of characters. */
   LISP_STRING,
+  /** Pair of items. Used to represent lists as well. */
   LISP_CONS,
-  LISP_BUILTIN,
-  LISP_CLOSURE,
+  /**
+   * Mutable cell for storing a single value.
+   *
+   * TODO Implement atom in lisp since it's basically just an array of length 1?
+   */
   LISP_ATOM,
+  /** Builtin function. */
+  LISP_BUILTIN,
+  /** Lisp-defined function. */
+  LISP_CLOSURE,
+
   /**
    * Type to mark objects internal to the runtime, not accessible from LISP.
    */
