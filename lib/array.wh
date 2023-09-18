@@ -18,6 +18,19 @@
         (cons (array-get arr index) acc)
         (dec index)))))
 
+; TODO Include in equal?
+(defn! (array-equal? a b)
+  (let ((a-len (array-length a)))
+    (and
+      (= a-len (array-length b))
+      (let-named loop ((i 0))
+        (or (= i a-len)
+          (and
+            (equal? (array-get a i) (array-get b i))
+            (loop (inc i))))))))
+
+; TODO More generic array-compare?
+
 (defn! (array . elems) (list->array elems))
 
 (defn! (array-update! arr i f)
@@ -60,3 +73,38 @@
         (do
           (array-set! new-arr i (array-get arr i))
           (loop (inc i)))))))
+
+(defn! (array-copy-sub from into start end into-offset)
+  (if (= start end)
+    into
+    (do
+      (array-set!
+        into
+        (int+ start into-offset)
+        (array-get from start))
+      (array-copy-sub from into (inc start) end into-offset))))
+
+(defn! (array-sub arr start end)
+  (array-copy-sub
+    arr
+    (make-array (int- end start))
+    start
+    end
+    (int- 0 start)))
+
+(defn! (array-concat . arrays)
+  (let*
+    ((total-len
+      (foldl 0
+        (fn (acc sub-arr)
+          (int+ acc (array-length sub-arr)))
+        arrays))
+     (new-arr (make-array total-len)))
+    (let-named loop ((offset 0) (arrays arrays))
+      (let-if-cons ((sub-arr . rest) arrays)
+        (let ((sub-arr-len (array-length sub-arr)))
+          (do
+            (array-copy-sub
+              sub-arr new-arr 0 sub-arr-len offset)
+            (loop (int+ offset sub-arr-len) (cdr rest))))
+        new-arr))))
