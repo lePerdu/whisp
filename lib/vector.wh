@@ -1,8 +1,10 @@
-(def! *vector-trie-bits* 5)
+; TODO Figure out ideal bit count. Keeping it smaller for now since it makes
+; depth-related bugs surface earlier
+(def! *vector-trie-bits* 4)
 (def! *vector-trie-width* (bitshift 1 *vector-trie-bits*))
 (def! *vector-trie-mask* (int- *vector-trie-width* 1))
 
-(def! *vector-marker* (gensym))
+(def! *vector-marker* (gensym "vector-marker"))
 
 (defn! (build-vector len shift root)
   (array *vector-marker* len shift root))
@@ -28,6 +30,7 @@
   (<= 0 i (dec (vector-length v))))
 
 (defn! (vector-dec-bits level) (int- level *vector-trie-bits*))
+(defn! (vector-inc-bits level) (int+ level *vector-trie-bits*))
 
 (defn! (vector-level-index i level)
   (bitand
@@ -75,47 +78,114 @@
     (error "vector-get: index out of bounds")))
 
 (defn! (make-new-branch shift single-elem)
-  (do
-    ; TODO Make iterative?
-    (defn! (rec level)
-      (if (= level 0)
-        single-elem
-        (array (rec (int- level *vector-trie-bits*)))))
-    (rec shift)))
+  ; TODO Make iterative?
+  (let-named rec ((level shift))
+    (if (= level 0)
+      single-elem
+      (array (rec (int- level *vector-trie-bits*))))))
 
 (defn! (vector-append v value)
   (do
     (def! len (vector-length v))
     (defn! (last-child-full? node level)
       (=
-        (vector-index-shift len level)
-        (bitand (array-length node) *vector-index-mask*)))
+        (vector-level-index len level)
+        (bitand (array-length node) *vector-trie-mask*)))
     (defn! (trie-append shift node)
-      (if (last-child-full? node)
+      (if (last-child-full? node shift)
         (array-append
           node
           (make-new-branch shift value))
-        (trie-append
-          (int- shift *vector-trie-bits*)
-          (array-get node (dec (array-length node))))))
+        (let ((last-index (dec (array-length node))))
+          (array-set
+            node
+            last-index
+            (trie-append
+              (int- shift *vector-trie-bits*)
+              (array-get node last-index))))))
 
     (let*
       ((root (vector-root v))
+       (shift (vector-shift v))
        (root-full?
         (and
           (= (array-length root) *vector-trie-width*)
-          (last-child-full? root 0))))
+          (last-child-full? root shift))))
       (if root-full?
-        (let ((new-shift (int+ (vector-shift v) *vector-trie-bits*)))
+        (let ((new-shift (vector-inc-bits shift)))
           (build-vector
             (inc len)
             new-shift
             (array root (make-new-branch new-shift value))))
-        (let ((cur-shift (vector-shift v)))
-          (build-vector
-            (inc len)
-            cur-shift
-            (trie-append cur-shift root)))))))
+        (build-vector
+          (inc len)
+          shift
+          (trie-append shift root))))))
+
+(defn! (array-pop-or-nil arr)
+  (if (= (array-length arr) 1)
+    nil
+    (array-sub arr 0 (dec (array-length arr)))))
+
+(defn! (vector-pop v)
+  (let*
+    ((new-len (dec (vector-length v)))
+     (shift (vector-shift v))
+     (new-root
+      (let-named trie-pop ((level shift) (node (vector-root v)))
+        (if (= level 0)
+          (array-pop-or-nil node)
+          (let*
+            ((last-index (dec (array-length node)))
+             (new-last-node
+              (trie-pop
+                (int- level *vector-trie-bits*)
+                (array-get node last-index))))
+            (if (null? new-last-node)
+              (array-pop-or-nil node)
+              (array-set node last-index new-last-node)))))))
+    (cond
+      ; Vector is empty, so re-use the global instance
+      ((null? new-root) empty-vector)
+      ; Delete a level if possible
+      ((and (int> shift 0) (= (array-length new-root) 1))
+        (build-vector
+          new-len
+          (int- shift *vector-trie-bits*)
+          (array-get new-root 0)))
+      (else (build-vector new-len shift new-root)))))
 
 (defn! (list->vector lst)
   (foldl empty-vector vector-append lst))
+
+(defn! (vector->list v)
+  ; TODO More efficient tree iteration
+  (let-named loop ((acc nil) (index (dec (vector-length v))))
+    (if (= index -1)
+      acc
+      (loop
+        (cons (vector-get v index) acc)
+        (dec index)))))
+
+(defn! (vector . elems) (list->vector elems))
+
+(defn! (vector-equal? a b)
+  (let ((a-len (vector-length a)))
+    (and
+      (= a-len (vector-length b))
+      (let-named loop ((i 0))
+        (or
+          (= i a-len)
+          (and
+            (equal? (vector-get a i) (vector-get b i))
+            (loop (inc i))))))))
+
+(defn! (vector-concat v1 v2)
+  ; TODO More efficient tree iteration for v2
+  (let ((end-index (dec (vector-length v2))))
+    (let-named loop ((acc v1) (index 0))
+      (if (= index end-index)
+        acc
+        (loop
+          (vector-append acc (vector-get v2 index))
+          (inc index))))))

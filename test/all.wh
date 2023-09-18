@@ -10,5 +10,6 @@
 (load-file "test/string.wh")
 (load-file "test/error.wh")
 (load-file "test/array.wh")
+(load-file "test/vector.wh")
 
 (run-all-tests)

@@ -1,0 +1,87 @@
+(defgroup! vector
+  (defsyntax! (assert-vector-not-equal expected actual)
+    `(assert (not (vector-equal? ~expected ~actual)) 'expected-not ~expected))
+
+  (defsyntax! (assert-vector-equal expected actual)
+    `(assert (vector-equal? ~expected ~actual) 'expected ~expected 'got ~actual))
+
+  (defgroup! list->vector->list
+    (defn! (round-trip lst)
+      (assert-equal lst (vector->list (list->vector lst))))
+    (deftest! empty (round-trip nil))
+    (deftest! singleton (round-trip (list 1)))
+    (deftest! many-elems (round-trip (list 1 2 3 4 5))))
+
+  (deftest! vector-function
+    (assert-vector-equal (vector 1 2 3) (list->vector (list 1 2 3))))
+
+  (defgroup! vector-length
+    (deftest! empty
+      (assert= 0 (vector-length (vector))))
+    (deftest! non-empty
+      (assert= 5 (vector-length (vector 1 2 3 4 5))))
+    (deftest! very-long
+      ; Long enough that it is 3 stages deep at branching width of 32
+      (assert= 1000 (vector-length (list->vector (repeat 5 1000))))))
+
+  (defgroup! vector-equal?
+    (deftest! empty-vectors-equal
+      (assert (vector-equal? (vector) (vector))))
+    (deftest! matching-elems-equal
+      (assert (vector-equal? (vector 1 "2") (vector 1 "2"))))
+    (deftest! non-matching-elems-not-equal
+      (assert (not (vector-equal? (vector 1 "2") (vector "2" 1)))))
+    (deftest! non-matching-lengths-not-equal
+      (assert (not (vector-equal? (vector 1 "2") (vector 1 "2" 3))))))
+
+  (defgroup! vector-set
+    (deftest! changes-single-element
+      (def! a (vector 1 2 3 4 5))
+      (def! b (vector-set a 2 8))
+      (assert-vector-equal (vector 1 2 8 4 5) b))
+    (deftest! does-not-modify-existing-vector
+      (def! a (vector 1 2 3 4 5))
+      (vector-set a 2 8)
+      (assert= 3 (vector-get a 2))))
+
+  (defgroup! vector-append
+    (deftest! appends-single-element
+      (def! a (vector 1 2 3 4 5))
+      (assert-vector-equal (vector 1 2 3 4 5 8) (vector-append a 8)))
+    (deftest! does-not-modify-existing-vector
+      (def! a (vector 1 2 3 4 5))
+      (vector-append a 8)
+      (assert= 5 (vector-length a))))
+
+  (comment defgroup! vector-sub
+    (deftest! extract-start-to-middle
+      (def! a (vector 1 2 3 4 5))
+      (assert-vector-equal (vector 1 2) (vector-sub a 0 2)))
+    (deftest! extract-middle-to-end
+      (def! a (vector 1 2 3 4 5))
+      (assert-vector-equal (vector 4 5) (vector-sub a 3 5)))
+    (deftest! extract-middle-to-middle
+      (def! a (vector 1 2 3 4 5))
+      (assert-vector-equal (vector 2 3 4) (vector-sub a 1 4)))
+    (deftest! extract-empty-in-middle
+      (def! a (vector 1 2 3 4 5))
+      (assert-vector-equal (vector) (vector-sub a 2 2)))
+    (deftest! extract-whole-vector
+      (def! a (vector 1 2 3 4 5))
+      (assert-vector-equal (vector 1 2 3 4 5) (vector-sub a 0 5)))
+    (deftest! does-not-modify-existing-vector
+      (def! a (vector 1 2 3 4 5))
+      (vector-sub a 1 3)
+      (assert-vector-equal (vector 1 2 3 4 5) a)))
+
+  (comment defgroup! vector-map
+    (deftest! applies-to-all-elemenst
+      (def! a (vector 1 2 3 4 5))
+      (assert-vector-equal (vector 2 3 4 5 6) (vector-map inc a)))
+    (deftest! does-not-modify-existing-vector
+      (def! a (vector 1 2 3 4 5))
+      (vector-map int a)
+      (assert= 3 (vector-get a 2)))
+    (deftest! f-not-called-for-empty-vector
+      (vector-map (fn (x) (error "should not be called")) (vector)))))
+
