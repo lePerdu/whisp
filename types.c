@@ -1151,7 +1151,7 @@ static const struct lisp_vtable *const TYPE_TO_VTABLE[] = {
     [LISP_REAL] = &REAL_VTABLE,     [LISP_CHAR] = &CHAR_VTABLE,
     [LISP_STRING] = &STRING_VTABLE, [LISP_SYMBOL] = &SYMBOL_VTABLE,
     [LISP_CONS] = &CONS_VTABLE,     [LISP_CLOSURE] = &CLOSURE_VTABLE,
-    [LISP_ATOM] = &ATOM_VTABLE,
+    [LISP_ATOM] = &ATOM_VTABLE,     [LISP_ARRAY] = &ARRAY_VTABLE,
 };
 
 static_assert(sizeof(TYPE_TO_VTABLE) / sizeof(void *) == LISP_TYPE_MAX - 1,

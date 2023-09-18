@@ -1,3 +1,5 @@
+(def! empty-array (make-array 0))
+
 (defn! (list->array elems)
   (let* ((n (count elems)) (arr (make-array n)))
     (let-named loop
@@ -47,9 +49,9 @@
 
 ; Persistent append
 (defn! (array-append arr value)
-  (let
+  (let*
     ((old-len (array-length arr))
-     (new-arr (make-arr (inc old-len))))
+     (new-arr (make-array (inc old-len))))
     (let-named loop ((i 0))
       (if (= i old-len)
         (do

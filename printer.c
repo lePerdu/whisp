@@ -29,6 +29,16 @@ static void print_cons(struct str_builder *b, struct lisp_cons *cons,
   str_builder_append(b, ')');
 }
 
+static void print_array(struct str_builder *b, struct lisp_array *arr,
+                        bool readble) {
+  str_builder_concat_cstr(b, "#<array");
+  for (size_t i = 0; i < lisp_array_length(arr); i++) {
+    str_builder_append(b, ' ');
+    print_str_into(b, lisp_array_get(arr, i), readble);
+  }
+  str_builder_append(b, '>');
+}
+
 static void print_char_literal(struct str_builder *b, char c) {
   // TODO Unify code with reader
   str_builder_concat_cstr(b, "#\\");
@@ -184,7 +194,7 @@ void print_str_into(struct str_builder *b, struct lisp_val v, bool readable) {
       break;
     }
     case LISP_ARRAY:
-      str_builder_concat_cstr(b, "#<array>");
+      print_array(b, lisp_val_as_obj(v), readable);
       break;
     default:
       str_builder_concat_cstr(b, "#<unknown>");
