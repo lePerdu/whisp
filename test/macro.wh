@@ -3,7 +3,7 @@
 (defsyntax! (replace-with-2 . args) 2)
 (defsyntax! (noop-macro arg) arg)
 
-(defgroup! macro
+(defgroup! macro-expansion
   (deftest! simple-macro-replaced
     (assert= 2 (replace-with-2)))
 
@@ -102,7 +102,36 @@
     (f)
 
     (def! a (atom 0))
-    (assert-error (twice (swap! a inc))))
+    (assert-error (twice (swap! a inc)))))
+
+(defgroup! standard-macros
+  (defgroup! gensym
+    (deftest! symbols-unique
+      (assert-not= (gensym) (gensym)))
+    (deftest! unique-with-custom-name
+      (assert-not= (gensym "abc") (gensym "abc"))))
+
+  (defgroup! let-cons
+    (deftest! extracts-first
+      (assert= 1 (let-cons ((a . b) (cons 1 2)) a)))
+    (deftest! extracts-second
+      (assert= 2 (let-cons ((a . b) (cons 1 2)) b)))
+    (deftest! extracts-tail-of-list
+      (assert-equal (list 2 3 4) (let-cons ((a . b) (list 1 2 3 4)) b)))
+    (deftest! error-for-non-cons
+      (assert-error (let-cons ((a . b) nil) b))))
+
+  (defgroup! let-named
+    (deftest! call-binding-in-tail-pos
+      (assert= 55 (let-named loop ((acc 0) (n 10))
+        (if (= n 0)
+          acc
+          (loop (+ acc n) (dec n))))))
+    (deftest! call-binding-in-non-tail-pos
+      (assert= 55 (let-named rec ((n 10))
+        (if (= n 0)
+          0
+          (+ n (rec (dec n))))))))
 
   (defgroup! quasiquote
     (deftest! backtick-syntax
