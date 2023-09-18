@@ -57,6 +57,22 @@
 
     qq)))
 
+; TODO Validate structure
+(defsyntax! (cond . branches)
+  (if (null? branches)
+    nil
+    (let*
+      ((branch1 (car branches))
+       ; Is there a better way to validate in the middle of a let without
+       ; nesting lets and adding a bunch of indentation?
+       (_ (if (not (= (count branch1) 2))
+        (error "cond: branches must be of the form (condition expr)")))
+       (cond1 (car branch1))
+       (expr1 (car (cdr branch1))))
+      (if (= cond1 'else)
+        expr1
+        `(if ~cond1 ~expr1 ~(cons 'cond (cdr branches)))))))
+
 (defsyntax! (let* bindings ast)
   (do
     (defn! (helper bindings ast)

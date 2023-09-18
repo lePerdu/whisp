@@ -6,25 +6,6 @@
 (defn! (map-if f x)
   (if x (f x)))
 
-(defsyntax! (unless c f)
-  `(if ~c nil ~f))
-
-; TODO Validate structure
-(defsyntax! (cond . branches)
-  (if (null? branches)
-    nil
-    (let*
-      ((branch1 (car branches))
-       ; Is there a better way to validate in the middle of a let without
-       ; nesting lets and adding a bunch of indentation?
-       (_ (unless (= (count branch1) 2)
-        (error "cond: branches must be of the form (condition expr)")))
-       (cond1 (car branch1))
-       (expr1 (car (cdr branch1))))
-      (if (= cond1 'else)
-        expr1
-        `(if ~cond1 ~expr1 ~(cons 'cond (cdr branches)))))))
-
 ; TODO Make these return values? It's useful sometimes and enables these forms
 ; to be tail-call optimized, but adds in overhead without good optimizations
 (defsyntax! (and . conds)
