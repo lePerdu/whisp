@@ -109,6 +109,28 @@
         (~(cdr bind-pair) (cdr ~cons-sym)))
        ~body))))
 
+; Version of let-cons which allows an "else" branch if the binding is nil
+; TODO Allow more than 1 pattern
+; TODO Allow nested / more complex patterns
+(defsyntax! (let-if-cons binding if-cons . opt-if-nil)
+  ; TODO Check structure
+  (let
+    ((if-nil
+      (cond
+        ((null? opt-if-nil) nil)
+        ((null? (cdr opt-if-nil)) (car opt-if-nil))
+        (else (error "let-if-cons: too many arguments"))))
+     (bind-pair (car binding))
+     (cons-sym (gensym "pair")))
+    `(let
+      ((~cons-sym ~@(cdr binding)))
+      (if (null? ~cons-sym)
+        ~if-nil
+        (let
+         ((~(car bind-pair) (car ~cons-sym))
+          (~(cdr bind-pair) (cdr ~cons-sym)))
+         ~if-cons)))))
+
 (defsyntax! (letrec* bindings body)
   `(let ()
     (do
