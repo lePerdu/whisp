@@ -1,0 +1,326 @@
+(defn! (make-env bindings) (atom bindings))
+(defn! (null-env) (make-env nil))
+(defn! (env-alist env) @env)
+
+(def! make-binding cons)
+(def! binding-sym car)
+(def! binding-val cdr)
+
+(defn! (env-set env sym val) (do
+  (if (not (symbol? sym))
+    (error "env-set: must be a symbol"))
+  (swap! env
+    (fn (l) (cons (make-binding sym val) l)))))
+
+(defn! (env-get env sym) (do
+  (if (not (symbol? sym))
+    (error "env-get: must be a symbol"))
+  (map-if binding-val (assq sym (env-alist env)))))
+
+;; Create a new environment, with
+; For the simple compiler, this can just create a new atom
+; Values are never updated in the compile so environment chaining is not
+; required
+(defn! (env-create parent) (atom (env-alist parent)))
+
+(defn! (cons-opt existing car-val cdr-val)
+  (if (and (= car-val (car existing)) (= cdr-val (cdr existing)))
+    existing
+    (cons car-val cdr-val)))
+
+(defn! (list-opt existing . elems)
+  (cond
+    ((null? elems) nil)
+    ((null? existing) elems)
+    (else
+      (cons-opt
+        existing
+        (car elems)
+        (apply* list-opt (cdr existing) (cdr elems))))))
+
+; Version of map which avoid allocating new cons cells if the function is an
+; identity (or often an identity)
+(defn! (map-opt f l)
+  (if (null? l)
+    nil
+    (cons-opt l (f (car l)) (map-opt f (cdr l)))))
+
+(defn! (primitive? ast)
+  (or (null? ast) (number? ast) (char? ast) (string? ast) (fn? ast)))
+
+(defn! (compile chunk env tail-pos ast)
+  (cond
+    ((primitive? ast) (compile-primitive chunk tail-pos ast))
+    ((symbol? ast) (compile-symbol chunk env tail-pos ast))
+    ((list? ast)
+     (let*
+      ; Guaranteed to be non-nil because of the primitive? check above
+      ((head (car ast))
+       (args (cdr ast))
+       (binding
+        (if (symbol? head)
+          (env-get env head))))
+      (if (null? binding)
+        (compile-call chunk env tail-pos head args)
+        (binding chunk env tail-pos args))))
+    ((cons? ast) (error "cannot compile improper list"))
+    (else (error "cannot compile unknown type"))))
+
+;; Bytecode helpers
+
+(defn! (emit-const chunk ast)
+  (do
+    (chunk-write-byte! chunk *bytecode-const*)
+    (chunk-write-byte! chunk (chunk-add-const! chunk ast))))
+
+(defn! (emit-lookup chunk)
+  (chunk-write-byte! chunk *bytecode-lookup*))
+
+(defn! (emit-bind chunk) (chunk-write-byte! chunk *bytecode-bind*))
+(defn! (emit-pop chunk) (chunk-write-byte! chunk *bytecode-pop*))
+(defn! (emit-dup chunk) (chunk-write-byte! chunk *bytecode-dup*))
+
+(defn! (emit-call-helper chunk opcode arg-count)
+  (do
+    (chunk-write-byte! chunk opcode)
+    (chunk-write-byte! chunk arg-count)))
+
+(defn! (emit-call chunk arg-count)
+  (emit-call-helper chunk *bytecode-call* arg-count))
+(defn! (emit-tail-call chunk arg-count)
+  (emit-call-helper chunk *bytecode-tail-call* arg-count))
+
+(defn! (emit-return chunk)
+  (chunk-write-byte! chunk *bytecode-return*))
+(defn! (emit-make-closure chunk arg-count rest-arg)
+  (do
+    (chunk-write-byte! chunk *bytecode-make-closure*)
+    (chunk-write-byte! chunk arg-count)
+    (chunk-write-byte! chunk (if rest-arg 1 0))))
+
+(defn! (emit-branch-helper chunk opcode)
+  (let ((branch-instr-pos (chunk-write-byte! chunk opcode)))
+    (do
+      (chunk-write-byte! chunk 255)
+      (chunk-write-byte! chunk 255)
+      branch-instr-pos)))
+
+(defn! (emit-init-branch chunk)
+  (emit-branch-helper chunk *bytecode-branch*))
+(defn! (emit-init-branch-if-false chunk)
+  (emit-branch-helper chunk *bytecode-branch-if-false*))
+
+(defn! (resolve-branch chunk branch-pos target-pos)
+  (let ((offset (int- target-pos (int+ branch-pos 1))))
+    (do
+      (chunk-set-byte! chunk (int+ branch-pos 1) (bitand offset 255))
+      (chunk-set-byte! chunk (int+ branch-pos 2) (bitshift offset -8)))))
+
+;; Compiler helpers
+
+(defn! (compile-primitive chunk tail-pos prim)
+  (do
+    (emit-const chunk prim)
+    (if tail-pos
+      (emit-return chunk))
+    chunk))
+
+(defn! (compile-symbol chunk env tail-pos sym)
+  (do
+    (emit-const chunk sym)
+    (emit-lookup chunk)
+    (if tail-pos
+      (emit-return chunk))
+    chunk))
+
+(defn! (compile-call chunk env tail-pos func-expr arg-exprs)
+  (do
+    ; Evaluate arguments first
+    (for-each
+      (fn (expr) (compile chunk env false expr))
+      arg-exprs)
+    ; Then evaluate and call the function
+    (compile chunk env false func-expr)
+    ; TODO Count arguments in for-each loop
+    (emit-call-helper
+      chunk
+      (if tail-pos *bytecode-tail-call* *bytecode-call*)
+      (count arg-exprs))
+    chunk))
+
+(defn! (process-do chunk env tail-pos exprs)
+  (if (null? exprs)
+    (compile-primitive chunk nil)
+    (let-named loop ((next (car exprs)) (rest (cdr exprs)))
+      (if (null? rest)
+        (compile chunk env tail-pos next)
+        (do
+          (compile chunk env false next)
+          ; Ignore the result
+          (emit-pop chunk)
+          (loop (car rest) (cdr rest)))))))
+
+(defn! (process-if chunk env tail-pos ast)
+  (let
+    ; TODO Proper structure checking to get better error reporting
+    ((cond-ast (car ast))
+     (if-true-ast (cadr ast))
+     (if-false-ast
+      (if (null? (cddr ast)) nil (caddr ast)))
+     (branch-to-else-pos (atom nil))
+     (branch-to-end-pos (atom nil)))
+    ; Use atoms to store state rather than let since evaluation order is better
+    ; guaranteed
+    ; TODO Use set! instead?
+    (do
+      (compile chunk env false cond-ast)
+      (reset! branch-to-else-pos
+        (emit-init-branch-if-false chunk))
+      (compile chunk env tail-pos if-true-ast)
+
+      ; If at tail position, the if chunk will return so the branch isn't needed
+      (if (not tail-pos)
+        (reset! branch-to-end-pos
+          (emit-init-branch chunk)))
+
+      (resolve-branch chunk
+        @branch-to-else-pos
+        (chunk-size chunk))
+      (compile chunk env tail-pos if-false-ast)
+
+      (if (not tail-pos)
+        (resolve-branch chunk
+          @branch-to-end-pos
+          (chunk-size chunk)))
+      chunk)))
+
+; Extracts rest param from arguments
+; Returns: (required-args . rest-arg)
+(defn! (parse-fn-args fn-args)
+  (cond
+    ((null? fn-args) (cons nil nil))
+    ((cons? fn-args)
+      (let-cons ((req . rest) (parse-fn-args (cdr fn-args)))
+        (cons (cons (car fn-args) req) rest)))
+    ((symbol? fn-args) (cons nil fn-args))
+    (else (error "fn: arguments must bf of type symbol"))))
+
+;; Create a function's local environment.
+;; Arguments are all bound to nil so that local bindings shadow global special
+;; forms.
+(defn! (make-fn-env outer-env fn-arg-names)
+  (let ((local-env (env-create outer-env)))
+    (do
+      (for-each
+        (fn (arg)
+          (env-set local-env arg nil))
+        fn-arg-names)
+      local-env)))
+
+(defn! (process-fn chunk env tail-pos args) (do
+  (if (not (= (count args) 2))
+    (error "fn: must have exactly 2 argumnts"))
+  (let
+    ((fn-args (car args))
+     (fn-expr (cadr args)))
+    (let-cons ((req-args . rest-arg) (parse-fn-args fn-args))
+      (let
+        ((fn-code-chunk
+          (compile-fn-chunk env (build-full-args req-args rest-arg) fn-expr)))
+        (do
+          (emit-const chunk fn-code-chunk)
+          (emit-make-closure chunk (count req-args) rest-arg)
+          (if tail-pos
+            (emit-return chunk))
+          chunk))))))
+
+(defn! (build-full-args req-args rest-arg)
+  (if rest-arg
+    (concat req-args (list rest-arg))
+    req-args))
+
+(defn! (compile-bind-args chunk args)
+  (if (null? args)
+    nil
+    (do
+      ; Bind in reverse order since that's the order arguments are passed
+      (compile-bind-args chunk (cdr args))
+      (emit-const chunk (car args))
+      (emit-bind chunk))))
+
+(defn! (compile-fn-chunk outer-env fn-args fn-expr)
+  (let ((fn-chunk (make-chunk)) (fn-env (make-fn-env outer-env fn-args)))
+    (do
+      (compile-bind-args fn-chunk fn-args)
+      (compile fn-chunk fn-env true fn-expr))))
+
+(defn! (process-quote chunk env tail-pos ast)
+  (do
+    (if (not (= (count ast) 1))
+      (error "quote: must have exact 1 argument"))
+    (emit-const chunk (car ast))
+    (if tail-pos
+      (emit-return chunk))
+    chunk))
+
+(defn! (process-def! chunk env tail-pos ast) (do
+  (if (not (= (count ast) 2))
+    (error "def!: must have exactly 2 argumnts"))
+  (let ((sym (car ast)) (expr (cadr ast)))
+    (do
+      (if (not (symbol? sym))
+        (error "def!: argument must be of type symbol"))
+      ; Non-macro value shadows other macros/special forms
+      (env-set env sym nil)
+      (compile chunk env expr)
+      (emit-dup chunk)
+      (emit-const chunk sym)
+      (emit-bind chunk)
+      (if tail-pos
+        (emit-return chunk))
+      chunk))))
+
+(defn! (make-macro-processor macro-fn)
+  (fn (chunk env tail-pos args)
+    ; Expand the macro and then re-process the output
+    (compile chunk env tail-pos (apply macro-fn args))))
+
+(defn! (process-defmacro! chunk env tail-pos args) (do
+  (if (not (= (count args) 2))
+    (error "defmacro!: must have exactly 2 argumnts"))
+  (let
+    ; Evaluate the macro expression compiler's global environment
+    ; TODO Isolate the compiler so that macros can't access compiler internals
+    ((sym (car args))
+     (macro-fn
+      (eval (compile env (cadr args)))))
+    (do
+      (if (not (symbol? sym))
+        (error "defmacro!: argument must be of type symbol"))
+      (if (not (fn? macro-fn))
+        (error "defmacro!: value must be of type function"))
+      (env-set env sym
+        (make-macro-processor macro-fn))
+      ; The form has to evaluate to something
+      (emit-const chunk nil)
+      (if tail-pos
+        (emit-return chunk))
+      chunk))))
+
+(def! *global-special-forms*
+  (list
+    (cons 'do process-do)
+    (cons 'if process-if)
+    (cons 'fn process-fn)
+    (cons 'quote process-quote)
+    (cons 'def! process-def!)
+    (cons 'defmacro! process-defmacro!)))
+
+(def! *global-env* (make-env *global-special-forms*))
+
+(defn! (compile-top-level ast)
+  (compile (make-chunk) *global-env* true ast))
+
+(defn! (compile-file filename)
+  (compile-top-level
+    (read-str (string-concat "(do\n" (slurp filename) "\n)"))))
