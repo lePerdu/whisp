@@ -114,14 +114,12 @@ static void print_function(struct str_builder *b, const char *name,
                            unsigned arg_count, bool variadic) {
   str_builder_concat_cstr(b, "#<function ");
   str_builder_concat_cstr(b, name);
-  str_builder_append(b, ' ');
   if (arg_count == 0) {
     if (variadic) {
-      str_builder_append(b, '_');
+      str_builder_concat_cstr(b, " _");
     }
   } else {
-    str_builder_append(b, '(');
-    str_builder_append(b, '_');
+    str_builder_concat_cstr(b, " (_");
     for (unsigned i = 1; i < arg_count; i++) {
       str_builder_concat_cstr(b, " _");
     }
