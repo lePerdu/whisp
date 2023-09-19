@@ -36,7 +36,8 @@
 
 #define BUILTIN_RETURN(val) \
   vm_stack_push(vm, (val)); \
-  return EV_SUCCESS
+  return EV_SUCCESS;        \
+  (void)0
 
 #define ERROR_INT_ARGS "arguments must be of type int"
 #define ERROR_REAL_ARGS "arguments must be of type real"

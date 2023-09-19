@@ -206,31 +206,10 @@ DEF_BUILTIN(core_div) {
 */
 
 DEF_BUILTIN(core_identical) {
-  DEF_ARG(args, 0);
+  DEF_ARG(a, 0);
+  DEF_ARG(b, 1);
 
-  if (lisp_val_type(args) != LISP_CONS) {
-    vm_stack_push(vm, lisp_true());
-    return EV_SUCCESS;
-  }
-
-  struct lisp_cons *cell = lisp_val_as_obj(args);
-  // All must be equal to the first
-  struct lisp_val first = cell->car;
-
-  args = cell->cdr;
-
-  while (lisp_val_type(args) == LISP_CONS) {
-    cell = lisp_val_as_obj(args);
-
-    if (!lisp_val_identical(first, cell->car)) {
-      vm_stack_push(vm, lisp_false());
-      return EV_SUCCESS;
-    }
-    args = cell->cdr;
-  }
-
-  vm_stack_push(vm, lisp_true());
-  return EV_SUCCESS;
+  BUILTIN_RETURN(lisp_val_identical(a, b) ? lisp_true() : lisp_false());
 }
 
 static enum eval_status make_cons(struct lisp_val first, struct lisp_val second,
@@ -260,27 +239,25 @@ DEF_BUILTIN(core_cdr) {
 }
 
 DEF_BUILTIN(core_string_concat) {
-  DEF_ARG(args, 0);
-
   struct str_builder builder;
   str_builder_init(&builder);
 
-  enum eval_status res = EV_SUCCESS;
-  while (!lisp_val_is_nil(args)) {
-    struct lisp_cons *cell = lisp_val_as_obj(args);
-    args = cell->cdr;
-
-    struct lisp_string *s = lisp_val_cast(LISP_STRING, cell->car);
+  unsigned arg_count = vm_stack_size(vm);
+  for (unsigned i = 0; i < arg_count; i++) {
+    struct lisp_val next_arg = vm_from_frame_pointer(vm, i);
+    struct lisp_string *s = lisp_val_cast(LISP_STRING, next_arg);
     if (s == NULL) {
       vm_raise_func_exception(vm, ERROR_STRING_ARG);
-      res = EV_EXCEPTION;
-      break;
+      goto ERROR;
     }
     str_builder_concat(&builder, s);
   }
 
-  vm_stack_push(vm, lisp_val_from_obj(str_build(&builder)));
-  return res;
+  BUILTIN_RETURN(lisp_val_from_obj(str_build(&builder)));
+
+ERROR:
+  str_build(&builder);
+  return EV_EXCEPTION;
 }
 
 enum eval_status string_count(struct lisp_val arg, struct lisp_val *result) {
@@ -686,10 +663,8 @@ struct lisp_builtin builtins[] = {
     // - =: compares by reference. Works for integers and symbols due to how
     // they are implemented
     // - equal?: structural comparison, working for strings and lists
-    // TODO Make equality checks consistent. Either:
-    // - Make = binary
-    // - Make other checks variadic
-    lisp_builtin_make("=", core_identical, 0, true),
+    // TODO Make equality checks variadic (this one and others)?
+    lisp_builtin_make("=", core_identical, 2, false),
     lisp_builtin_make("string->symbol", core_string_to_symbol, 1, false),
     lisp_builtin_make("symbol?", core_is_symbol, 1, false),
     lisp_builtin_make("fn?", core_is_function, 1, false),

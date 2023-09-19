@@ -27,8 +27,11 @@ void vm_raise_format_exception(struct lisp_vm *vm, const char *format, ...);
   vm_raise_format_exception((vm), "%s: " message, \
                             __func__ __VA_OPT__(, ) __VA_ARGS__)
 
-/** Returns whether the current stack frame is empty. */
-bool vm_stack_empty(const struct lisp_vm *vm);
+/**
+ * Returns the size of the current stack frame.
+ * When a function is first called, this will be the number of arguments passed.
+ */
+unsigned vm_stack_size(const struct lisp_vm *vm);
 
 /** Push another value to the current stack frame. */
 void vm_stack_push(struct lisp_vm *vm, struct lisp_val v);

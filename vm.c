@@ -197,8 +197,8 @@ static inline unsigned active_frame_size(const struct lisp_vm *vm) {
   }
 }
 
-bool vm_stack_empty(const struct lisp_vm *vm) {
-  return vm->stack.size == active_frame_pointer(vm);
+unsigned vm_stack_size(const struct lisp_vm *vm) {
+  return vm->stack.size - active_frame_pointer(vm);
 }
 
 void vm_stack_push(struct lisp_vm *vm, struct lisp_val v) {

@@ -351,16 +351,26 @@ static enum eval_status eval_quote(struct lisp_vm *vm, struct lisp_val args) {
   return EV_SUCCESS;
 }
 
+static void build_rest_args(struct lisp_vm *vm, unsigned rest_arg_count) {
+  vm_stack_push(vm, LISP_VAL_NIL);
+  for (unsigned i = 0; i < rest_arg_count; i++) {
+    struct lisp_val cdr = vm_stack_pop(vm);
+    struct lisp_val car = vm_stack_pop(vm);
+    vm_stack_push(vm, lisp_val_from_obj(lisp_cons_create(car, cdr)));
+  }
+  // Leave the final list on the stack
+}
+
 static struct eval_result call_closure(struct lisp_vm *vm,
                                        struct lisp_closure *cl,
-                                       unsigned stack_arg_count) {
+                                       unsigned arg_count) {
   // Save the closure while doing the environment operations since the closure
   // could be an immediate value
   gc_push_root_obj(cl);
 
   // Create new environment
   struct lisp_env *func_env = lisp_env_create(lisp_closure_env(cl));
-  vm_create_tail_stack_frame(vm, func_env, stack_arg_count);
+  vm_create_tail_stack_frame(vm, func_env, arg_count);
 
   // Bind arguments to environment
   struct eval_result res;
@@ -369,6 +379,11 @@ static struct eval_result call_closure(struct lisp_vm *vm,
   struct lisp_cons *params_cons;
   unsigned param_index = 0;
   while ((params_cons = lisp_val_cast(LISP_CONS, params)) != NULL) {
+    if (param_index >= arg_count) {
+      vm_raise_func_exception(vm, "not enough arguments");
+      goto ERROR;
+    }
+
     lisp_env_set(func_env, lisp_val_cast(LISP_SYMBOL, params_cons->car),
                  vm_from_frame_pointer(vm, param_index));
 
@@ -377,8 +392,13 @@ static struct eval_result call_closure(struct lisp_vm *vm,
   }
 
   struct lisp_symbol *rest_param = lisp_closure_rest_param(cl);
+  unsigned rest_arg_count = arg_count - param_index;
   if (rest_param != NULL) {
-    lisp_env_set(func_env, rest_param, vm_from_stack_pointer(vm, 0));
+    build_rest_args(vm, rest_arg_count);
+    lisp_env_set(func_env, rest_param, vm_stack_pop(vm));
+  } else if (rest_arg_count > 0) {
+    vm_raise_func_exception(vm, "too many arguments");
+    goto ERROR;
   }
 
   // Don't need the stack items anymore now that they are bound
@@ -389,69 +409,47 @@ static struct eval_result call_closure(struct lisp_vm *vm,
   res.status = EV_TAIL_CALL;
   res.ast = lisp_closure_ast(cl);
   return res;
-}
 
-static bool validate_function(struct lisp_val func, unsigned *arg_count,
-                              bool *is_variadic) {
-  enum lisp_type func_type = lisp_val_type(func);
-  if (func_type == LISP_BUILTIN) {
-    struct lisp_builtin *builtin = lisp_val_as_obj(func);
-    *arg_count = builtin->arg_count;
-    *is_variadic = builtin->has_rest_arg;
-    return true;
-  } else if (func_type == LISP_CLOSURE) {
-    struct lisp_closure *closure = lisp_val_as_obj(func);
-    *arg_count = lisp_closure_arg_count(closure);
-    *is_variadic = lisp_closure_rest_param(closure) != NULL;
-    return true;
-  } else {
-    return false;
-  }
+ERROR:
+  gc_pop_root_expect_obj(cl);
+  res.status = EV_EXCEPTION;
+  return res;
 }
 
 static struct eval_result dispatch_call(struct lisp_vm *vm,
                                         struct lisp_val func,
-                                        unsigned stack_arg_count) {
+                                        unsigned arg_count) {
   enum lisp_type func_type = lisp_val_type(func);
   struct eval_result res;
   if (func_type == LISP_BUILTIN) {
     struct lisp_builtin *builtin = lisp_val_as_obj(func);
-    vm_create_tail_stack_frame(vm, vm_current_env(vm), stack_arg_count);
+    unsigned req_arg_count = builtin->arg_count;
+    bool is_variadic = builtin->has_rest_arg;
+
+    if (arg_count < req_arg_count) {
+      vm_raise_func_exception(vm, "not enough arguments");
+      res.status = EV_EXCEPTION;
+      return res;
+    }
+    if (!is_variadic && arg_count > req_arg_count) {
+      vm_raise_func_exception(vm, "too many arguments");
+      res.status = EV_EXCEPTION;
+      return res;
+    }
+
+    vm_create_tail_stack_frame(vm, vm_current_env(vm), arg_count);
     // TODO Enable tail calls from builtins
     res.status = builtin->func(vm);
     return res;
   } else if (func_type == LISP_CLOSURE) {
-    return call_closure(vm, lisp_val_as_obj(func), stack_arg_count);
+    return call_closure(vm, lisp_val_as_obj(func), arg_count);
   } else {
     vm_raise_func_exception(vm, "cannot call value of type: %s",
                             lisp_val_type_name(func));
     // Should have already been checked
     res.status = EV_EXCEPTION;
+    return res;
   }
-  return res;
-}
-
-static enum eval_status eval_and_build_rest_args(struct lisp_vm *vm,
-                                                 struct lisp_val arg_exprs,
-                                                 struct lisp_val *arg_values) {
-  // TODO Use the VM stack to save the in-progess list instead of GC roots?
-  struct list_builder builder;
-  list_builder_init(&builder);
-  enum eval_status res = EV_SUCCESS;
-
-  struct lisp_cons *args_cons;
-  while ((args_cons = lisp_val_cast(LISP_CONS, arg_exprs)) != NULL) {
-    res = eval(vm, args_cons->car);
-    if (res == EV_EXCEPTION) {
-      break;
-    }
-    list_builder_append(&builder, vm_stack_pop(vm));
-
-    arg_exprs = args_cons->cdr;
-  }
-
-  *arg_values = list_build(&builder);
-  return res;
 }
 
 /**
@@ -462,63 +460,34 @@ static struct eval_result eval_call(struct lisp_vm *vm,
                                     struct lisp_val func_expr,
                                     struct lisp_val args_expr) {
   struct eval_result res;
+  unsigned arg_count = 0;
+  struct lisp_cons *args_cons;
+  while ((args_cons = lisp_val_cast(LISP_CONS, args_expr)) != NULL) {
+    res.status = eval(vm, args_cons->car);
+    if (res.status == EV_EXCEPTION) {
+      return res;
+    }
 
-  // Evaluate function first to make sure it's callable and find the number of
-  // args
+    args_expr = args_cons->cdr;
+    arg_count++;
+  }
+
+  if (!lisp_val_is_nil(args_expr)) {
+    vm_raise_func_exception(vm, "cannot call function with improper list");
+    res.status = EV_EXCEPTION;
+    return res;
+  }
+
+  // Evaluate function last so that it's state doesn't have to be saved while
+  // evaluating the arguments
   res.status = eval(vm, func_expr);
   if (res.status == EV_EXCEPTION) {
     return res;
   }
   struct lisp_val func = vm_stack_pop(vm);
 
-  unsigned arg_count;
-  bool is_variadic;
-  if (!validate_function(func, &arg_count, &is_variadic)) {
-    vm_raise_func_exception(vm, "cannot call object of type: %s",
-                            lisp_val_type_name(func));
-    res.status = EV_EXCEPTION;
-    return res;
-  }
-
-  gc_push_root(func);
-
-  for (unsigned i = 0; i < arg_count; i++) {
-    struct lisp_cons *args_cons = lisp_val_cast(LISP_CONS, args_expr);
-    if (args_cons == NULL) {
-      vm_raise_func_exception(vm, "not enough arguments");
-      res.status = EV_EXCEPTION;
-      goto ERROR;
-    }
-
-    res.status = eval(vm, args_cons->car);
-    if (res.status == EV_EXCEPTION) {
-      goto ERROR;
-    }
-
-    args_expr = args_cons->cdr;
-  }
-
-  if (is_variadic) {
-    struct lisp_val rest_args_values;
-    res.status = eval_and_build_rest_args(vm, args_expr, &rest_args_values);
-    if (res.status == EV_EXCEPTION) {
-      goto ERROR;
-    }
-    vm_stack_push(vm, rest_args_values);
-  } else if (!lisp_val_is_nil(args_expr)) {
-    vm_raise_func_exception(vm, "too many arguments");
-    res.status = EV_EXCEPTION;
-    goto ERROR;
-  }
-
-  gc_pop_root_expect(func);
   // Total number of stack elements passed to the function
-  unsigned stack_arg_count = arg_count + (is_variadic ? 1 : 0);
-  return dispatch_call(vm, func, stack_arg_count);
-
-ERROR:
-  gc_pop_root_expect(func);
-  return res;
+  return dispatch_call(vm, func, arg_count);
 }
 
 /**
@@ -528,41 +497,22 @@ ERROR:
 static struct eval_result eval_apply_tco(struct lisp_vm *vm,
                                          struct lisp_val func,
                                          struct lisp_val args) {
-  struct eval_result res;
-
-  unsigned arg_count;
-  bool is_variadic;
-  if (!validate_function(func, &arg_count, &is_variadic)) {
-    vm_raise_func_exception(vm, "cannot call object of type: %s",
-                            lisp_val_type_name(func));
-    res.status = EV_EXCEPTION;
-    return res;
-  }
-
-  for (unsigned i = 0; i < arg_count; i++) {
-    struct lisp_cons *args_cons = lisp_val_cast(LISP_CONS, args);
-    if (args_cons == NULL) {
-      vm_raise_func_exception(vm, "not enough arguments");
-      res.status = EV_EXCEPTION;
-      return res;
-    }
-
+  unsigned arg_count = 0;
+  struct lisp_cons *args_cons;
+  while ((args_cons = lisp_val_cast(LISP_CONS, args)) != NULL) {
     vm_stack_push(vm, args_cons->car);
     args = args_cons->cdr;
+    arg_count++;
   }
 
-  if (is_variadic) {
-    // Args are not evaluated, so the rest of the list can be used directly
-    vm_stack_push(vm, args);
-  } else if (!lisp_val_is_nil(args)) {
-    vm_raise_func_exception(vm, "too many arguments");
+  struct eval_result res;
+  if (!lisp_val_is_nil(args)) {
+    vm_raise_func_exception(vm, "cannot call function with improper list");
     res.status = EV_EXCEPTION;
     return res;
   }
 
-  // Total number of stack elements passed to the function
-  unsigned stack_arg_count = arg_count + (is_variadic ? 1 : 0);
-  return dispatch_call(vm, func, stack_arg_count);
+  return dispatch_call(vm, func, arg_count);
 }
 
 enum eval_status eval_apply(struct lisp_vm *vm, struct lisp_val func,
