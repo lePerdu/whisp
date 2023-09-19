@@ -3,7 +3,6 @@
 
 #include "types.h"
 
-// Terminated by a NULL name / function pointer
-extern struct lisp_builtin builtins[];
+void define_builtins(struct lisp_env *global_env);
 
 #endif

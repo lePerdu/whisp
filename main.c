@@ -107,22 +107,7 @@ static struct lisp_vm *setup_vm(int argc, char **argv) {
 
   struct lisp_env *global_env = vm_current_env(vm);
 
-  // TODO Make these constants or part of the reader?
-
-  struct lisp_val true_val = lisp_true();
-  gc_push_root(true_val);
-  lisp_env_set(global_env, lisp_symbol_create_cstr("true"), true_val);
-  gc_pop_root_expect(true_val);
-
-  struct lisp_val false_val = lisp_false();
-  gc_push_root(false_val);
-  lisp_env_set(global_env, lisp_symbol_create_cstr("false"), false_val);
-  gc_pop_root_expect(false_val);
-
-  for (unsigned i = 0; builtins[i].func != NULL; i++) {
-    struct lisp_symbol *sym = lisp_symbol_create_cstr(builtins[i].name);
-    lisp_env_set(global_env, sym, lisp_val_from_obj(&builtins[i]));
-  }
+  define_builtins(global_env);
 
   struct lisp_val argv_list = create_argv_list(argc, argv);
   gc_push_root(argv_list);

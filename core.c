@@ -15,6 +15,7 @@
 #include "core_helper.h"
 #include "eval.h"
 #include "file.h"
+#include "memory.h"
 #include "printer.h"
 #include "reader.h"
 #include "types.h"
@@ -614,7 +615,7 @@ DEF_BUILTIN(core_macroexpand_1) {
   return eval_apply(vm, binding->value, ast_cons->cdr);
 }
 
-struct lisp_builtin builtins[] = {
+static struct lisp_builtin builtins[] = {
     lisp_builtin_make("int?", core_is_integer, 1, false),
     lisp_builtin_make("int", core_to_int, 1, false),
     lisp_builtin_make("int+", core_int_add, 2, false),
@@ -716,3 +717,22 @@ struct lisp_builtin builtins[] = {
 
     lisp_builtin_make(NULL, NULL, 0, false),
 };
+
+void define_builtins(struct lisp_env *global_env) {
+  for (unsigned i = 0; builtins[i].func != NULL; i++) {
+    struct lisp_symbol *sym = lisp_symbol_create_cstr(builtins[i].name);
+    lisp_env_set(global_env, sym, lisp_val_from_obj(&builtins[i]));
+  }
+
+  // TODO Make these constants or part of the reader?
+
+  struct lisp_val true_val = lisp_true();
+  gc_push_root(true_val);
+  lisp_env_set(global_env, lisp_symbol_create_cstr("true"), true_val);
+  gc_pop_root_expect(true_val);
+
+  struct lisp_val false_val = lisp_false();
+  gc_push_root(false_val);
+  lisp_env_set(global_env, lisp_symbol_create_cstr("false"), false_val);
+  gc_pop_root_expect(false_val);
+}
