@@ -50,7 +50,7 @@ void *lisp_obj_alloc(const struct lisp_vtable *vt, size_t size) {
 }
 
 static bool lisp_type_valid(enum lisp_type t) {
-  return LISP_TYPE_MIN <= t && t <= LISP_TYPE_MAX;
+  return LISP_TYPE_MIN <= t && t < LISP_TYPE_MAX;
 }
 
 static void visit_none(struct lisp_val object, visit_callback cb, void *ctx) {
@@ -1129,11 +1129,13 @@ static const struct lisp_vtable *const TYPE_TO_VTABLE[] = {
     [LISP_CLOSURE] = &CLOSURE_VTABLE, [LISP_ATOM] = &ATOM_VTABLE,
 };
 
-static_assert(sizeof(TYPE_TO_VTABLE) / sizeof(void *) == LISP_TYPE_MAX,
+static_assert(sizeof(TYPE_TO_VTABLE) / sizeof(void *) == LISP_TYPE_MAX - 1,
               "missing vtable entry");
 
 const char *lisp_type_name(enum lisp_type t) {
-  if (LISP_TYPE_MIN <= t && t < LISP_TYPE_MAX) {
+  if (t == LISP_OPAQUE) {
+    return "opaque";
+  } else if (LISP_TYPE_MIN <= t && t < LISP_TYPE_MAX) {
     return TYPE_TO_VTABLE[t]->name;
   } else {
     return "unknown";

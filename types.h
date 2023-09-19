@@ -40,6 +40,17 @@ enum lisp_type {
   LISP_CLOSURE,
 
   /**
+   * Opaque, bulitin object.
+   *
+   * This exists as a well-defined alternative to LISP_INVALID when an object is
+   * intended to be available to LISP code.
+   *
+   * TODO Better name?
+   * TODO Merge with INVALID?
+   */
+  LISP_OPAQUE,
+
+  /**
    * Type to mark objects internal to the runtime, not accessible from LISP.
    */
   LISP_INVALID,
