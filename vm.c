@@ -8,46 +8,9 @@
 
 #include "memory.h"
 #include "types.h"
-
-struct val_stack {
-  // TODO Try storing top instead of size for performance
-  size_t size;
-  size_t cap;
-  struct lisp_val *data;
-};
+#include "val_array.h"
 
 #define STACK_INIT_CAP 8
-
-#define VAL_STACK_EMPTY ((struct val_stack){.size = 0, .cap = 0, .data = NULL})
-
-static void val_stack_push(struct val_stack *s, struct lisp_val v) {
-  if (s->size >= s->cap) {
-    s->cap = s->cap < STACK_INIT_CAP ? STACK_INIT_CAP : 2 * s->cap;
-    s->data = realloc(s->data, s->cap * sizeof(s->data[0]));
-  }
-
-  s->data[s->size++] = v;
-}
-
-static struct lisp_val val_stack_top(struct val_stack *s) {
-  assert(s->size > 0);
-  return s->data[s->size - 1];
-}
-
-static struct lisp_val val_stack_pop(struct val_stack *s) {
-  assert(s->size > 0);
-  return s->data[--s->size];
-}
-
-static void val_stack_skip_delete(struct val_stack *s, unsigned skip_n,
-                                  unsigned delete_n) {
-  assert(s->size >= delete_n + skip_n);
-  memmove(&s->data[s->size - delete_n - skip_n], &s->data[s->size - skip_n],
-          skip_n * sizeof(s->data[0]));
-  s->size -= delete_n;
-}
-
-static void val_stack_destroy(struct val_stack *s) { free(s->data); }
 
 /**
  * "Activation record" for a function.
@@ -100,7 +63,7 @@ struct lisp_vm {
   // TODO Store global env as a base call frame?
   struct lisp_env *global_env;
   struct call_stack call_frames;
-  struct val_stack stack;
+  struct val_array stack;
 
   bool has_exception;
   struct lisp_val current_exception;
@@ -125,7 +88,7 @@ static void vm_visit_children(struct lisp_val v, visit_callback cb, void *ctx) {
 static void vm_destroy(struct lisp_val v) {
   struct lisp_vm *vm = lisp_val_as_obj(v);
   call_stack_destroy(&vm->call_frames);
-  val_stack_destroy(&vm->stack);
+  val_array_destroy(&vm->stack);
 }
 
 static const struct lisp_vtable VM_VTABLE = {
@@ -143,7 +106,7 @@ struct lisp_vm *vm_create(void) {
   struct lisp_vm *vm = lisp_obj_alloc(&VM_VTABLE, sizeof(*vm));
   vm->global_env = global_env;
   vm->call_frames = CALL_STACK_EMPTY;
-  vm->stack = VAL_STACK_EMPTY;
+  vm->stack = VAL_ARRAY_EMPTY;
   vm->has_exception = false;
   vm->current_exception = LISP_VAL_NIL;
   gc_pop_root_expect_obj(global_env);
@@ -202,19 +165,19 @@ unsigned vm_stack_size(const struct lisp_vm *vm) {
 }
 
 void vm_stack_push(struct lisp_vm *vm, struct lisp_val v) {
-  val_stack_push(&vm->stack, v);
+  val_array_push(&vm->stack, v);
 }
 
 struct lisp_val vm_stack_top(struct lisp_vm *vm) {
   // Don't let external code see past the current frame
   assert(vm->stack.size > active_frame_pointer(vm));
-  return val_stack_top(&vm->stack);
+  return val_array_top(&vm->stack);
 }
 
 struct lisp_val vm_stack_pop(struct lisp_vm *vm) {
   // Don't let external code pop past the current frame
   assert(vm->stack.size > active_frame_pointer(vm));
-  return val_stack_pop(&vm->stack);
+  return val_array_pop(&vm->stack);
 }
 
 void vm_stack_frame_clear(struct lisp_vm *vm) {
@@ -237,7 +200,7 @@ void vm_create_tail_stack_frame(struct lisp_vm *vm, struct lisp_env *func_env,
   unsigned frame_size = active_frame_size(vm);
   assert(arg_count <= frame_size);
   // Clear the stack except for the arguments
-  val_stack_skip_delete(&vm->stack, arg_count, frame_size - arg_count);
+  val_array_skip_delete(&vm->stack, arg_count, frame_size - arg_count);
   assert(active_frame_size(vm) == arg_count);
 
   // Don't need to replace the frame pointer as it is unchanged
@@ -251,7 +214,7 @@ void vm_stack_frame_return(struct lisp_vm *vm) {
   // Pop the frame off the stack
   call_stack_pop(&vm->call_frames);
   vm->stack.size = old_fp;
-  val_stack_push(&vm->stack, return_val);
+  val_array_push(&vm->stack, return_val);
 }
 
 void vm_stack_frame_save(const struct lisp_vm *vm,

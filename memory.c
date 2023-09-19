@@ -9,6 +9,7 @@
 #include "eval.h"
 #include "log.h"
 #include "types.h"
+#include "val_array.h"
 
 // #define GC_DEBUG
 // #define GC_LOG
@@ -86,40 +87,14 @@ static void alloc_header_destroy(struct alloc_header *header) {
 
 // void *lisp_realloc(void *ptr, size_t size) { return realloc(ptr, size); }
 
-struct val_stack {
-  size_t size;
-  size_t cap;
-  struct lisp_val *data;
-};
+static struct val_array gc_roots = VAL_ARRAY_EMPTY;
 
-#define STACK_INIT_CAP 8
+void gc_push_root(struct lisp_val root) { val_array_push(&gc_roots, root); }
 
-#define VAL_STACK_EMPTY ((struct val_stack){.size = 0, .cap = 0, .data = NULL})
-
-void val_stack_push(struct val_stack *s, struct lisp_val v) {
-  if (s->size >= s->cap) {
-    s->cap = s->cap == 0 ? STACK_INIT_CAP : 2 * s->cap;
-    s->data = realloc(s->data, s->cap * sizeof(s->data[0]));
-  }
-
-  s->data[s->size++] = v;
-}
-
-struct lisp_val val_stack_pop(struct val_stack *s) {
-  assert(s->size > 0);
-  return s->data[--s->size];
-}
-
-void val_stack_destroy(struct val_stack *s) { free(s->data); }
-
-static struct val_stack gc_roots = VAL_STACK_EMPTY;
-
-void gc_push_root(struct lisp_val root) { val_stack_push(&gc_roots, root); }
-
-void gc_pop_root() { val_stack_pop(&gc_roots); }
+void gc_pop_root() { val_array_pop(&gc_roots); }
 
 void gc_pop_root_expect(struct lisp_val root) {
-  struct lisp_val popped = val_stack_pop(&gc_roots);
+  struct lisp_val popped = val_array_pop(&gc_roots);
   (void)root;
   (void)popped;
   // Must be identical, just just equivalent
@@ -133,7 +108,7 @@ void gc_pop_root_expect_obj(void *root) {
 }
 
 // TODO Make a local variable to clean up between invocations?
-static struct val_stack gray_set = VAL_STACK_EMPTY;
+static struct val_array gray_set = VAL_ARRAY_EMPTY;
 
 static void mark_gray(struct lisp_val v) {
   if (!lisp_val_vtable(v)->is_gc_managed) {
@@ -146,7 +121,7 @@ static void mark_gray(struct lisp_val v) {
   }
 
   header->marked = true;
-  val_stack_push(&gray_set, v);
+  val_array_push(&gray_set, v);
 }
 
 static void mark_gray_visit_cb(void *ctx, struct lisp_val v) {
@@ -157,7 +132,7 @@ static void mark_gray_visit_cb(void *ctx, struct lisp_val v) {
 
 static void gc_clear_gray_set(void) {
   while (gray_set.size > 0) {
-    struct lisp_val next = val_stack_pop(&gray_set);
+    struct lisp_val next = val_array_pop(&gray_set);
 
     lisp_val_vtable(next)->visit_children(next, mark_gray_visit_cb, NULL);
   }
