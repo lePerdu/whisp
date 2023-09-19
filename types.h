@@ -373,6 +373,7 @@ struct lisp_closure *lisp_closure_create(struct lisp_val params,
                                          struct lisp_env *outer_env,
                                          struct lisp_val ast);
 struct lisp_symbol *lisp_closure_name(const struct lisp_closure *c);
+const char *lisp_closure_name_cstr(const struct lisp_closure *c);
 unsigned lisp_closure_arg_count(const struct lisp_closure *c);
 struct lisp_val lisp_closure_params(const struct lisp_closure *c);
 struct lisp_symbol *lisp_closure_rest_param(const struct lisp_closure *c);

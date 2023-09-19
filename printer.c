@@ -177,9 +177,7 @@ void print_str_into(struct str_builder *b, struct lisp_val v, bool readable) {
     }
     case LISP_CLOSURE: {
       struct lisp_closure *closure = lisp_val_as_obj(v);
-      const struct lisp_symbol *name_sym = lisp_closure_name(closure);
-      const char *name =
-          name_sym != NULL ? lisp_symbol_name(name_sym) : "<unknown>";
+      const char *name = lisp_closure_name_cstr(closure);
       bool variadic = lisp_closure_rest_param(closure) != NULL;
       print_function(b, name, lisp_closure_arg_count(closure), variadic);
       break;

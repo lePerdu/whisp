@@ -1081,6 +1081,14 @@ struct lisp_symbol *lisp_closure_name(const struct lisp_closure *c) {
   return c->name;
 }
 
+const char *lisp_closure_name_cstr(const struct lisp_closure *c) {
+  if (c->name != NULL) {
+    return lisp_symbol_name(c->name);
+  } else {
+    return "#<unknown>";
+  }
+}
+
 void lisp_closure_set_name(struct lisp_closure *c, struct lisp_symbol *name) {
   c->name = name;
 }

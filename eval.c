@@ -380,7 +380,8 @@ static struct eval_result call_closure(struct lisp_vm *vm,
   unsigned param_index = 0;
   while ((params_cons = lisp_val_cast(LISP_CONS, params)) != NULL) {
     if (param_index >= arg_count) {
-      vm_raise_func_exception(vm, "not enough arguments");
+      vm_raise_func_exception(vm, "%s: not enough arguments",
+                              lisp_closure_name_cstr(cl));
       goto ERROR;
     }
 
@@ -397,7 +398,8 @@ static struct eval_result call_closure(struct lisp_vm *vm,
     build_rest_args(vm, rest_arg_count);
     lisp_env_set(func_env, rest_param, vm_stack_pop(vm));
   } else if (rest_arg_count > 0) {
-    vm_raise_func_exception(vm, "too many arguments");
+    vm_raise_func_exception(vm, "%s: too many arguments",
+                            lisp_closure_name_cstr(cl));
     goto ERROR;
   }
 
@@ -427,12 +429,12 @@ static struct eval_result dispatch_call(struct lisp_vm *vm,
     bool is_variadic = builtin->has_rest_arg;
 
     if (arg_count < req_arg_count) {
-      vm_raise_func_exception(vm, "not enough arguments");
+      vm_raise_func_exception(vm, "%s: not enough arguments", builtin->name);
       res.status = EV_EXCEPTION;
       return res;
     }
     if (!is_variadic && arg_count > req_arg_count) {
-      vm_raise_func_exception(vm, "too many arguments");
+      vm_raise_func_exception(vm, "%s: too many arguments", builtin->name);
       res.status = EV_EXCEPTION;
       return res;
     }
