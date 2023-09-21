@@ -60,8 +60,8 @@ void vm_create_stack_frame(struct lisp_vm *vm, struct lisp_env *func_env,
 /**
  * Replace the current stack frame with a new one to initiate a tail call.
  */
-void vm_create_tail_stack_frame(struct lisp_vm *vm, struct lisp_env *func_env,
-                                unsigned arg_count);
+void vm_replace_stack_frame(struct lisp_vm *vm, struct lisp_env *func_env,
+                            unsigned arg_count);
 
 /**
  * Return from the current frame. The return value is on the top of the

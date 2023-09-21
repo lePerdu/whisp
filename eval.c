@@ -370,7 +370,7 @@ static struct eval_result call_closure(struct lisp_vm *vm,
 
   // Create new environment
   struct lisp_env *func_env = lisp_env_create(lisp_closure_env(cl));
-  vm_create_tail_stack_frame(vm, func_env, arg_count);
+  vm_replace_stack_frame(vm, func_env, arg_count);
 
   // Bind arguments to environment
   struct eval_result res;
@@ -439,7 +439,7 @@ static struct eval_result dispatch_call(struct lisp_vm *vm,
       return res;
     }
 
-    vm_create_tail_stack_frame(vm, vm_current_env(vm), arg_count);
+    vm_replace_stack_frame(vm, vm_current_env(vm), arg_count);
     // TODO Enable tail calls from builtins
     res.status = builtin->func(vm);
     return res;

@@ -195,8 +195,8 @@ void vm_create_stack_frame(struct lisp_vm *vm, struct lisp_env *func_env,
                                     });
 }
 
-void vm_create_tail_stack_frame(struct lisp_vm *vm, struct lisp_env *func_env,
-                                unsigned arg_count) {
+void vm_replace_stack_frame(struct lisp_vm *vm, struct lisp_env *func_env,
+                            unsigned arg_count) {
   unsigned frame_size = active_frame_size(vm);
   assert(arg_count <= frame_size);
   // Clear the stack except for the arguments
