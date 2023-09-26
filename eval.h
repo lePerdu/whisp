@@ -1,19 +1,27 @@
 #ifndef EVAL_H_
 #define EVAL_H_
 
+#include "bytecode.h"
 #include "types.h"
 #include "vm.h"
 
-void init_global_eval_state(void);
-
-enum eval_status eval(struct lisp_vm *vm, struct lisp_val ast);
-enum eval_status eval_apply(struct lisp_vm *vm, struct lisp_val func,
-                            struct lisp_val args);
+/**
+ * Possible evaluation conditions.
+ */
+enum eval_status {
+  EV_SUCCESS = 0,
+  EV_EXCEPTION,
+};
 
 /**
- * Apply eval and handle exceptions by unwinding the stack.
- * To be used in top-level contexts, like the REPL or processing a file.
+ * Evaluate bytecode in a code chunk at the top level.
  */
-enum eval_status eval_handle_exception(struct lisp_vm *vm, struct lisp_val ast);
+enum eval_status eval_chunk(struct lisp_vm *vm, struct code_chunk *code);
+
+/**
+ * Apply a function to a list of arguments at the top-level.
+ */
+enum eval_status eval_apply(struct lisp_vm *vm, struct lisp_val func,
+                            struct lisp_val args);
 
 #endif

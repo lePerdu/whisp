@@ -169,17 +169,11 @@ void print_str_into(struct str_builder *b, struct lisp_val v, bool readable) {
     case LISP_CONS:
       print_cons(b, lisp_val_as_obj(v), readable);
       break;
-    case LISP_BUILTIN: {
-      struct lisp_builtin *builtin = lisp_val_as_obj(v);
-      print_function(b, builtin->name, builtin->arg_count,
-                     builtin->has_rest_arg);
-      break;
-    }
     case LISP_CLOSURE: {
       struct lisp_closure *closure = lisp_val_as_obj(v);
       const char *name = lisp_closure_name_cstr(closure);
-      bool variadic = lisp_closure_rest_param(closure) != NULL;
-      print_function(b, name, lisp_closure_arg_count(closure), variadic);
+      print_function(b, name, lisp_closure_arg_count(closure),
+                     lisp_closure_is_variadic(closure));
       break;
     }
     case LISP_ATOM: {

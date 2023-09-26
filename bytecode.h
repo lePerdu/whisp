@@ -40,8 +40,24 @@ enum bytecode_op {
 
   /**
    * Duplicates the top of the stack.
+   *
+   * `dup`
    */
   OP_DUP,
+
+  /**
+   * Duplicates the n-th item from the frame pointer (i.e. bottom of the stack).
+   *
+   * `dup-fp N`
+   */
+  OP_DUP_FP,
+
+  /**
+   * Clears all values off the current stack frame.
+   *
+   * `clear`
+   */
+  OP_CLEAR,
 
   /**
    * Call the top of the stack with the specified number of arguments.
@@ -69,17 +85,35 @@ enum bytecode_op {
   /**
    * Pop a code chunk off the top of the stack and push a newly created closure.
    *
+   * TODO Include the arg count descriptors and name in the code chunk (or maybe
+   * put some other structure on the stack)?
+   *
    * `make-closure N-ARGS IS-VARIADIC`
    */
   OP_MAKE_CLOSURE,
 
   /**
+   * Collapse arguments starting at a given FP index into a list.
+   *
+   * `build-rest-args FP-INDEX`
+   */
+  OP_BUILD_REST_ARGS,
+
+  /**
+   * Call an intrisic by index.
+   * These all operate on the stack frame of the current function, but will not
+   * create or delete stack frames. Current API limits to 256 intrinsics, but
+   * that's probably a good limit anyway.
+   *
+   * `intrinsic INDEX`
+   */
+  // OP_INTRINSIC,
+
+  /**
    * Branch to another location in the current bytecode chunk.
    *
-   * The offset is computed as a positive 2-byte integer relative to the index
+   * The offset is computed as a signed 2-byte integer relative to the index
    * after the current instruction.
-   *
-   * TODO Allow backwards jumps
    *
    * `branch OFFSET`
    */
@@ -100,6 +134,8 @@ struct bytecode_array {
 };
 
 // TODO Pick better name
+// TODO Should this be GC'd? It probably always has a single clear owner (i.e. a
+// function object)
 struct code_chunk {
   struct lisp_obj header;
   struct val_array const_table;
@@ -110,9 +146,24 @@ struct code_chunk {
 struct code_chunk *chunk_create(void);
 bool is_chunk(struct lisp_val v);
 
+/**
+ * Add a constant to the function's constant table and return its index.
+ */
 unsigned chunk_add_const(struct code_chunk *chunk, struct lisp_val v);
+
+/**
+ * Append a byte to the chunk and return its index.
+ */
 unsigned chunk_append_byte(struct code_chunk *chunk, uint8_t byte);
+
+/**
+ * Set a byte at a specific index.
+ */
 void chunk_set_byte(struct code_chunk *chunk, unsigned index, uint8_t byte);
+
+unsigned chunk_append_short(struct code_chunk *t, int16_t v);
+
+void chunk_set_short(struct code_chunk *t, unsigned index, int16_t v);
 
 // TODO Implement in lisp?
 void chunk_disassemble(const struct code_chunk *chunk);

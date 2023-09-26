@@ -34,9 +34,10 @@ enum lisp_type {
    * TODO Implement atom in lisp since it's basically just an array of length 1?
    */
   LISP_ATOM,
-  /** Builtin function. */
-  LISP_BUILTIN,
-  /** Lisp-defined function. */
+
+  /**
+   * Compiled lisp-defined closure.
+   */
   LISP_CLOSURE,
 
   /**
@@ -134,8 +135,7 @@ void *lisp_val_cast(enum lisp_type type, struct lisp_val v);
     struct lisp_string *: LISP_STRING, \
     struct lisp_cons *: LISP_CONS, \
     struct lisp_atom *: LISP_ATOM, \
-    struct lisp_builtin *: LISP_BUILTIN, \
-    struct lisp_closure *: LISP_CLOSURE, \
+    struct lisp_eval_closure *: LISP_EVAL_CLOSURE, \
   )
 // clang-format on
 
@@ -145,21 +145,6 @@ void *lisp_val_cast(enum lisp_type type, struct lisp_val v);
  *
 #define LISP_CAST(t, v) ((t *)lisp_val_cast(LISP_CONVERT_C_TYPE(t), v))
 */
-
-/**
- * Possible evaluation conditions.
- */
-enum eval_status {
-  EV_SUCCESS = 0,
-  EV_TAIL_CALL,
-  EV_EXCEPTION,
-};
-
-struct eval_result {
-  enum eval_status status;
-  /** AST to eval in case of tail call */
-  struct lisp_val ast;
-};
 
 bool lisp_val_is_nil(struct lisp_val v);
 
@@ -329,30 +314,6 @@ void list_mapper_append_next(struct list_mapper *m, struct lisp_val next);
  */
 struct lisp_val list_mapper_build(struct list_mapper *m);
 
-struct lisp_vm;  // Pre-declare
-
-// args can either be a list or nil
-typedef enum eval_status (*lisp_builtin_fn)(struct lisp_vm *vm);
-
-struct lisp_builtin {
-  struct lisp_obj header;
-  const char *name;
-  uint8_t arg_count;
-  bool has_rest_arg;
-  lisp_builtin_fn func;
-};
-
-extern const struct lisp_vtable BUILTIN_VTABLE;
-
-#define lisp_builtin_make(name_val, func_val, arg_count_val, has_rest_arg_val) \
-  ((struct lisp_builtin){                                                      \
-      .header = {.vt = &BUILTIN_VTABLE},                                       \
-      .name = (name_val),                                                      \
-      .arg_count = (arg_count_val),                                            \
-      .has_rest_arg = (has_rest_arg_val),                                      \
-      .func = (func_val),                                                      \
-  })
-
 struct lisp_env_binding {
   struct lisp_val value;
   bool is_macro;
@@ -378,18 +339,17 @@ void lisp_env_set_macro(struct lisp_env *env, struct lisp_symbol *sym,
                         struct lisp_val val);
 
 struct lisp_closure;
+struct code_chunk;
 
-struct lisp_closure *lisp_closure_create(struct lisp_val params,
-                                         struct lisp_symbol *rest_param,
+struct lisp_closure *lisp_closure_create(unsigned arg_count, bool is_variadic,
                                          struct lisp_env *outer_env,
-                                         struct lisp_val ast);
+                                         struct code_chunk *bytecode);
 struct lisp_symbol *lisp_closure_name(const struct lisp_closure *c);
 const char *lisp_closure_name_cstr(const struct lisp_closure *c);
 unsigned lisp_closure_arg_count(const struct lisp_closure *c);
-struct lisp_val lisp_closure_params(const struct lisp_closure *c);
-struct lisp_symbol *lisp_closure_rest_param(const struct lisp_closure *c);
+bool lisp_closure_is_variadic(const struct lisp_closure *c);
 struct lisp_env *lisp_closure_env(const struct lisp_closure *c);
-struct lisp_val lisp_closure_ast(const struct lisp_closure *c);
+struct code_chunk *lisp_closure_code(const struct lisp_closure *c);
 
 // TODO Force setting at construction time?
 void lisp_closure_set_name(struct lisp_closure *c, struct lisp_symbol *name);

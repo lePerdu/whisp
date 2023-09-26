@@ -170,7 +170,7 @@ bool lisp_val_is_list(struct lisp_val v) {
 
 bool lisp_val_is_func(struct lisp_val v) {
   enum lisp_type type = lisp_val_type(v);
-  return type == LISP_BUILTIN || type == LISP_CLOSURE;
+  return type == LISP_CLOSURE;
 }
 
 struct lisp_real {
@@ -1025,10 +1025,10 @@ void lisp_env_set_macro(struct lisp_env *env, struct lisp_symbol *sym,
 struct lisp_closure {
   struct lisp_obj header;
   struct lisp_symbol *name;
-  struct lisp_val params;
-  struct lisp_symbol *rest_param;
+  unsigned arg_count;
+  bool is_variadic;
   struct lisp_env *outer_env;
-  struct lisp_val ast;
+  struct code_chunk *code;
 };
 
 static void lisp_closure_visit(struct lisp_val v, visit_callback cb,
@@ -1037,12 +1037,8 @@ static void lisp_closure_visit(struct lisp_val v, visit_callback cb,
   if (cl->name != NULL) {
     cb(ctx, lisp_val_from_obj(cl->name));
   }
-  cb(ctx, cl->params);
-  if (cl->rest_param != NULL) {
-    cb(ctx, lisp_val_from_obj(cl->rest_param));
-  }
   cb(ctx, lisp_val_from_obj(cl->outer_env));
-  cb(ctx, cl->ast);
+  cb(ctx, lisp_val_from_obj(cl->code));
 }
 
 static const struct lisp_vtable CLOSURE_VTABLE = {
@@ -1053,27 +1049,21 @@ static const struct lisp_vtable CLOSURE_VTABLE = {
     .destroy = destroy_none,
 };
 
-struct lisp_closure *lisp_closure_create(struct lisp_val params,
-                                         struct lisp_symbol *rest_param,
+struct lisp_closure *lisp_closure_create(unsigned arg_count, bool is_variadic,
                                          struct lisp_env *outer_env,
-                                         struct lisp_val ast) {
-  gc_push_root(params);
-  gc_push_root_obj(rest_param);
+                                         struct code_chunk *bytecode) {
   gc_push_root_obj(outer_env);
-  gc_push_root(ast);
+  gc_push_root_obj(bytecode);
 
   struct lisp_closure *cl = lisp_obj_alloc(&CLOSURE_VTABLE, sizeof(*cl));
   cl->name = NULL;
-  cl->params = params;
-  cl->rest_param = rest_param;
+  cl->arg_count = arg_count;
+  cl->is_variadic = is_variadic;
   cl->outer_env = outer_env;
-  cl->ast = ast;
+  cl->code = bytecode;
 
-  gc_pop_root_expect(ast);
+  gc_pop_root_expect_obj(bytecode);
   gc_pop_root_expect_obj(outer_env);
-  gc_pop_root_expect_obj(rest_param);
-  gc_pop_root_expect(params);
-
   return cl;
 }
 
@@ -1082,51 +1072,36 @@ struct lisp_symbol *lisp_closure_name(const struct lisp_closure *c) {
 }
 
 const char *lisp_closure_name_cstr(const struct lisp_closure *c) {
-  if (c->name != NULL) {
-    return lisp_symbol_name(c->name);
-  } else {
-    return "#<unknown>";
-  }
-}
-
-void lisp_closure_set_name(struct lisp_closure *c, struct lisp_symbol *name) {
-  c->name = name;
+  return c->name != NULL ? lisp_symbol_name(c->name) : "#<unknown>";
 }
 
 unsigned lisp_closure_arg_count(const struct lisp_closure *c) {
-  return lisp_list_count(c->params);
+  return c->arg_count;
 }
 
-struct lisp_val lisp_closure_params(const struct lisp_closure *c) {
-  return c->params;
-}
-
-struct lisp_symbol *lisp_closure_rest_param(const struct lisp_closure *c) {
-  return c->rest_param;
+bool lisp_closure_is_variadic(const struct lisp_closure *c) {
+  return c->is_variadic;
 }
 
 struct lisp_env *lisp_closure_env(const struct lisp_closure *c) {
   return c->outer_env;
 }
 
-struct lisp_val lisp_closure_ast(const struct lisp_closure *c) {
-  return c->ast;
+struct code_chunk *lisp_closure_code(const struct lisp_closure *c) {
+  return c->code;
 }
 
-const struct lisp_vtable BUILTIN_VTABLE = {
-    .type = LISP_BUILTIN,
-    .is_gc_managed = false,
-    .name = "bulitin",
-    .visit_children = visit_none,
-    .destroy = destroy_none,
-};
+// TODO Force setting at construction time?
+void lisp_closure_set_name(struct lisp_closure *c, struct lisp_symbol *name) {
+  c->name = name;
+}
 
 static const struct lisp_vtable *const TYPE_TO_VTABLE[] = {
-    [LISP_NIL] = &NIL_VTABLE,         [LISP_INT] = &INT_VTABLE,
-    [LISP_REAL] = &REAL_VTABLE,       [LISP_CHAR] = &CHAR_VTABLE,
-    [LISP_STRING] = &STRING_VTABLE,   [LISP_SYMBOL] = &SYMBOL_VTABLE,
-    [LISP_CONS] = &CONS_VTABLE,       [LISP_BUILTIN] = &BUILTIN_VTABLE,
-    [LISP_CLOSURE] = &CLOSURE_VTABLE, [LISP_ATOM] = &ATOM_VTABLE,
+    [LISP_NIL] = &NIL_VTABLE,       [LISP_INT] = &INT_VTABLE,
+    [LISP_REAL] = &REAL_VTABLE,     [LISP_CHAR] = &CHAR_VTABLE,
+    [LISP_STRING] = &STRING_VTABLE, [LISP_SYMBOL] = &SYMBOL_VTABLE,
+    [LISP_CONS] = &CONS_VTABLE,     [LISP_CLOSURE] = &CLOSURE_VTABLE,
+    [LISP_ATOM] = &ATOM_VTABLE,
 };
 
 static_assert(sizeof(TYPE_TO_VTABLE) / sizeof(void *) == LISP_TYPE_MAX - 1,

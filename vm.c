@@ -11,32 +11,22 @@
 #include "val_array.h"
 
 #define STACK_INIT_CAP 8
-
-/**
- * "Activation record" for a function.
- * TODO Change name?
- */
-struct active_record {
-  /** Index into the stack */
-  unsigned frame_pointer;
-  struct lisp_env *env;
-};
-
-static void active_record_visit(struct active_record *rec, visit_callback cb,
-                                void *ctx) {
+static void stack_frame_visit(struct stack_frame *rec, visit_callback cb,
+                              void *ctx) {
   cb(ctx, lisp_val_from_obj(rec->env));
+  cb(ctx, lisp_val_from_obj(rec->code));
 }
 
 struct call_stack {
   size_t size;
   size_t cap;
-  struct active_record *data;
+  struct stack_frame *data;
 };
 
 #define CALL_STACK_EMPTY \
   ((struct call_stack){.size = 0, .cap = 0, .data = NULL})
 
-static void call_stack_push(struct call_stack *s, struct active_record v) {
+static void call_stack_push(struct call_stack *s, struct stack_frame v) {
   if (s->size >= s->cap) {
     s->cap = s->cap < STACK_INIT_CAP ? STACK_INIT_CAP : 2 * s->cap;
     s->data = realloc(s->data, s->cap * sizeof(s->data[0]));
@@ -45,7 +35,7 @@ static void call_stack_push(struct call_stack *s, struct active_record v) {
   s->data[s->size++] = v;
 }
 
-static struct active_record *call_stack_top(const struct call_stack *s) {
+static struct stack_frame *call_stack_top(const struct call_stack *s) {
   assert(s->size > 0);
   return &s->data[s->size - 1];
 }
@@ -74,7 +64,7 @@ static void vm_visit_children(struct lisp_val v, visit_callback cb, void *ctx) {
 
   cb(ctx, lisp_val_from_obj(vm->global_env));
   for (unsigned i = 0; i < vm->call_frames.size; i++) {
-    active_record_visit(&vm->call_frames.data[i], cb, ctx);
+    stack_frame_visit(&vm->call_frames.data[i], cb, ctx);
   }
   for (unsigned i = 0; i < vm->stack.size; i++) {
     cb(ctx, vm->stack.data[i]);
@@ -136,11 +126,24 @@ void vm_clear_exception(struct lisp_vm *vm) {
   vm->current_exception = LISP_VAL_NIL;
 }
 
-struct lisp_env *vm_current_env(struct lisp_vm *vm) {
+// TODO is this necessary? Would it be reasonable to just always use
+// vm_current_env?
+struct lisp_env *vm_global_env(struct lisp_vm *vm) { return vm->global_env; }
+
+struct stack_frame *vm_current_frame(struct lisp_vm *vm) {
   if (vm->call_frames.size == 0) {
+    return NULL;
+  } else {
+    return call_stack_top(&vm->call_frames);
+  }
+}
+
+struct lisp_env *vm_current_env(struct lisp_vm *vm) {
+  struct stack_frame *rec = vm_current_frame(vm);
+  if (rec == NULL) {
     return vm->global_env;
   } else {
-    return call_stack_top(&vm->call_frames)->env;
+    return rec->env;
   }
 }
 
@@ -184,27 +187,32 @@ void vm_stack_frame_clear(struct lisp_vm *vm) {
   vm->stack.size = active_frame_pointer(vm);
 }
 
-void vm_create_stack_frame(struct lisp_vm *vm, struct lisp_env *func_env,
-                           unsigned arg_count) {
+void vm_create_stack_frame(struct lisp_vm *vm, struct lisp_env *env,
+                           struct code_chunk *code, unsigned arg_count) {
   assert(arg_count <= active_frame_size(vm));
   unsigned new_fp = vm->stack.size - arg_count;
 
-  call_stack_push(&vm->call_frames, (struct active_record){
+  call_stack_push(&vm->call_frames, (struct stack_frame){
                                         .frame_pointer = new_fp,
-                                        .env = func_env,
+                                        .env = env,
+                                        .code = code,
+                                        .instr_pointer = 0,
                                     });
 }
 
-void vm_replace_stack_frame(struct lisp_vm *vm, struct lisp_env *func_env,
-                            unsigned arg_count) {
+void vm_replace_stack_frame(struct lisp_vm *vm, struct lisp_env *env,
+                            struct code_chunk *code, unsigned arg_count) {
   unsigned frame_size = active_frame_size(vm);
   assert(arg_count <= frame_size);
   // Clear the stack except for the arguments
   val_array_skip_delete(&vm->stack, arg_count, frame_size - arg_count);
   assert(active_frame_size(vm) == arg_count);
 
+  struct stack_frame *frame = call_stack_top(&vm->call_frames);
   // Don't need to replace the frame pointer as it is unchanged
-  call_stack_top(&vm->call_frames)->env = func_env;
+  frame->code = code;
+  frame->env = env;
+  frame->instr_pointer = 0;
 }
 
 void vm_stack_frame_return(struct lisp_vm *vm) {
@@ -227,6 +235,11 @@ void vm_stack_frame_unwind_to(struct lisp_vm *vm,
                               const struct stack_frame_state *state) {
   vm->call_frames.size = state->frame_index + 1;
   vm->stack.size = state->stack_size;
+}
+
+void vm_stack_frame_unwind_all(struct lisp_vm *vm) {
+  vm->call_frames.size = 0;
+  vm->stack.size = 0;
 }
 
 struct lisp_val vm_from_frame_pointer(const struct lisp_vm *vm,

@@ -10,6 +10,8 @@
 #include <readline/readline.h>
 // clang-format on
 
+#include "compiler.h"
+#include "compiler_core.h"
 #include "core.h"
 #include "eval.h"
 #include "file.h"
@@ -64,7 +66,7 @@ static enum eval_status eval_print_many(struct lisp_vm *vm,
     assert(cell != NULL);
     exprs = cell->cdr;
 
-    res = eval_handle_exception(vm, cell->car);
+    res = compile_eval(vm, cell->car);
     if (res == EV_SUCCESS) {
       // Keep on the stack while printing so it is't GC'd
       struct lisp_string *printed = print_str(vm_stack_top(vm), true);
@@ -99,7 +101,7 @@ static struct lisp_val create_argv_list(int argc, char *argv[]) {
 }
 
 static struct lisp_vm *setup_vm(int argc, char **argv) {
-  init_global_eval_state();
+  init_global_compile_state();
 
   struct lisp_vm *vm = vm_create();
   // Save the VM permenantly
@@ -107,7 +109,9 @@ static struct lisp_vm *setup_vm(int argc, char **argv) {
 
   struct lisp_env *global_env = vm_current_env(vm);
 
-  define_builtins(global_env);
+  // define_builtins(global_env);
+  // Just for testing purposes
+  // define_compiler_builtins(global_env);
 
   struct lisp_val argv_list = create_argv_list(argc, argv);
   gc_push_root(argv_list);
@@ -129,7 +133,10 @@ static void run_file(struct lisp_vm *vm, const char *filename) {
   }
 }
 
-static void load_prelude(struct lisp_vm *vm) { run_file(vm, PRELUDE_FILENAME); }
+static void load_prelude(struct lisp_vm *vm) {
+  return;
+  run_file(vm, PRELUDE_FILENAME);
+}
 
 static void rep(struct lisp_vm *vm, const char *input) {
   struct lisp_val ast;

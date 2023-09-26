@@ -75,15 +75,21 @@ unsigned chunk_append_byte(struct code_chunk *t, uint8_t byte) {
   return t->bytecode.size - 1;
 }
 
+unsigned chunk_append_short(struct code_chunk *t, int16_t v) {
+  unsigned offset = chunk_append_byte(t, v & 0xff);
+  chunk_append_byte(t, v >> 8);
+  return offset;
+}
+
 void chunk_set_byte(struct code_chunk *t, unsigned index, uint8_t byte) {
   assert(index < t->bytecode.size);
   t->bytecode.data[index] = byte;
 }
 
-static int disassemble_instr(const struct code_chunk *chunk, unsigned offset) {
-  if (offset >= chunk->bytecode.size) {
-    return 0;
-  }
+void chunk_set_short(struct code_chunk *t, unsigned index, int16_t v) {
+  chunk_set_byte(t, index, v & 0xff);
+  chunk_set_byte(t, index + 1, v >> 8);
+}
 
 #define ENSURE_INSTR_ARGS(opcode, n)                               \
   do {                                                             \
@@ -92,6 +98,27 @@ static int disassemble_instr(const struct code_chunk *chunk, unsigned offset) {
       return -1;                                                   \
     }                                                              \
   } while (false)
+
+static int disassemble_branch(const struct code_chunk *chunk,
+                              enum bytecode_op op, const char *name,
+                              unsigned offset) {
+  ENSURE_INSTR_ARGS(op, 2);
+  // Read as litle endian
+  int16_t branch_offset = chunk->bytecode.data[offset + 1] +
+                          (chunk->bytecode.data[offset + 2] << 8);
+  int branch_target = offset + 1 + branch_offset;
+  printf("(%s %u)\t; target = %u\n", name, branch_offset, branch_target);
+  if (branch_target < 0 || (int)chunk->bytecode.size <= branch_target) {
+    printf("\nbranch target out of bounds: %u\n", branch_target);
+    return -1;
+  }
+  return 3;
+}
+
+static int disassemble_instr(const struct code_chunk *chunk, unsigned offset) {
+  if (offset >= chunk->bytecode.size) {
+    return 0;
+  }
 
   printf("\t%04u\t", offset);
   enum bytecode_op opcode = chunk->bytecode.data[offset];
@@ -118,9 +145,18 @@ static int disassemble_instr(const struct code_chunk *chunk, unsigned offset) {
     case OP_POP:
       printf("(pop)\n");
       return 1;
+    case OP_CLEAR:
+      printf("(clear)\n");
+      return 1;
     case OP_DUP:
       printf("(dup)\n");
       return 1;
+    case OP_DUP_FP: {
+      ENSURE_INSTR_ARGS(OP_DUP_FP, 1);
+      unsigned n = chunk->bytecode.data[offset + 1];
+      printf("(dup-fp %u)\n", n);
+      return 2;
+    }
     case OP_CALL: {
       ENSURE_INSTR_ARGS(OP_CALL, 1);
       unsigned arg_count = chunk->bytecode.data[offset + 1];
@@ -142,40 +178,32 @@ static int disassemble_instr(const struct code_chunk *chunk, unsigned offset) {
       uint8_t variadic = chunk->bytecode.data[offset + 2];
       printf("(make-closure %u %s)\n", arg_count, variadic ? "true" : "false");
       return 3;
-    case OP_BRANCH: {
-      ENSURE_INSTR_ARGS(OP_BRANCH, 2);
-      // Read as litle endian
-      uint16_t branch_offset = chunk->bytecode.data[offset + 1] +
-                               (chunk->bytecode.data[offset + 2] << 8);
-      unsigned branch_target = offset + 1 + branch_offset;
-      printf("(branch %u)\t; target = %u\n", branch_offset, branch_target);
-      if (branch_target >= chunk->bytecode.size) {
-        printf("\nbranch target out of bounds: %u\n", branch_target);
-        return -1;
-      }
-      return 3;
+    // case OP_INTRINSIC: {
+    //   ENSURE_INSTR_ARGS(OP_INTRINSIC, 1);
+    //   unsigned id = chunk->bytecode.data[offset + 1];
+    //   // TODO include intrinsic name
+    //   printf("(intrinsic %u)\n", id);
+    //   return 2;
+    // }
+    case OP_BUILD_REST_ARGS: {
+      ENSURE_INSTR_ARGS(OP_BUILD_REST_ARGS, 1);
+      unsigned fp = chunk->bytecode.data[offset + 1];
+      // TODO include intrinsic name
+      printf("(build-rest-args %u)\n", fp);
+      return 2;
     }
-    case OP_BRANCH_IF_FALSE: {
-      ENSURE_INSTR_ARGS(OP_BRANCH_IF_FALSE, 2);
-      // Read as litle endian
-      unsigned branch_offset = chunk->bytecode.data[offset + 1] +
-                               (chunk->bytecode.data[offset + 2] << 8);
-      unsigned branch_target = offset + 1 + branch_offset;
-      printf("(branch-if-false %u)\t; target = %u\n", branch_offset,
-             branch_target);
-      if (branch_target >= chunk->bytecode.size) {
-        printf("\nbranch target out of bounds: %u\n", branch_target);
-        return -1;
-      }
-      return 3;
-    }
+    case OP_BRANCH:
+      return disassemble_branch(chunk, OP_BRANCH, "branch", offset);
+    case OP_BRANCH_IF_FALSE:
+      return disassemble_branch(chunk, OP_BRANCH_IF_FALSE, "branch-if-false",
+                                offset);
   }
-
-#undef ENSURE_INSTR_ARGS
 
   printf("\ninvalid opcode at offset %04u: %u\n", offset, opcode);
   return -1;
 }
+
+#undef ENSURE_INSTR_ARGS
 
 void chunk_disassemble(const struct code_chunk *chunk) {
   printf("disassembly of code chunk at %p:\n", chunk);

@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "compiler.h"
 #include "eval.h"
 #include "memory.h"
 #include "printer.h"
@@ -58,7 +59,7 @@ static enum eval_status eval_many(struct lisp_vm *vm, struct lisp_val exprs) {
     assert(cell != NULL);
     exprs = cell->cdr;
 
-    res = eval_handle_exception(vm, cell->car);
+    res = compile_eval(vm, cell->car);
     if (res == EV_SUCCESS) {
       (void)vm_stack_pop(vm);
     } else {
