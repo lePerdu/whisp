@@ -41,7 +41,9 @@
     (deftest! multiple-lists
       (assert-equal (list 1 2 3 4 5) (concat (list 1 2) (list 3) (list 4 5))))
     (deftest! empty-has-no-effect
-      (assert-equal (list 1 2 3 4) (concat nil (list 1 2) nil (list 3 4) (list) nil (list)))))
+      (assert-equal
+        (list 1 2 3 4)
+        (concat nil (list 1 2) nil (list 3 4) (list) nil (list)))))
 
   (defgroup! reverse
     (deftest! empty-list

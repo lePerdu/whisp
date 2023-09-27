@@ -85,6 +85,27 @@
       (array-append a 8)
       (assert= 5 (array-length a))))
 
+  (defgroup! array-concat
+    (deftest! no-arrays
+      (assert-array-equal (array) (array-concat)))
+    (deftest! single-empty-array
+      (assert-array-equal (array) (array-concat (array))))
+    (deftest! single-array
+      (assert-array-equal (array 1 2 3) (array-concat (array 1 2 3))))
+    (deftest! multiple-arrays
+      (assert-array-equal (array 1 2 3 4 5) (array-concat (array 1 2) (array 3) (array 4 5))))
+    (deftest! empty-has-no-effect
+      (assert-array-equal
+        (array 1 2 3 4)
+        (array-concat
+          (array)
+          (array 1 2)
+          (array)
+          (array 3 4)
+          (array)
+          (array)
+          (array)))))
+
   (defgroup! array-sub
     (deftest! extract-start-to-middle
       (def! a (array 1 2 3 4 5))

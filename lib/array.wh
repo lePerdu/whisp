@@ -106,5 +106,5 @@
           (do
             (array-copy-sub
               sub-arr new-arr 0 sub-arr-len offset)
-            (loop (int+ offset sub-arr-len) (cdr rest))))
+            (loop (int+ offset sub-arr-len) rest)))
         new-arr))))

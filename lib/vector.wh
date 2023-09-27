@@ -188,12 +188,15 @@
         acc
         (loop (f acc (vector-get v index)) (inc index))))))
 
+(defn! (vector-concat2 v1 v2)
+  (vector-fold v1 vector-append v2))
+
 (defn! (vector-concat . vs)
   (if (null? vs)
     empty-vector
     ; Easy optimization: use the first vector as a starting point to avoid
     ; reconstructing it
-    (vector-fold (car vs) vector-append (cdr vs))))
+    (foldl (car vs) vector-concat2 (cdr vs))))
 
 ; TODO More efficient tree structure copying?
 ; At least for vector-map, the resulting vector will have the same structure,

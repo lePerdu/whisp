@@ -53,6 +53,27 @@
       (vector-append a 8)
       (assert= 5 (vector-length a))))
 
+  (defgroup! vector-concat
+    (deftest! no-vectors
+      (assert-vector-equal (vector) (vector-concat)))
+    (deftest! single-empty-vector
+      (assert-vector-equal (vector) (vector-concat (vector))))
+    (deftest! single-vector
+      (assert-vector-equal (vector 1 2 3) (vector-concat (vector 1 2 3))))
+    (deftest! multiple-vectors
+      (assert-vector-equal (vector 1 2 3 4 5) (vector-concat (vector 1 2) (vector 3) (vector 4 5))))
+    (deftest! empty-has-no-effect
+      (assert-vector-equal
+        (vector 1 2 3 4)
+        (vector-concat
+          (vector)
+          (vector 1 2)
+          (vector)
+          (vector 3 4)
+          (vector)
+          (vector)
+          (vector)))))
+
   (defgroup! vector-sub
     (deftest! extract-start-to-middle
       (def! a (vector 1 2 3 4 5))
