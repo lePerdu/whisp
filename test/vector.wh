@@ -53,7 +53,7 @@
       (vector-append a 8)
       (assert= 5 (vector-length a))))
 
-  (comment defgroup! vector-sub
+  (defgroup! vector-sub
     (deftest! extract-start-to-middle
       (def! a (vector 1 2 3 4 5))
       (assert-vector-equal (vector 1 2) (vector-sub a 0 2)))
@@ -74,7 +74,7 @@
       (vector-sub a 1 3)
       (assert-vector-equal (vector 1 2 3 4 5) a)))
 
-  (comment defgroup! vector-map
+  (defgroup! vector-map
     (deftest! applies-to-all-elemenst
       (def! a (vector 1 2 3 4 5))
       (assert-vector-equal (vector 2 3 4 5 6) (vector-map inc a)))

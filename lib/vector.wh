@@ -155,20 +155,6 @@
           (array-get new-root 0)))
       (else (build-vector new-len shift new-root)))))
 
-(defn! (list->vector lst)
-  (foldl empty-vector vector-append lst))
-
-(defn! (vector->list v)
-  ; TODO More efficient tree iteration
-  (let-named loop ((acc nil) (index (dec (vector-length v))))
-    (if (= index -1)
-      acc
-      (loop
-        (cons (vector-get v index) acc)
-        (dec index)))))
-
-(defn! (vector . elems) (list->vector elems))
-
 (defn! (vector-equal? a b)
   (let ((a-len (vector-length a)))
     (and
@@ -180,12 +166,47 @@
             (equal? (vector-get a i) (vector-get b i))
             (loop (inc i))))))))
 
-(defn! (vector-concat v1 v2)
-  ; TODO More efficient tree iteration for v2
-  (let ((end-index (dec (vector-length v2))))
-    (let-named loop ((acc v1) (index 0))
+; TODO More efficient tree iteration
+
+(defn! (list->vector lst)
+  (foldl empty-vector vector-append lst))
+
+(defn! (vector->list v)
+  (let-named loop ((acc nil) (index (dec (vector-length v))))
+    (if (= index -1)
+      acc
+      (loop
+        (cons (vector-get v index) acc)
+        (dec index)))))
+
+(defn! (vector . elems) (list->vector elems))
+
+(defn! (vector-fold init f v)
+  (let ((end-index (vector-length v)))
+    (let-named loop ((acc init) (index 0))
       (if (= index end-index)
         acc
-        (loop
-          (vector-append acc (vector-get v2 index))
-          (inc index))))))
+        (loop (f acc (vector-get v index)) (inc index))))))
+
+(defn! (vector-concat . vs)
+  (if (null? vs)
+    empty-vector
+    ; Easy optimization: use the first vector as a starting point to avoid
+    ; reconstructing it
+    (vector-fold (car vs) vector-append (cdr vs))))
+
+; TODO More efficient tree structure copying?
+; At least for vector-map, the resulting vector will have the same structure,
+; so the extra work done to figure out where to insert things is unnecessary
+
+(defn! (vector-map f v)
+  (vector-fold
+    empty-vector
+    (fn (acc x) (vector-append acc (f x)))
+    v))
+
+(defn! (vector-sub v start-index end-index)
+  (let-named loop ((acc empty-vector) (index start-index))
+    (if (= index end-index)
+      acc
+      (loop (vector-append acc (vector-get v index)) (inc index)))))
