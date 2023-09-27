@@ -65,6 +65,18 @@
 
     qq)))
 
+(defsyntax! (let* bindings ast)
+  (do
+    (defn! (helper bindings ast)
+      (if (null? bindings)
+        ast
+        `(let (~(car bindings))
+          ~(helper (cdr bindings) ast))))
+    (if (null? bindings)
+      ; Special case for no bindings so that it still generates a new scope
+      `(fn () ~ast)
+      (helper bindings ast))))
+
 ; TODO Validate structure
 (defsyntax! (cond . branches)
   (if (null? branches)
@@ -80,18 +92,6 @@
       (if (= cond1 'else)
         expr1
         `(if ~cond1 ~expr1 ~(cons 'cond (cdr branches)))))))
-
-(defsyntax! (let* bindings ast)
-  (do
-    (defn! (helper bindings ast)
-      (if (null? bindings)
-        ast
-        `(let (~(car bindings))
-          ~(helper (cdr bindings) ast))))
-    (if (null? bindings)
-      ; Special case for no bindings so that it still generates a new scope
-      `(fn () ~ast)
-      (helper bindings ast))))
 
 ; Version of let which extracts values from a cons cell
 ; TODO Allow more than 1 pattern
@@ -172,6 +172,3 @@
     (if (= expanded ast)
       expanded
       (macroexpand expanded))))
-
-; TODO Make error wrap the value somehow
-(def! error raise)

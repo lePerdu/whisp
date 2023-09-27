@@ -72,16 +72,16 @@
     (error "minimum: must have at least 1 element")
     (foldl
       (car l)
-      (fn (x y) (if (<= x y) x y)
-      (cdr l)))))
+      (fn (x y) (if (<= x y) x y))
+      (cdr l))))
 
 (defn! (maximum l)
   (if (null? l)
     (error "maximum: must have at least 1 element")
     (foldl
       (car l)
-      (fn (x y) (if (>= x y) x y)
-      (cdr l)))))
+      (fn (x y) (if (>= x y) x y))
+      (cdr l))))
 
 (defn! (min . xs) (minimum xs))
 (defn! (max . xs) (maximum xs))

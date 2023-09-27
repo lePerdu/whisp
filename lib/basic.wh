@@ -44,7 +44,6 @@
     nil
     (cons (f (car l)) (map f (cdr l)))))
 
-; Variadic concat
 (defn! (concat . lists)
   ; Use foldr since it keeps prepending shorter lists instead of longer lists
   (foldr nil (fn (l acc) (foldr acc cons l)) lists))
@@ -52,3 +51,17 @@
 (defn! (concat-map f l)
   ; TODO Avoid foldr since it runs the map in reverse?
   (foldr nil (fn (x acc) (concat (f x) acc)) l))
+
+; Misc functions used in early macro definitions
+
+(defn! (swap! a f . args)
+  ; TODO Define as primitive? Doesn't really need to be one unless parallelism
+  ; is possible
+  (reset! a (apply f (cons @a args))))
+
+(defn! (true? x) (if x true false))
+(defn! (false? x) (if x false true))
+(def! not false?)
+
+; TODO Make error wrap the value somehow
+(def! error raise)

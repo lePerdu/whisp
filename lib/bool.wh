@@ -1,7 +1,3 @@
-(defn! (true? x) (if x true false))
-(defn! (false? x) (if x false true))
-(def! not false?)
-
 ; Apply f if x is non-nil
 (defn! (map-if f x)
   (if x (f x)))

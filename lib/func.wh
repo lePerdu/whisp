@@ -23,11 +23,6 @@
 
 ; TODO Move these somewhere else?
 
-(defn! (swap! a f . args)
-  ; TODO Define as primitive? Doesn't really need to be one unless parallelism
-  ; is possible
-  (reset! a (apply* f @a args)))
-
 (defn! (time f . args)
   (let
     ((start-time (runtime))
