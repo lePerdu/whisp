@@ -447,6 +447,9 @@ static enum compile_res compile_fn_params(struct compiler_ctx *ctx,
 
     emit_instr(ctx, OP_BIND);
 
+    // Mark the variable as set so it can shadow globals
+    lisp_env_set(ctx->comp_env, sym_name, LISP_VAL_NIL);
+
     raw_params = cons_cell->cdr;
     param_index++;
   }
@@ -471,6 +474,9 @@ static enum compile_res compile_fn_params(struct compiler_ctx *ctx,
       return res;
     }
     emit_instr(ctx, OP_BIND);
+
+    // Mark the variable as set so it can shadow globals
+    lisp_env_set(ctx->comp_env, rest_param, LISP_VAL_NIL);
   } else {
     *is_variadic = false;
   }
