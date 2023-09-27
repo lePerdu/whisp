@@ -133,10 +133,7 @@ static void run_file(struct lisp_vm *vm, const char *filename) {
   }
 }
 
-static void load_prelude(struct lisp_vm *vm) {
-  return;
-  run_file(vm, PRELUDE_FILENAME);
-}
+static void load_prelude(struct lisp_vm *vm) { run_file(vm, PRELUDE_FILENAME); }
 
 static void rep(struct lisp_vm *vm, const char *input) {
   struct lisp_val ast;
