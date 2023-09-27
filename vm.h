@@ -47,7 +47,7 @@ struct lisp_val vm_stack_pop(struct lisp_vm *vm);
 /**
  * Delete all items from the current stack frame.
  */
-void vm_stack_frame_clear(struct lisp_vm *vm);
+void vm_stack_frame_skip_clear(struct lisp_vm *vm, unsigned n);
 
 /**
  * Stack frame for an executing function.
@@ -61,6 +61,7 @@ struct stack_frame {
   unsigned instr_pointer;
 };
 
+unsigned vm_current_frame_index(const struct lisp_vm *vm);
 struct stack_frame *vm_current_frame(struct lisp_vm *vm);
 struct lisp_env *vm_current_env(struct lisp_vm *vm);
 struct lisp_env *vm_global_env(struct lisp_vm *vm);
@@ -75,7 +76,7 @@ void vm_create_stack_frame(struct lisp_vm *vm, struct lisp_env *env,
  * Replace the current stack frame with a new one to initiate a tail call.
  */
 void vm_replace_stack_frame(struct lisp_vm *vm, struct lisp_env *env,
-                            struct code_chunk *code, unsigned arg_count);
+                            struct code_chunk *code);
 
 /**
  * Return from the current frame. The return value is on the top of the

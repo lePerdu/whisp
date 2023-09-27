@@ -130,6 +130,10 @@ void vm_clear_exception(struct lisp_vm *vm) {
 // vm_current_env?
 struct lisp_env *vm_global_env(struct lisp_vm *vm) { return vm->global_env; }
 
+unsigned vm_current_frame_index(const struct lisp_vm *vm) {
+  return vm->call_frames.size;
+}
+
 struct stack_frame *vm_current_frame(struct lisp_vm *vm) {
   if (vm->call_frames.size == 0) {
     return NULL;
@@ -183,8 +187,12 @@ struct lisp_val vm_stack_pop(struct lisp_vm *vm) {
   return val_array_pop(&vm->stack);
 }
 
-void vm_stack_frame_clear(struct lisp_vm *vm) {
-  vm->stack.size = active_frame_pointer(vm);
+void vm_stack_frame_skip_clear(struct lisp_vm *vm, unsigned n) {
+  unsigned frame_size = active_frame_size(vm);
+  assert(n <= frame_size);
+  // Clear the stack except for the arguments
+  val_array_skip_delete(&vm->stack, n, frame_size - n);
+  assert(active_frame_size(vm) == n);
 }
 
 void vm_create_stack_frame(struct lisp_vm *vm, struct lisp_env *env,
@@ -201,13 +209,7 @@ void vm_create_stack_frame(struct lisp_vm *vm, struct lisp_env *env,
 }
 
 void vm_replace_stack_frame(struct lisp_vm *vm, struct lisp_env *env,
-                            struct code_chunk *code, unsigned arg_count) {
-  unsigned frame_size = active_frame_size(vm);
-  assert(arg_count <= frame_size);
-  // Clear the stack except for the arguments
-  val_array_skip_delete(&vm->stack, arg_count, frame_size - arg_count);
-  assert(active_frame_size(vm) == arg_count);
-
+                            struct code_chunk *code) {
   struct stack_frame *frame = call_stack_top(&vm->call_frames);
   // Don't need to replace the frame pointer as it is unchanged
   frame->code = code;

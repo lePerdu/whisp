@@ -14,9 +14,9 @@ enum eval_status {
 };
 
 /**
- * Evaluate bytecode in a code chunk at the top level.
+ * Evaluate a no-argument closure at the top-level
  */
-enum eval_status eval_chunk(struct lisp_vm *vm, struct code_chunk *code);
+enum eval_status eval_closure(struct lisp_vm *vm, struct lisp_closure *code);
 
 /**
  * Apply a function to a list of arguments at the top-level.

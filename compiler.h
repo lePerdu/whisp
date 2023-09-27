@@ -14,7 +14,7 @@ void init_global_compile_state(void);
  * Compile a top-level expression. Returns a compiled code chunk on success,
  * NULL on error. In case of error, the exception is raised in the passed-in VM.
  */
-struct code_chunk *compile_top_level(struct lisp_vm *vm, struct lisp_val ast);
+struct lisp_closure *compile_top_level(struct lisp_vm *vm, struct lisp_val ast);
 
 /**
  * Compile and then evaluate a top-level expression.

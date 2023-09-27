@@ -142,12 +142,21 @@ static int disassemble_instr(const struct code_chunk *chunk, unsigned offset) {
     case OP_BIND:
       printf("(bind)\n");
       return 1;
+    case OP_BIND_GLOBAL:
+      printf("(bind-global)\n");
+      return 1;
     case OP_POP:
       printf("(pop)\n");
       return 1;
     case OP_CLEAR:
       printf("(clear)\n");
       return 1;
+    case OP_SKIP_CLEAR: {
+      ENSURE_INSTR_ARGS(OP_SKIP_CLEAR, 1);
+      unsigned n = chunk->bytecode.data[offset + 1];
+      printf("(skip-clear %u)\n", n);
+      return 2;
+    }
     case OP_DUP:
       printf("(dup)\n");
       return 1;
@@ -178,16 +187,9 @@ static int disassemble_instr(const struct code_chunk *chunk, unsigned offset) {
       uint8_t variadic = chunk->bytecode.data[offset + 2];
       printf("(make-closure %u %s)\n", arg_count, variadic ? "true" : "false");
       return 3;
-    // case OP_INTRINSIC: {
-    //   ENSURE_INSTR_ARGS(OP_INTRINSIC, 1);
-    //   unsigned id = chunk->bytecode.data[offset + 1];
-    //   // TODO include intrinsic name
-    //   printf("(intrinsic %u)\n", id);
-    //   return 2;
-    // }
     case OP_BUILD_REST_ARGS: {
       ENSURE_INSTR_ARGS(OP_BUILD_REST_ARGS, 1);
-      unsigned fp = chunk->bytecode.data[offset + 1];
+      uint8_t fp = chunk->bytecode.data[offset + 1];
       // TODO include intrinsic name
       printf("(build-rest-args %u)\n", fp);
       return 2;

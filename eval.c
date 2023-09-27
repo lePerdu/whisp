@@ -70,17 +70,14 @@ static enum eval_status check_call(struct lisp_vm *vm, struct lisp_val func_obj,
  * Evaluate bytecode until the call stack is empty.
  */
 static enum eval_status eval_bytecode(struct lisp_vm *vm) {
-  struct stack_frame *frame;
-  struct code_chunk *code;
-  unsigned *ip;
-
-FETCH_NEW_CODE:
-  frame = vm_current_frame(vm);
-  code = frame->code;
-  ip = &frame->instr_pointer;
+  const unsigned initial_frame = vm_current_frame_index(vm);
 
   while (true) {
+    struct stack_frame *frame = vm_current_frame(vm);
+    struct code_chunk *code = frame->code;
+    unsigned *ip = &frame->instr_pointer;
     assert(*ip < code->bytecode.size);
+
     enum bytecode_op op = chunk_read_byte(code, ip);
 
     // TODO Error checking before the asserts (including in VM functions)
@@ -89,7 +86,7 @@ FETCH_NEW_CODE:
         uint8_t const_idx = chunk_read_byte(code, ip);
         assert(const_idx < code->const_table.size);
         vm_stack_push(vm, code->const_table.data[const_idx]);
-        continue;
+        break;
       }
       case OP_LOOKUP: {
         struct lisp_val top_value = vm_stack_pop(vm);
@@ -107,7 +104,7 @@ FETCH_NEW_CODE:
         }
 
         vm_stack_push(vm, binding->value);
-        continue;
+        break;
       }
       case OP_BIND: {
         struct lisp_val top_value = vm_stack_pop(vm);
@@ -120,22 +117,40 @@ FETCH_NEW_CODE:
 
         struct lisp_val bind_value = vm_stack_pop(vm);
         lisp_env_set(frame->env, sym, bind_value);
-        continue;
+        break;
+      }
+      case OP_BIND_GLOBAL: {
+        struct lisp_val top_value = vm_stack_pop(vm);
+        struct lisp_symbol *sym = lisp_val_cast(LISP_SYMBOL, top_value);
+        if (sym == NULL) {
+          vm_raise_format_exception(vm, "cannot bind value of type: %s",
+                                    lisp_val_type_name(top_value));
+          return EV_EXCEPTION;
+        }
+
+        struct lisp_val bind_value = vm_stack_pop(vm);
+        lisp_env_set(vm_global_env(vm), sym, bind_value);
+        break;
       }
       case OP_POP:
         vm_stack_pop(vm);
-        continue;
+        break;
       case OP_DUP:
         vm_stack_push(vm, vm_stack_top(vm));
-        continue;
+        break;
       case OP_DUP_FP: {
         uint8_t idx = chunk_read_byte(code, ip);
         vm_stack_push(vm, vm_from_frame_pointer(vm, idx));
-        continue;
+        break;
       }
       case OP_CLEAR:
-        vm_stack_frame_clear(vm);
-        continue;
+        vm_stack_frame_skip_clear(vm, 0);
+        break;
+      case OP_SKIP_CLEAR: {
+        uint8_t new_size = chunk_read_byte(code, ip);
+        vm_stack_frame_skip_clear(vm, new_size);
+        break;
+      }
       case OP_CALL: {
         uint8_t arg_count = chunk_read_byte(code, ip);
         struct lisp_val func = vm_stack_pop(vm);
@@ -146,28 +161,27 @@ FETCH_NEW_CODE:
           return EV_EXCEPTION;
         }
         vm_create_stack_frame(vm, new_env, new_code, arg_count);
-        goto FETCH_NEW_CODE;
+        break;
       }
       case OP_TAIL_CALL: {
-        uint8_t arg_count = chunk_read_byte(code, ip);
         struct lisp_val func = vm_stack_pop(vm);
+        unsigned arg_count = vm_stack_size(vm);
         struct lisp_env *new_env;
         struct code_chunk *new_code;
         if (check_call(vm, func, arg_count, &new_env, &new_code) ==
             EV_EXCEPTION) {
           return EV_EXCEPTION;
         }
-        vm_replace_stack_frame(vm, new_env, new_code, arg_count);
-        goto FETCH_NEW_CODE;
+        vm_replace_stack_frame(vm, new_env, new_code);
+        break;
       }
       case OP_RETURN:
         vm_stack_frame_return(vm);
-        frame = vm_current_frame(vm);
-        if (frame == NULL) {
+        if (vm_current_frame_index(vm) < initial_frame) {
           // Nothing left to evaluate
           return EV_SUCCESS;
         } else {
-          goto FETCH_NEW_CODE;
+          break;
         }
       case OP_MAKE_CLOSURE: {
         uint8_t req_arg_count = chunk_read_byte(code, ip);
@@ -184,7 +198,7 @@ FETCH_NEW_CODE:
         struct lisp_closure *cl = lisp_closure_create(
             req_arg_count, is_variadic, frame->env, lisp_val_as_obj(top_value));
         vm_stack_push(vm, lisp_val_from_obj(cl));
-        continue;
+        break;
       }
       case OP_BUILD_REST_ARGS: {
         uint8_t start_fp = chunk_read_byte(code, ip);
@@ -192,7 +206,7 @@ FETCH_NEW_CODE:
         if (res == EV_EXCEPTION) {
           return EV_EXCEPTION;
         }
-        continue;
+        break;
       }
       case OP_BRANCH: {
         int16_t offset = chunk_read_short(code, ip);
@@ -203,7 +217,7 @@ FETCH_NEW_CODE:
           return EV_EXCEPTION;
         }
         *ip = new_ip;
-        continue;
+        break;
       }
       case OP_BRANCH_IF_FALSE: {
         int16_t offset = chunk_read_short(code, ip);
@@ -236,12 +250,21 @@ enum eval_status do_eval(struct lisp_vm *vm) {
   return res;
 }
 
-enum eval_status eval_chunk(struct lisp_vm *vm, struct code_chunk *code) {
-  vm_create_stack_frame(vm, vm_current_env(vm), code, 0);
+enum eval_status eval_closure(struct lisp_vm *vm, struct lisp_closure *cl) {
+  struct lisp_env *new_env;
+  struct code_chunk *new_code;
+  // TODO Should this always create a new environment? It's not necessary for
+  // top-level compiled closures, but makes the behavior consistent between
+  // top-level REPL and calling `(eval)`.
+  enum eval_status res =
+      check_call(vm, lisp_val_from_obj(cl), 0, &new_env, &new_code);
+  if (res == EV_EXCEPTION) {
+    return res;
+  }
+
+  vm_create_stack_frame(vm, new_env, new_code, 0);
   return do_eval(vm);
 }
-
-// TODO Figure out a way to call apply without "completing" the VM call stack
 
 enum eval_status eval_apply(struct lisp_vm *vm, struct lisp_val func,
                             struct lisp_val args) {

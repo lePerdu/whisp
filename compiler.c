@@ -1,5 +1,6 @@
 #include "compiler.h"
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #include "bytecode.h"
@@ -71,6 +72,11 @@ void init_global_compile_state(void) {
 
 static enum compile_res compile(struct compiler_ctx *ctx, struct lisp_val ast);
 
+static struct lisp_closure *compile_chunk_to_closure(struct lisp_vm *vm,
+                                                     struct code_chunk *code) {
+  return lisp_closure_create(0, false, vm_global_env(vm), code);
+}
+
 static void emit_byte(struct compiler_ctx *ctx, uint8_t byte) {
   chunk_append_byte(ctx->chunk, byte);
 }
@@ -113,16 +119,30 @@ static enum compile_res emit_const(struct compiler_ctx *ctx,
   return COMP_SUCCESS;
 }
 
-static enum compile_res emit_call_instr(struct compiler_ctx *ctx,
-                                        enum bytecode_op call_op,
-                                        unsigned arg_count) {
+static enum compile_res emit_call(struct compiler_ctx *ctx,
+                                  unsigned arg_count) {
   if (arg_count > UINT8_MAX) {
     vm_raise_format_exception(ctx->vm, "too many arguments");
     return COMP_FAILED;
   }
 
-  emit_instr(ctx, call_op);
+  emit_instr(ctx, OP_CALL);
   emit_byte(ctx, arg_count);
+  return COMP_SUCCESS;
+}
+
+static enum compile_res emit_tail_call(struct compiler_ctx *ctx,
+                                       unsigned arg_count) {
+  // Clear out the stack frame except for the arguments and the function
+  unsigned remaining_stack_size = arg_count + 1;
+  if (remaining_stack_size > UINT8_MAX) {
+    vm_raise_format_exception(ctx->vm, "too many arguments");
+    return COMP_FAILED;
+  }
+
+  emit_instr(ctx, OP_SKIP_CLEAR);
+  emit_byte(ctx, remaining_stack_size);
+  emit_instr(ctx, OP_TAIL_CALL);
   return COMP_SUCCESS;
 }
 
@@ -321,7 +341,11 @@ static enum compile_res compile_def(struct compiler_ctx *ctx,
     return res;
   }
 
-  emit_instr(ctx, OP_BIND);
+  if (ctx->top_level) {
+    emit_instr(ctx, OP_BIND_GLOBAL);
+  } else {
+    emit_instr(ctx, OP_BIND);
+  }
 
   emit_return_if_tail_pos(ctx);
 
@@ -349,19 +373,18 @@ static enum compile_res compile_defmacro(struct compiler_ctx *ctx,
   };
 
   gc_push_root_obj(macro_ctx.chunk);
-
   res = compile(&macro_ctx, value_expr);
+  gc_pop_root_expect_obj(macro_ctx.chunk);
   if (res == COMP_FAILED) {
     return res;
   }
 
   // Evaluate the macro expression in the compilation VM at the top-level
-  enum eval_status eval_res = eval_chunk(ctx->vm, macro_ctx.chunk);
+  enum eval_status eval_res =
+      eval_closure(ctx->vm, compile_chunk_to_closure(ctx->vm, macro_ctx.chunk));
   if (eval_res == EV_EXCEPTION) {
     return COMP_FAILED;
   }
-
-  gc_pop_root_expect_obj(macro_ctx.chunk);
 
   struct lisp_val macro_fn = vm_stack_pop(ctx->vm);
   if (!lisp_val_is_func(macro_fn)) {
@@ -379,6 +402,10 @@ static enum compile_res compile_defmacro(struct compiler_ctx *ctx,
   }
   lisp_env_set_macro(macro_env, sym, macro_fn);
 
+  // Need to emit something for the produced code
+  // TODO Have `defmacro!` "return" NIL?
+  emit_const(ctx, macro_fn);
+  emit_return_if_tail_pos(ctx);
   return COMP_SUCCESS;
 }
 
@@ -566,8 +593,11 @@ static enum compile_res compile_func_call(struct compiler_ctx *ctx,
   }
 
   ctx->tail_pos = outer_tail_pos;
-  return emit_call_instr(ctx, ctx->tail_pos ? OP_TAIL_CALL : OP_CALL,
-                         arg_count);
+  if (ctx->tail_pos) {
+    return emit_tail_call(ctx, arg_count);
+  } else {
+    return emit_call(ctx, arg_count);
+  }
 }
 
 static enum compile_res expand_and_compile_macro(struct compiler_ctx *ctx,
@@ -671,7 +701,8 @@ static enum compile_res compile(struct compiler_ctx *ctx, struct lisp_val ast) {
   return res;
 }
 
-struct code_chunk *compile_top_level(struct lisp_vm *vm, struct lisp_val ast) {
+struct lisp_closure *compile_top_level(struct lisp_vm *vm,
+                                       struct lisp_val ast) {
   struct lisp_env *comp_env = lisp_env_create(vm_global_env(vm));
   gc_push_root_obj(comp_env);
   struct code_chunk *code = chunk_create();
@@ -688,14 +719,18 @@ struct code_chunk *compile_top_level(struct lisp_vm *vm, struct lisp_val ast) {
   enum compile_res res = compile(&ctx, ast);
   gc_pop_root_expect_obj(code);
   gc_pop_root_expect_obj(comp_env);
-  return res == COMP_SUCCESS ? code : NULL;
+  if (res == COMP_FAILED) {
+    return NULL;
+  }
+
+  return compile_chunk_to_closure(vm, code);
 }
 
 enum eval_status compile_eval(struct lisp_vm *vm, struct lisp_val ast) {
-  struct code_chunk *code = compile_top_level(vm, ast);
+  struct lisp_closure *code = compile_top_level(vm, ast);
   if (code == NULL) {
     return EV_EXCEPTION;
   }
 
-  return eval_chunk(vm, code);
+  return eval_closure(vm, code);
 }
