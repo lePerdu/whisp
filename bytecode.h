@@ -142,6 +142,13 @@ enum bytecode_op {
    * `branch-if-false OFFSET`
    */
   OP_BRANCH_IF_FALSE,
+
+  /**
+   * Set exception handler to a location in the bytecode.
+   *
+   * Offset is relative, just like branch instructions.
+   */
+  OP_SET_EX_HANDLER,
 };
 
 struct bytecode_array {

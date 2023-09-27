@@ -206,6 +206,9 @@ static int disassemble_instr(const struct code_chunk *chunk, unsigned offset) {
     case OP_BRANCH_IF_FALSE:
       return disassemble_branch(chunk, OP_BRANCH_IF_FALSE, "branch-if-false",
                                 offset);
+    case OP_SET_EX_HANDLER:
+      return disassemble_branch(chunk, OP_SET_EX_HANDLER, "set-ex-handler",
+                                offset);
   }
 
   printf("\ninvalid opcode at offset %04u: %u\n", offset, opcode);

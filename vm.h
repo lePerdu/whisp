@@ -59,6 +59,12 @@ struct stack_frame {
   struct code_chunk *code;
   /** Offset into the bytecode array of the function. */
   unsigned instr_pointer;
+  /**
+   * Offset into the bytecode array to return to when catching an exception.
+   *
+   * Negative if there is no exception handler.
+   */
+  int exception_handler_ip;
 };
 
 unsigned vm_current_frame_index(const struct lisp_vm *vm);
@@ -83,6 +89,21 @@ void vm_replace_stack_frame(struct lisp_vm *vm, struct lisp_env *env,
  * stack.
  */
 void vm_stack_frame_return(struct lisp_vm *vm);
+
+/**
+ * Register exception handler point in the current function.
+ */
+void vm_set_exception_handler(struct lisp_vm *vm, unsigned handler_ip);
+bool vm_has_exception_handler(struct lisp_vm *vm);
+
+/**
+ * Jump to a set exception handler and setup for running it:
+ * - Push the exception on the stack (TODO Also restore the stack to
+ * pre-exception state)
+ * - Clear the exception handler
+ * - Clear the current VM exception (the handler can re-raise if it wants)
+ */
+void vm_run_exception_handler(struct lisp_vm *vm);
 
 void vm_stack_frame_unwind(struct lisp_vm *vm);
 

@@ -241,16 +241,37 @@ static enum eval_status eval_bytecode(struct lisp_vm *vm) {
         }
         continue;
       }
-      default:
-        vm_raise_format_exception(vm, "unknown opcode: %d", op);
-        goto HANDLE_EXCEPTION;
+      case OP_SET_EX_HANDLER: {
+        int16_t offset = chunk_read_short(code, ip);
+        int handler_ip = *ip + offset - 2;
+        if (handler_ip < 0 || code->bytecode.size <= (unsigned)handler_ip) {
+          vm_raise_format_exception(vm, "branch target out of bounds: %d",
+                                    handler_ip);
+          goto HANDLE_EXCEPTION;
+        }
+        vm_set_exception_handler(vm, handler_ip);
+        continue;
+      }
     }
 
+    // Unhandled opcode (other instructions should continue to the top of the
+    // loop)
+    vm_raise_format_exception(vm, "unknown opcode: %d", op);
+    // And then handle the error...
+
   HANDLE_EXCEPTION : {
-    while (vm_current_frame_index(vm) >= initial_frame) {
+    while (vm_current_frame_index(vm) >= initial_frame &&
+           !vm_has_exception_handler(vm)) {
       vm_stack_frame_unwind(vm);
     }
-    return EV_EXCEPTION;
+
+    if (vm_has_exception_handler(vm)) {
+      vm_run_exception_handler(vm);
+      // Then continue on executing
+    } else {
+      // No exception handler (at least for the current execution sequence)
+      return EV_EXCEPTION;
+    }
   }
   }
 }

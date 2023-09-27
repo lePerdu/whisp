@@ -205,6 +205,7 @@ void vm_create_stack_frame(struct lisp_vm *vm, struct lisp_env *env,
                                         .env = env,
                                         .code = code,
                                         .instr_pointer = 0,
+                                        .exception_handler_ip = -1,
                                     });
 }
 
@@ -215,6 +216,8 @@ void vm_replace_stack_frame(struct lisp_vm *vm, struct lisp_env *env,
   frame->code = code;
   frame->env = env;
   frame->instr_pointer = 0;
+  // Reset this in case it was set
+  frame->exception_handler_ip = -1;
 }
 
 void vm_stack_frame_return(struct lisp_vm *vm) {
@@ -225,6 +228,31 @@ void vm_stack_frame_return(struct lisp_vm *vm) {
   call_stack_pop(&vm->call_frames);
   vm->stack.size = old_fp;
   val_array_push(&vm->stack, return_val);
+}
+
+void vm_set_exception_handler(struct lisp_vm *vm, unsigned handler_ip) {
+  struct stack_frame *frame = call_stack_top(&vm->call_frames);
+  frame->exception_handler_ip = handler_ip;
+}
+
+bool vm_has_exception_handler(struct lisp_vm *vm) {
+  if (vm->call_frames.size == 0) {
+    return false;
+  }
+  struct stack_frame *frame = call_stack_top(&vm->call_frames);
+  return frame->exception_handler_ip >= 0;
+}
+
+void vm_run_exception_handler(struct lisp_vm *vm) {
+  struct stack_frame *frame = call_stack_top(&vm->call_frames);
+  assert(frame->exception_handler_ip >= 0);
+  frame->instr_pointer = frame->exception_handler_ip;
+  // Clear it since it has been used
+  frame->exception_handler_ip = -1;
+
+  // TODO Restore stack state from point of registering the exception handler?
+  vm_stack_push(vm, vm->current_exception);
+  vm_clear_exception(vm);
 }
 
 void vm_stack_frame_unwind(struct lisp_vm *vm) {

@@ -912,17 +912,11 @@ static struct lisp_closure *make_builtin_eval(void) {
   return cl;
 }
 
-/*
-static struct lisp_closure *make_core_with_exception_handler(
-    struct lisp_env *global_env) {
-  struct lisp_symbol *name = lisp_symbol_create_cstr("with-exception-handler");
-  gc_push_root_obj(name);
-
+static struct lisp_closure *make_builtin_with_exception_handler() {
   struct code_chunk *code = chunk_create();
-  chunk_append_byte(code, OP_CONST);
+  chunk_append_byte(code, OP_SET_EX_HANDLER);
   unsigned handler_offset_cell = chunk_append_byte(code, 0);
-  chunk_append_byte(code, OP_INTRINSIC);
-  chunk_append_byte(code, 0);  // INTRINSIC_SET_EXCEPTION_HANDLER);
+  chunk_append_byte(code, 0);
   // Fetch and call the thunk
   chunk_append_byte(code, OP_DUP_FP);
   chunk_append_byte(code, 1);
@@ -931,26 +925,28 @@ static struct lisp_closure *make_core_with_exception_handler(
   chunk_append_byte(code, OP_CALL);
   chunk_append_byte(code, 0);  // no args
   chunk_append_byte(code, OP_RETURN);
-  // TODO Combine the intrinsics together? They won't be used separately
-  unsigned handler_offset = chunk_append_byte(code, OP_INTRINSIC);
-  chunk_append_byte(code, 0);  // clear exception handler
-  chunk_append_byte(code, OP_INTRINSIC);
-  chunk_append_byte(code, 0);  // fetch current exception
+
+  // In the exception handler code, the exception will be pushed on the stack
   // Fetch and call the handler
-  chunk_append_byte(code, OP_DUP_FP);
+  unsigned handler_offset = chunk_append_byte(code, OP_DUP_FP);
   chunk_append_byte(code, 0);
+  chunk_append_byte(code, OP_SKIP_CLEAR);
+  chunk_append_byte(code, 2);  // Handler function and exception
   chunk_append_byte(code, OP_TAIL_CALL);
-  chunk_append_byte(code, 1);
 
-  chunk_set_byte(code, handler_offset_cell,
-                 chunk_add_const(code, lisp_val_from_int(handler_offset)));
+  // TODO Use helper functions from the compiler
+  // TODO Make this special syntax handled by the compiler?
+  unsigned branch_offset = handler_offset - handler_offset_cell;
+  chunk_set_byte(code, handler_offset_cell, branch_offset & 0xff);
+  chunk_set_byte(code, handler_offset_cell + 1, branch_offset >> 8);
 
-  struct lisp_closure *cl = lisp_closure_create(2, false, global_env, code);
+  struct lisp_closure *cl = lisp_closure_create(2, false, NULL, code);
+  gc_push_root_obj(cl);
+  struct lisp_symbol *name = lisp_symbol_create_cstr("with-exception-handler");
   lisp_closure_set_name(cl, name);
-  gc_pop_root_expect_obj(name);
+  gc_pop_root_expect_obj(cl);
   return cl;
 }
-*/
 
 enum eval_status call_intrinsic(uint8_t index, struct lisp_vm *vm) {
   assert(index < BUILTIN_COUNT);
@@ -980,6 +976,7 @@ void define_builtins(struct lisp_env *global_env) {
   // Special builtins
   define_cl(global_env, make_builtin_apply());
   define_cl(global_env, make_builtin_eval());
+  define_cl(global_env, make_builtin_with_exception_handler());
 
   // TODO Make these constants or part of the reader?
   define_const(global_env, "true", lisp_true());
