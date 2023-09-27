@@ -49,10 +49,6 @@ void *lisp_obj_alloc(const struct lisp_vtable *vt, size_t size) {
   return obj;
 }
 
-static bool lisp_type_valid(enum lisp_type t) {
-  return LISP_TYPE_MIN <= t && t < LISP_TYPE_MAX;
-}
-
 static void visit_none(struct lisp_val object, visit_callback cb, void *ctx) {
   (void)object;
   (void)cb;
@@ -98,7 +94,7 @@ enum lisp_type lisp_val_type(struct lisp_val v) {
     return LISP_NIL;
   } else {
     enum lisp_type t = LISP_VAL_AS(struct lisp_obj, v)->vt->type;
-    assert(lisp_type_valid(t));
+    assert(LISP_TYPE_MIN <= t && t < LISP_TYPE_MAX);
     return t;
   }
 }
