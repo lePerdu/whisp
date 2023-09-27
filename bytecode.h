@@ -162,13 +162,21 @@ struct bytecode_array {
 // function object)
 struct code_chunk {
   struct lisp_obj header;
+  /** Optional name for debugging. */
+  struct lisp_symbol *name;
   struct val_array const_table;
   // TODO Store bytecode inline with the template allocation?
   struct bytecode_array bytecode;
 };
 
 struct code_chunk *chunk_create(void);
+
 bool is_chunk(struct lisp_val v);
+
+/**
+ * Return C-string of the name, or a placeholder if unset.
+ */
+const char *chunk_get_name(const struct code_chunk *chunk);
 
 /**
  * Add a constant to the function's constant table and return its index.

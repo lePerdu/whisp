@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "bytecode.h"
 #include "memory.h"
 
 enum ptr_tag {
@@ -1074,7 +1075,6 @@ void lisp_env_set_macro(struct lisp_env *env, struct lisp_symbol *sym,
 
 struct lisp_closure {
   struct lisp_obj header;
-  struct lisp_symbol *name;
   unsigned arg_count;
   bool is_variadic;
   struct lisp_env *outer_env;
@@ -1084,9 +1084,6 @@ struct lisp_closure {
 static void lisp_closure_visit(struct lisp_val v, visit_callback cb,
                                void *ctx) {
   const struct lisp_closure *cl = lisp_val_as_obj(v);
-  if (cl->name != NULL) {
-    cb(ctx, lisp_val_from_obj(cl->name));
-  }
   cb(ctx, lisp_val_from_obj(cl->outer_env));
   cb(ctx, lisp_val_from_obj(cl->code));
 }
@@ -1106,7 +1103,6 @@ struct lisp_closure *lisp_closure_create(unsigned arg_count, bool is_variadic,
   gc_push_root_obj(bytecode);
 
   struct lisp_closure *cl = lisp_obj_alloc(&CLOSURE_VTABLE, sizeof(*cl));
-  cl->name = NULL;
   cl->arg_count = arg_count;
   cl->is_variadic = is_variadic;
   cl->outer_env = outer_env;
@@ -1118,11 +1114,11 @@ struct lisp_closure *lisp_closure_create(unsigned arg_count, bool is_variadic,
 }
 
 struct lisp_symbol *lisp_closure_name(const struct lisp_closure *c) {
-  return c->name;
+  return c->code->name;
 }
 
 const char *lisp_closure_name_cstr(const struct lisp_closure *c) {
-  return c->name != NULL ? lisp_symbol_name(c->name) : "#<unknown>";
+  return chunk_get_name(c->code);
 }
 
 unsigned lisp_closure_arg_count(const struct lisp_closure *c) {
@@ -1139,11 +1135,6 @@ struct lisp_env *lisp_closure_env(const struct lisp_closure *c) {
 
 struct code_chunk *lisp_closure_code(const struct lisp_closure *c) {
   return c->code;
-}
-
-// TODO Force setting at construction time?
-void lisp_closure_set_name(struct lisp_closure *c, struct lisp_symbol *name) {
-  c->name = name;
 }
 
 static const struct lisp_vtable *const TYPE_TO_VTABLE[] = {

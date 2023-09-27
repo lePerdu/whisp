@@ -39,6 +39,14 @@ struct compiler_ctx {
   bool top_level;
 
   bool tail_pos;
+
+  /**
+   * Name of the current binding.
+   *
+   * TODO Find a cleaner way to do this?
+   * This is solely used for naming functions defined with `def!`.
+   */
+  struct lisp_symbol *binding_name;
 };
 
 static const struct lisp_symbol *SYMBOL_DO;
@@ -326,12 +334,14 @@ static enum compile_res compile_def(struct compiler_ctx *ctx,
 
   bool outer_tail_pos = ctx->tail_pos;
   ctx->tail_pos = false;
+  ctx->binding_name = sym;
   res = compile(ctx, value_expr);
+  ctx->binding_name = NULL;
+  ctx->tail_pos = outer_tail_pos;
+
   if (res == COMP_FAILED) {
     return res;
   }
-
-  ctx->tail_pos = outer_tail_pos;
 
   // Copy the result so that it is also returned from the expression
   emit_instr(ctx, OP_DUP);
@@ -370,6 +380,7 @@ static enum compile_res compile_defmacro(struct compiler_ctx *ctx,
       .chunk = chunk_create(),
       .top_level = false,
       .tail_pos = true,
+      .binding_name = sym,
   };
 
   gc_push_root_obj(macro_ctx.chunk);
@@ -498,6 +509,7 @@ static enum compile_res compile_fn_params(struct compiler_ctx *ctx,
 }
 
 static enum compile_res compile_fn(struct compiler_ctx *ctx,
+                                   struct lisp_symbol *binding_name,
                                    struct lisp_val args) {
   struct lisp_cons *args_cons = lisp_val_cast(LISP_CONS, args);
   if (args_cons == NULL) {
@@ -523,12 +535,17 @@ static enum compile_res compile_fn(struct compiler_ctx *ctx,
   struct code_chunk *func_code = chunk_create();
   gc_push_root_obj(func_code);
 
+  if (binding_name != NULL) {
+    func_code->name = binding_name;
+  }
+
   struct compiler_ctx func_ctx = {
       .vm = ctx->vm,
       .comp_env = func_comp_env,
       .chunk = func_code,
       .top_level = false,
       .tail_pos = true,
+      .binding_name = NULL,
   };
 
   unsigned req_arg_count;
@@ -638,6 +655,10 @@ static enum compile_res compile_call_or_special(struct compiler_ctx *ctx,
     return COMP_FAILED;
   }
 
+  // Unset the binding name for all cases except `fn`
+  struct lisp_symbol *binding_name = ctx->binding_name;
+  ctx->binding_name = NULL;
+
   struct lisp_symbol *head_sym = lisp_val_cast(LISP_SYMBOL, head);
   if (head_sym != NULL) {
     const struct lisp_env_binding *binding =
@@ -648,6 +669,9 @@ static enum compile_res compile_call_or_special(struct compiler_ctx *ctx,
       }
     } else {
       // See if it's a special form
+      if (head_sym == SYMBOL_FN) {
+        return compile_fn(ctx, binding_name, args);
+      }
       if (head_sym == SYMBOL_DO) {
         return compile_do(ctx, args);
       }
@@ -659,9 +683,6 @@ static enum compile_res compile_call_or_special(struct compiler_ctx *ctx,
       }
       if (head_sym == SYMBOL_DEFMACRO) {
         return compile_defmacro(ctx, args);
-      }
-      if (head_sym == SYMBOL_FN) {
-        return compile_fn(ctx, args);
       }
       if (head_sym == SYMBOL_QUOTE) {
         return compile_quote(ctx, args);
@@ -730,6 +751,7 @@ struct lisp_closure *compile_top_level(struct lisp_vm *vm,
       .chunk = code,
       .top_level = true,
       .tail_pos = true,
+      .binding_name = NULL,
   };
 
   enum compile_res res = compile(&ctx, ast);

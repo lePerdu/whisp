@@ -932,77 +932,73 @@ static struct lisp_closure *make_builtin(struct lisp_env *global_env,
   chunk_append_byte(chunk, index);
   chunk_append_byte(chunk, OP_RETURN);
 
-  struct lisp_closure *cl =
-      lisp_closure_create(req_arg_count, is_variadic, global_env, chunk);
-  gc_push_root_obj(cl);
-  lisp_closure_set_name(cl, lisp_symbol_create_cstr(name));
-  gc_pop_root_expect_obj(cl);
-  return cl;
+  gc_push_root_obj(chunk);
+  chunk->name = lisp_symbol_create_cstr(name);
+  gc_pop_root_expect_obj(chunk);
+
+  return lisp_closure_create(req_arg_count, is_variadic, global_env, chunk);
 }
 
 static struct lisp_closure *make_builtin_apply(void) {
-  struct code_chunk *code = chunk_create();
-  chunk_append_byte(code, OP_INTRINSIC);
-  chunk_append_byte(code, INTRINSIC_PERPARE_APPLY);
-  chunk_append_byte(code, OP_TAIL_CALL);
+  struct code_chunk *chunk = chunk_create();
+  chunk_append_byte(chunk, OP_INTRINSIC);
+  chunk_append_byte(chunk, INTRINSIC_PERPARE_APPLY);
+  chunk_append_byte(chunk, OP_TAIL_CALL);
 
-  struct lisp_closure *cl = lisp_closure_create(2, false, NULL, code);
-  gc_push_root_obj(cl);
-  struct lisp_symbol *name = lisp_symbol_create_cstr("apply");
-  lisp_closure_set_name(cl, name);
-  gc_pop_root_expect_obj(cl);
-  return cl;
+  gc_push_root_obj(chunk);
+  chunk->name = lisp_symbol_create_cstr("apply");
+  gc_pop_root_expect_obj(chunk);
+
+  return lisp_closure_create(2, false, NULL, chunk);
 }
 
 static struct lisp_closure *make_builtin_eval(void) {
   // TODO Expose `(compile)` and implement `(eval)` in the prelude?
-  struct code_chunk *code = chunk_create();
-  chunk_append_byte(code, OP_INTRINSIC);
-  chunk_append_byte(code, INTRINSIC_COMPILE_TO_CLOSURE);
-  chunk_append_byte(code, OP_TAIL_CALL);
+  struct code_chunk *chunk = chunk_create();
+  chunk_append_byte(chunk, OP_INTRINSIC);
+  chunk_append_byte(chunk, INTRINSIC_COMPILE_TO_CLOSURE);
+  chunk_append_byte(chunk, OP_TAIL_CALL);
 
-  struct lisp_closure *cl = lisp_closure_create(1, false, NULL, code);
-  gc_push_root_obj(cl);
-  struct lisp_symbol *name = lisp_symbol_create_cstr("eval");
-  lisp_closure_set_name(cl, name);
-  gc_pop_root_expect_obj(cl);
-  return cl;
+  gc_push_root_obj(chunk);
+  chunk->name = lisp_symbol_create_cstr("eval");
+  gc_pop_root_expect_obj(chunk);
+
+  return lisp_closure_create(1, false, NULL, chunk);
 }
 
 static struct lisp_closure *make_builtin_with_exception_handler() {
-  struct code_chunk *code = chunk_create();
-  chunk_append_byte(code, OP_SET_EX_HANDLER);
-  unsigned handler_offset_cell = chunk_append_byte(code, 0);
-  chunk_append_byte(code, 0);
+  struct code_chunk *chunk = chunk_create();
+  chunk_append_byte(chunk, OP_SET_EX_HANDLER);
+  unsigned handler_offset_cell = chunk_append_byte(chunk, 0);
+  chunk_append_byte(chunk, 0);
   // Fetch and call the thunk
-  chunk_append_byte(code, OP_DUP_FP);
-  chunk_append_byte(code, 1);
+  chunk_append_byte(chunk, OP_DUP_FP);
+  chunk_append_byte(chunk, 1);
   // Separate call + return since the stack frame needs to stay intact for the
   // exception handler
-  chunk_append_byte(code, OP_CALL);
-  chunk_append_byte(code, 0);  // no args
-  chunk_append_byte(code, OP_RETURN);
+  chunk_append_byte(chunk, OP_CALL);
+  chunk_append_byte(chunk, 0);  // no args
+  chunk_append_byte(chunk, OP_RETURN);
 
   // In the exception handler code, the exception will be pushed on the stack
   // Fetch and call the handler
-  unsigned handler_offset = chunk_append_byte(code, OP_DUP_FP);
-  chunk_append_byte(code, 0);
-  chunk_append_byte(code, OP_SKIP_CLEAR);
-  chunk_append_byte(code, 2);  // Handler function and exception
-  chunk_append_byte(code, OP_TAIL_CALL);
+  unsigned handler_offset = chunk_append_byte(chunk, OP_DUP_FP);
+  chunk_append_byte(chunk, 0);
+  chunk_append_byte(chunk, OP_SKIP_CLEAR);
+  chunk_append_byte(chunk, 2);  // Handler function and exception
+  chunk_append_byte(chunk, OP_TAIL_CALL);
 
   // TODO Use helper functions from the compiler
   // TODO Make this special syntax handled by the compiler?
   unsigned branch_offset = handler_offset - handler_offset_cell;
-  chunk_set_byte(code, handler_offset_cell, branch_offset & 0xff);
-  chunk_set_byte(code, handler_offset_cell + 1, branch_offset >> 8);
+  chunk_set_byte(chunk, handler_offset_cell, branch_offset & 0xff);
+  chunk_set_byte(chunk, handler_offset_cell + 1, branch_offset >> 8);
 
-  struct lisp_closure *cl = lisp_closure_create(2, false, NULL, code);
-  gc_push_root_obj(cl);
-  struct lisp_symbol *name = lisp_symbol_create_cstr("with-exception-handler");
-  lisp_closure_set_name(cl, name);
-  gc_pop_root_expect_obj(cl);
-  return cl;
+  gc_push_root_obj(chunk);
+  chunk->name = lisp_symbol_create_cstr("with-exception-handler");
+  gc_pop_root_expect_obj(chunk);
+
+  return lisp_closure_create(2, false, NULL, chunk);
 }
 
 enum eval_status call_intrinsic(uint8_t index, struct lisp_vm *vm) {

@@ -37,6 +37,9 @@ static void bytecode_array_push(struct bytecode_array *s, uint8_t b) {
 
 static void code_chunk_visit(struct lisp_val v, visit_callback cb, void *ctx) {
   struct code_chunk *chunk = lisp_val_as_obj(v);
+  if (chunk->name != NULL) {
+    cb(ctx, lisp_val_from_obj(chunk->name));
+  }
   val_array_visit(&chunk->const_table, cb, ctx);
 }
 
@@ -56,6 +59,7 @@ static const struct lisp_vtable CODE_CHUNK_VTABLE = {
 
 struct code_chunk *chunk_create(void) {
   struct code_chunk *chunk = lisp_obj_alloc(&CODE_CHUNK_VTABLE, sizeof(*chunk));
+  chunk->name = NULL;
   chunk->const_table = VAL_ARRAY_EMPTY;
   bytecode_array_init(&chunk->bytecode);
   return chunk;
@@ -217,8 +221,13 @@ static int disassemble_instr(const struct code_chunk *chunk, unsigned offset) {
 
 #undef ENSURE_INSTR_ARGS
 
+const char *chunk_get_name(const struct code_chunk *chunk) {
+  return chunk->name != NULL ? lisp_symbol_name(chunk->name) : "#<unnamed>";
+}
+
 void chunk_disassemble(const struct code_chunk *chunk) {
-  printf("disassembly of code chunk at %p:\n", chunk);
+  printf("disassembly of code chunk '%s' at %p:\n", chunk_get_name(chunk),
+         chunk);
   unsigned offset = 0;
   while (true) {
     int result = disassemble_instr(chunk, offset);
