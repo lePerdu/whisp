@@ -227,21 +227,8 @@ void vm_stack_frame_return(struct lisp_vm *vm) {
   val_array_push(&vm->stack, return_val);
 }
 
-void vm_stack_frame_save(const struct lisp_vm *vm,
-                         struct stack_frame_state *state) {
-  state->frame_index = vm->call_frames.size - 1;
-  state->stack_size = vm->stack.size;
-}
-
-void vm_stack_frame_unwind_to(struct lisp_vm *vm,
-                              const struct stack_frame_state *state) {
-  vm->call_frames.size = state->frame_index + 1;
-  vm->stack.size = state->stack_size;
-}
-
-void vm_stack_frame_unwind_all(struct lisp_vm *vm) {
-  vm->call_frames.size = 0;
-  vm->stack.size = 0;
+void vm_stack_frame_unwind(struct lisp_vm *vm) {
+  call_stack_pop(&vm->call_frames);
 }
 
 struct lisp_val vm_from_frame_pointer(const struct lisp_vm *vm,

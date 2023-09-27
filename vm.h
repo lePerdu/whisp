@@ -84,16 +84,7 @@ void vm_replace_stack_frame(struct lisp_vm *vm, struct lisp_env *env,
  */
 void vm_stack_frame_return(struct lisp_vm *vm);
 
-struct stack_frame_state {
-  unsigned frame_index;
-  unsigned stack_size;
-};
-
-void vm_stack_frame_save(const struct lisp_vm *vm,
-                         struct stack_frame_state *state);
-void vm_stack_frame_unwind_to(struct lisp_vm *vm,
-                              const struct stack_frame_state *state);
-void vm_stack_frame_unwind_all(struct lisp_vm *vm);
+void vm_stack_frame_unwind(struct lisp_vm *vm);
 
 struct lisp_val vm_from_frame_pointer(const struct lisp_vm *vm, unsigned index);
 struct lisp_val vm_from_stack_pointer(const struct lisp_vm *vm,

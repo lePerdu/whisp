@@ -87,7 +87,7 @@ static enum eval_status eval_bytecode(struct lisp_vm *vm) {
         uint8_t const_idx = chunk_read_byte(code, ip);
         assert(const_idx < code->const_table.size);
         vm_stack_push(vm, code->const_table.data[const_idx]);
-        break;
+        continue;
       }
       case OP_LOOKUP: {
         struct lisp_val top_value = vm_stack_pop(vm);
@@ -95,17 +95,17 @@ static enum eval_status eval_bytecode(struct lisp_vm *vm) {
         if (sym == NULL) {
           vm_raise_format_exception(vm, "cannot lookup value of type: %s",
                                     lisp_val_type_name(top_value));
-          return EV_EXCEPTION;
+          goto HANDLE_EXCEPTION;
         }
         const struct lisp_env_binding *binding = lisp_env_get(frame->env, sym);
         if (binding == NULL) {
           vm_raise_format_exception(vm, "symbol not bound: %s",
                                     lisp_symbol_name(sym));
-          return EV_EXCEPTION;
+          goto HANDLE_EXCEPTION;
         }
 
         vm_stack_push(vm, binding->value);
-        break;
+        continue;
       }
       case OP_BIND: {
         struct lisp_val top_value = vm_stack_pop(vm);
@@ -113,12 +113,12 @@ static enum eval_status eval_bytecode(struct lisp_vm *vm) {
         if (sym == NULL) {
           vm_raise_format_exception(vm, "cannot bind value of type: %s",
                                     lisp_val_type_name(top_value));
-          return EV_EXCEPTION;
+          goto HANDLE_EXCEPTION;
         }
 
         struct lisp_val bind_value = vm_stack_pop(vm);
         lisp_env_set(frame->env, sym, bind_value);
-        break;
+        continue;
       }
       case OP_BIND_GLOBAL: {
         struct lisp_val top_value = vm_stack_pop(vm);
@@ -126,31 +126,31 @@ static enum eval_status eval_bytecode(struct lisp_vm *vm) {
         if (sym == NULL) {
           vm_raise_format_exception(vm, "cannot bind value of type: %s",
                                     lisp_val_type_name(top_value));
-          return EV_EXCEPTION;
+          goto HANDLE_EXCEPTION;
         }
 
         struct lisp_val bind_value = vm_stack_pop(vm);
         lisp_env_set(vm_global_env(vm), sym, bind_value);
-        break;
+        continue;
       }
       case OP_POP:
         vm_stack_pop(vm);
-        break;
+        continue;
       case OP_DUP:
         vm_stack_push(vm, vm_stack_top(vm));
-        break;
+        continue;
       case OP_DUP_FP: {
         uint8_t idx = chunk_read_byte(code, ip);
         vm_stack_push(vm, vm_from_frame_pointer(vm, idx));
-        break;
+        continue;
       }
       case OP_CLEAR:
         vm_stack_frame_skip_clear(vm, 0);
-        break;
+        continue;
       case OP_SKIP_CLEAR: {
         uint8_t new_size = chunk_read_byte(code, ip);
         vm_stack_frame_skip_clear(vm, new_size);
-        break;
+        continue;
       }
       case OP_CALL: {
         uint8_t arg_count = chunk_read_byte(code, ip);
@@ -159,10 +159,10 @@ static enum eval_status eval_bytecode(struct lisp_vm *vm) {
         struct code_chunk *new_code;
         if (check_call(vm, func, arg_count, &new_env, &new_code) ==
             EV_EXCEPTION) {
-          return EV_EXCEPTION;
+          goto HANDLE_EXCEPTION;
         }
         vm_create_stack_frame(vm, new_env, new_code, arg_count);
-        break;
+        continue;
       }
       case OP_TAIL_CALL: {
         struct lisp_val func = vm_stack_pop(vm);
@@ -171,10 +171,10 @@ static enum eval_status eval_bytecode(struct lisp_vm *vm) {
         struct code_chunk *new_code;
         if (check_call(vm, func, arg_count, &new_env, &new_code) ==
             EV_EXCEPTION) {
-          return EV_EXCEPTION;
+          goto HANDLE_EXCEPTION;
         }
         vm_replace_stack_frame(vm, new_env, new_code);
-        break;
+        continue;
       }
       case OP_RETURN:
         vm_stack_frame_return(vm);
@@ -182,7 +182,7 @@ static enum eval_status eval_bytecode(struct lisp_vm *vm) {
           // Nothing left to evaluate
           return EV_SUCCESS;
         } else {
-          break;
+          continue;
         }
       case OP_MAKE_CLOSURE: {
         uint8_t req_arg_count = chunk_read_byte(code, ip);
@@ -193,21 +193,21 @@ static enum eval_status eval_bytecode(struct lisp_vm *vm) {
               vm,
               "ca(((fn () (fn x 1))))nnot make closure with code of type: %s",
               lisp_val_type_name(top_value));
-          return EV_EXCEPTION;
+          goto HANDLE_EXCEPTION;
         }
 
         struct lisp_closure *cl = lisp_closure_create(
             req_arg_count, is_variadic, frame->env, lisp_val_as_obj(top_value));
         vm_stack_push(vm, lisp_val_from_obj(cl));
-        break;
+        continue;
       }
       case OP_BUILD_REST_ARGS: {
         uint8_t start_fp = chunk_read_byte(code, ip);
         enum eval_status res = build_rest_args(vm, start_fp);
         if (res == EV_EXCEPTION) {
-          return EV_EXCEPTION;
+          goto HANDLE_EXCEPTION;
         }
-        break;
+        continue;
       }
       case OP_BRANCH: {
         int16_t offset = chunk_read_short(code, ip);
@@ -215,10 +215,10 @@ static enum eval_status eval_bytecode(struct lisp_vm *vm) {
         if (new_ip < 0 || code->bytecode.size <= (unsigned)new_ip) {
           vm_raise_format_exception(vm, "branch target out of bounds: %d",
                                     new_ip);
-          return EV_EXCEPTION;
+          goto HANDLE_EXCEPTION;
         }
         *ip = new_ip;
-        break;
+        continue;
       }
       case OP_BRANCH_IF_FALSE: {
         int16_t offset = chunk_read_short(code, ip);
@@ -227,36 +227,32 @@ static enum eval_status eval_bytecode(struct lisp_vm *vm) {
           if (new_ip < 0 || code->bytecode.size <= (unsigned)new_ip) {
             vm_raise_format_exception(vm, "branch target out of bounds: %d",
                                       new_ip);
-            return EV_EXCEPTION;
+            goto HANDLE_EXCEPTION;
           }
           *ip = new_ip;
         }
-        break;
+        continue;
       }
       case OP_INTRINSIC: {
         uint8_t index = chunk_read_byte(code, ip);
         enum eval_status res = call_intrinsic(index, vm);
         if (res == EV_EXCEPTION) {
-          return res;
+          goto HANDLE_EXCEPTION;
         }
-        break;
+        continue;
       }
       default:
         vm_raise_format_exception(vm, "unknown opcode: %d", op);
-        return EV_EXCEPTION;
+        goto HANDLE_EXCEPTION;
     }
-  }
-}
 
-/**
- * Evalute bytecode, unwinding the stack on error.
- */
-enum eval_status do_eval(struct lisp_vm *vm) {
-  enum eval_status res = eval_bytecode(vm);
-  if (res == EV_EXCEPTION) {
-    vm_stack_frame_unwind_all(vm);
+  HANDLE_EXCEPTION : {
+    while (vm_current_frame_index(vm) >= initial_frame) {
+      vm_stack_frame_unwind(vm);
+    }
+    return EV_EXCEPTION;
   }
-  return res;
+  }
 }
 
 enum eval_status eval_closure(struct lisp_vm *vm, struct lisp_closure *cl) {
@@ -272,7 +268,7 @@ enum eval_status eval_closure(struct lisp_vm *vm, struct lisp_closure *cl) {
   }
 
   vm_create_stack_frame(vm, new_env, new_code, 0);
-  return do_eval(vm);
+  return eval_bytecode(vm);
 }
 
 enum eval_status eval_apply(struct lisp_vm *vm, struct lisp_val func,
@@ -298,5 +294,5 @@ enum eval_status eval_apply(struct lisp_vm *vm, struct lisp_val func,
   }
 
   vm_create_stack_frame(vm, new_env, new_code, arg_count);
-  return do_eval(vm);
+  return eval_bytecode(vm);
 }
