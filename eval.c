@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include "bytecode.h"
+#include "core.h"
 #include "memory.h"
 #include "types.h"
 #include "vm.h"
@@ -230,7 +231,15 @@ static enum eval_status eval_bytecode(struct lisp_vm *vm) {
           }
           *ip = new_ip;
         }
-        continue;
+        break;
+      }
+      case OP_INTRINSIC: {
+        uint8_t index = chunk_read_byte(code, ip);
+        enum eval_status res = call_intrinsic(index, vm);
+        if (res == EV_EXCEPTION) {
+          return res;
+        }
+        break;
       }
       default:
         vm_raise_format_exception(vm, "unknown opcode: %d", op);

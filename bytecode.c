@@ -194,6 +194,13 @@ static int disassemble_instr(const struct code_chunk *chunk, unsigned offset) {
       printf("(build-rest-args %u)\n", fp);
       return 2;
     }
+    case OP_INTRINSIC: {
+      ENSURE_INSTR_ARGS(OP_INTRINSIC, 1);
+      uint8_t index = chunk->bytecode.data[offset + 1];
+      // TODO Fetch intrinsic name
+      printf("(intrinsic %u)\n", index);
+      return 2;
+    }
     case OP_BRANCH:
       return disassemble_branch(chunk, OP_BRANCH, "branch", offset);
     case OP_BRANCH_IF_FALSE:

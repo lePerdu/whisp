@@ -124,7 +124,7 @@ enum bytecode_op {
    *
    * `intrinsic INDEX`
    */
-  // OP_INTRINSIC,
+  OP_INTRINSIC,
 
   /**
    * Branch to another location in the current bytecode chunk.

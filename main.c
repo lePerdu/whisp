@@ -109,7 +109,7 @@ static struct lisp_vm *setup_vm(int argc, char **argv) {
 
   struct lisp_env *global_env = vm_current_env(vm);
 
-  // define_builtins(global_env);
+  define_builtins(global_env);
   // Just for testing purposes
   // define_compiler_builtins(global_env);
 

@@ -9,6 +9,8 @@ EXEC = $(BIN)/whisp
 SRCS = main.c \
 	bytecode.c \
 	compiler.c \
+	core.c \
+	core_helper.c \
 	eval.c \
 	file.c \
 	memory.c \
