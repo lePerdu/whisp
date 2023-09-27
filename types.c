@@ -964,19 +964,29 @@ struct lisp_env *lisp_env_create(struct lisp_env *outer) {
   return env;
 }
 
-const struct lisp_env_binding *lisp_env_get(const struct lisp_env *env,
-                                            struct lisp_symbol *sym) {
+const struct lisp_env_binding *lisp_env_get_local(const struct lisp_env *env,
+                                                  struct lisp_symbol *sym) {
   struct lisp_env_table_entry *existing =
       (struct lisp_env_table_entry *)symbol_table_lookup_entry(
           env->mappings, lisp_symbol_name(sym), lisp_symbol_length(sym));
   if (existing == NULL) {
+    return NULL;
+  } else {
+    return &existing->binding;
+  }
+}
+
+const struct lisp_env_binding *lisp_env_get(const struct lisp_env *env,
+                                            struct lisp_symbol *sym) {
+  const struct lisp_env_binding *existing = lisp_env_get_local(env, sym);
+  if (existing == NULL) {
     if (env->outer != NULL) {
       return lisp_env_get(env->outer, sym);
     } else {
-      return false;
+      return NULL;
     }
   } else {
-    return &existing->binding;
+    return existing;
   }
 }
 

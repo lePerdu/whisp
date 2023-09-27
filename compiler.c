@@ -433,7 +433,15 @@ static enum compile_res compile_fn_params(struct compiler_ctx *ctx,
       return COMP_FAILED;
     }
 
-    // TODO Check for duplicate param names
+    // Lookup just in the innermost environment to check for duplicates
+    if (lisp_env_get_local(ctx->comp_env, sym_name) != NULL) {
+      vm_raise_format_exception(ctx->vm, "fn: duplicate parameter name: %s",
+                                lisp_symbol_name(sym_name));
+      return COMP_FAILED;
+    }
+
+    // Mark the variable as set so it can shadow globals
+    lisp_env_set(ctx->comp_env, sym_name, LISP_VAL_NIL);
 
     res = emit_dup_fp(ctx, param_index);
     if (res == COMP_FAILED) {
@@ -446,9 +454,6 @@ static enum compile_res compile_fn_params(struct compiler_ctx *ctx,
     }
 
     emit_instr(ctx, OP_BIND);
-
-    // Mark the variable as set so it can shadow globals
-    lisp_env_set(ctx->comp_env, sym_name, LISP_VAL_NIL);
 
     raw_params = cons_cell->cdr;
     param_index++;
@@ -465,7 +470,15 @@ static enum compile_res compile_fn_params(struct compiler_ctx *ctx,
                                 "fn: parameter names must be of type symbol");
       return COMP_FAILED;
     }
-    // TODO Check for duplicate param names
+
+    if (lisp_env_get_local(ctx->comp_env, rest_param) != NULL) {
+      vm_raise_format_exception(ctx->vm, "fn: duplicate parameter name: %s",
+                                lisp_symbol_name(rest_param));
+      return COMP_FAILED;
+    }
+
+    // Mark the variable as set so it can shadow globals
+    lisp_env_set(ctx->comp_env, rest_param, LISP_VAL_NIL);
 
     emit_instr(ctx, OP_BUILD_REST_ARGS);
     emit_byte(ctx, param_index);
@@ -474,9 +487,6 @@ static enum compile_res compile_fn_params(struct compiler_ctx *ctx,
       return res;
     }
     emit_instr(ctx, OP_BIND);
-
-    // Mark the variable as set so it can shadow globals
-    lisp_env_set(ctx->comp_env, rest_param, LISP_VAL_NIL);
   } else {
     *is_variadic = false;
   }
