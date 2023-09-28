@@ -478,7 +478,7 @@ DEF_BUILTIN(core_write_str) { return unary_func(vm, __func__, do_write_str); }
 
 static enum eval_status do_write(struct lisp_val arg, struct lisp_val *result) {
   display_str(print_str(arg, true));
-  *result = LISP_VAL_NIL;
+  *result = lisp_non_printing();
   return EV_SUCCESS;
 }
 
@@ -492,13 +492,13 @@ DEF_BUILTIN(core_write) { return unary_func(vm, __func__, do_write); }
  */
 DEF_BUILTIN(core_newline) {
   putchar('\n');
-  BUILTIN_RETURN(LISP_VAL_NIL);
+  BUILTIN_RETURN(lisp_non_printing());
 }
 
 static enum eval_status do_display(struct lisp_val arg,
                                    struct lisp_val *result) {
   display_str(print_str(arg, false));
-  *result = LISP_VAL_NIL;
+  *result = lisp_non_printing();
   return EV_SUCCESS;
 }
 
@@ -509,7 +509,7 @@ DEF_BUILTIN(core_display) { return unary_func(vm, __func__, do_display); }
 
 DEF_BUILTIN(core_flush) {
   fflush(stdout);
-  BUILTIN_RETURN(LISP_VAL_NIL);
+  BUILTIN_RETURN(lisp_non_printing());
 }
 
 DEF_BUILTIN(core_read_str) {
@@ -544,7 +544,7 @@ DEF_BUILTIN(core_load_file) {
   if (res == EV_EXCEPTION) {
     return res;
   } else {
-    BUILTIN_RETURN(LISP_VAL_NIL);
+    BUILTIN_RETURN(lisp_non_printing());
   }
 }
 
@@ -615,7 +615,7 @@ DEF_BUILTIN(core_sleep) {
     vm_raise_func_exception(vm, "sleep interrupted");
     return EV_EXCEPTION;
   } else {
-    BUILTIN_RETURN(LISP_VAL_NIL);
+    BUILTIN_RETURN(lisp_non_printing());
   }
 }
 

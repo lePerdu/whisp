@@ -161,6 +161,15 @@ struct lisp_val lisp_false(void);
 bool lisp_val_is_true(struct lisp_val v);
 bool lisp_val_is_false(struct lisp_val v);
 
+/**
+ * Object returned by forms of unspecified return to indicate that the REPL
+ * should not print their result.
+ *
+ * E.g. `def!`, `display`
+ */
+struct lisp_val lisp_non_printing(void);
+bool lisp_is_non_printing(struct lisp_val v);
+
 bool lisp_val_is_number(struct lisp_val v);
 /**
  * Returns whether a value is a "proper" list. I.e. nil or a series of cons

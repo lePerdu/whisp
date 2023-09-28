@@ -69,11 +69,13 @@ static enum eval_status eval_print_many(struct lisp_vm *vm,
     res = compile_eval(vm, cell->car);
     if (res == EV_SUCCESS) {
       // Keep on the stack while printing so it is't GC'd
-      struct lisp_string *printed = print_str(vm_stack_top(vm), true);
+      struct lisp_val res_val = vm_stack_top(vm);
+      if (!lisp_is_non_printing(res_val)) {
+        struct lisp_string *printed = print_str(res_val, true);
+        display_str(printed);
+        putchar('\n');
+      }
       (void)vm_stack_pop(vm);
-
-      display_str(printed);
-      putchar('\n');
     } else {
       assert(vm_has_exception(vm));
 

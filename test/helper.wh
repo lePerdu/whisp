@@ -34,7 +34,9 @@
       (err (do (println "FAIL") err))
       (do
         ((test-entry-func test))
-        (println "PASS")))))
+        (println "PASS")
+        ; Return nil to indicate no error
+        nil))))
 
 (defn! (run-all-tests)
   (let*

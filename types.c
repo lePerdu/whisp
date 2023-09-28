@@ -134,6 +134,26 @@ struct lisp_val lisp_val_from_int(long n) {
   return (struct lisp_val){(uintptr_t)(n << TAG_SHIFT) | TAG_INT};
 }
 
+static const struct lisp_vtable NON_PRINTING_VTABLE = {
+    .type = LISP_OPAQUE,
+    .is_gc_managed = false,
+    .name = "non-printing",
+    .visit_children = visit_none,
+    .destroy = destroy_none,
+};
+
+struct lisp_val lisp_non_printing(void) {
+  static struct lisp_obj NON_PRINTING_VAL = {
+      .vt = &NON_PRINTING_VTABLE,
+  };
+
+  return lisp_val_from_obj(&NON_PRINTING_VAL);
+}
+
+bool lisp_is_non_printing(struct lisp_val v) {
+  return lisp_val_vtable(v) == &NON_PRINTING_VTABLE;
+}
+
 struct lisp_val lisp_true(void) {
   // This only works because true is referenced by the global environment. If it
   // isn't this would segfault.

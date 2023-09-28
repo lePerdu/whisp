@@ -343,9 +343,6 @@ static enum compile_res compile_def(struct compiler_ctx *ctx,
     return res;
   }
 
-  // Copy the result so that it is also returned from the expression
-  emit_instr(ctx, OP_DUP);
-
   res = emit_const(ctx, lisp_val_from_obj(sym));
   if (res == COMP_FAILED) {
     return res;
@@ -356,6 +353,9 @@ static enum compile_res compile_def(struct compiler_ctx *ctx,
   } else {
     emit_instr(ctx, OP_BIND);
   }
+
+  // Return value
+  emit_const(ctx, lisp_non_printing());
 
   emit_return_if_tail_pos(ctx);
 
@@ -414,8 +414,7 @@ static enum compile_res compile_defmacro(struct compiler_ctx *ctx,
   lisp_env_set_macro(macro_env, sym, macro_fn);
 
   // Need to emit something for the produced code
-  // TODO Have `defmacro!` "return" NIL?
-  emit_const(ctx, macro_fn);
+  emit_const(ctx, lisp_non_printing());
   emit_return_if_tail_pos(ctx);
   return COMP_SUCCESS;
 }
