@@ -4,27 +4,15 @@
 (def! *vector-trie-width* (bitshift 1 *vector-trie-bits*))
 (def! *vector-trie-mask* (int- *vector-trie-width* 1))
 
-(def! *vector-marker* (gensym "vector-marker"))
+(defrecord! <vector>
+  ; TODO Decide on private export syntax/convention (or just wait for real modules)
+  build-vector-raw
+  vector?
+  (length vector-length _vector-length-set)
+  (shift vector-shift _vector-shift-set)
+  (root vector-root vector-root-set))
 
-(defn! (build-vector len shift root)
-  (array *vector-marker* len shift root))
-
-(def! empty-vector (build-vector 0 0 (array)))
-
-(defn! (vector? v)
-  (and
-    (array? v)
-    (= (array-length v) 4)
-    (= (array-get v 0) *vector-marker*)))
-
-(defn! (vector-length v) (array-get v 1))
-(defn! (vector-shift v) (array-get v 2))
-(defn! (vector-root v) (array-get v 3))
-
-(defn! (vector-replace-root v root)
-  (array-set v 3 root))
-(defn! (vector-replace-tail v tail)
-  (array-set v 4 tail))
+(def! empty-vector (build-vector-raw 0 0 (array)))
 
 (defn! (vector-check-bounds v i)
   (<= 0 i (dec (vector-length v))))
@@ -73,7 +61,7 @@
                 (vector-dec-bits level)
                 (array-get node cur-index))))))
 
-      (vector-replace-root v
+      (vector-root-set v
         (trie-set (vector-shift v) (vector-root v))))
     (error "vector-get: index out of bounds")))
 
@@ -113,11 +101,11 @@
           (last-child-full? root shift))))
       (if root-full?
         (let ((new-shift (vector-inc-bits shift)))
-          (build-vector
+          (build-vector-raw
             (inc len)
             new-shift
             (array root (make-new-branch new-shift value))))
-        (build-vector
+        (build-vector-raw
           (inc len)
           shift
           (trie-append shift root))))))
@@ -149,11 +137,11 @@
       ((null? new-root) empty-vector)
       ; Delete a level if possible
       ((and (int> shift 0) (= (array-length new-root) 1))
-        (build-vector
+        (build-vector-raw
           new-len
           (int- shift *vector-trie-bits*)
           (array-get new-root 0)))
-      (else (build-vector new-len shift new-root)))))
+      (else (build-vector-raw new-len shift new-root)))))
 
 (defn! (vector-equal? a b)
   (let ((a-len (vector-length a)))
