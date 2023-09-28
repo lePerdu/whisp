@@ -515,11 +515,11 @@ DEF_BUILTIN(core_flush) {
 DEF_BUILTIN(core_read_str) {
   DEF_OBJ_ARG(struct lisp_string, arg, LISP_STRING, 0);
   struct lisp_val result;
-  enum parse_res res = read_str(lisp_string_as_cstr(arg), &result);
-  if (res == P_SUCCESS) {
+  struct parse_res res = read_str(lisp_string_as_cstr(arg), &result);
+  if (res.status == P_SUCCESS) {
     BUILTIN_RETURN(result);
   } else {
-    vm_raise_func_exception(vm, "failed to parse string");
+    vm_raise_exception(vm, lisp_val_from_obj(parse_error_format(&res.error)));
     return EV_EXCEPTION;
   }
 }

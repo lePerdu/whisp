@@ -55,10 +55,44 @@ struct token {
 };
 
 struct reader {
-  const char *const input;
+  const char *input;
+  /** Offset in the input string. */
   size_t pos;
+  /** Human-readable source location. */
+  struct source_pos source_pos;
   struct token token;
 };
+
+static void reader_init(struct reader *r, const char *input) {
+  r->input = input;
+  r->pos = 0;
+  r->source_pos.line = 0;
+  r->source_pos.col = 0;
+  r->token.type = TOK_INVALID;
+}
+
+static char reader_peek(const struct reader *r) { return r->input[r->pos]; }
+
+static void reader_advance(struct reader *r) {
+  char cur = reader_peek(r);
+  if (cur == 0) {
+    return;
+  }
+
+  if (cur == '\n') {
+    r->source_pos.line++;
+    r->source_pos.col = 0;
+  } else {
+    r->source_pos.col++;
+  }
+  r->pos++;
+}
+
+static void reader_advance_n(struct reader *r, unsigned n) {
+  for (; n > 0; n--) {
+    reader_advance(r);
+  }
+}
 
 static bool is_lisp_space(char c) { return isspace(c) || c == ','; }
 
@@ -77,21 +111,21 @@ static bool is_atom_char(char c) {
 }
 
 static void skip_white(struct reader *r) {
-  while (is_lisp_space(r->input[r->pos])) {
-    r->pos++;
+  while (is_lisp_space(reader_peek(r))) {
+    reader_advance(r);
   }
 }
 
 static bool is_eol(char c) { return c == '\n' || c == 0; }
 
 static void skip_line(struct reader *r) {
-  while (!is_eol(r->input[r->pos])) {
-    r->pos++;
+  while (!is_eol(reader_peek(r))) {
+    reader_advance(r);
   }
 }
 
-static enum parse_res parse_int(struct reader *r, const char *atom_start,
-                                const char *atom_end) {
+static enum parse_status parse_int(struct reader *r, const char *atom_start,
+                                   const char *atom_end) {
   char *endptr;
   long n = strtol(atom_start, &endptr, 10);
   if (endptr != atom_end) {
@@ -102,8 +136,8 @@ static enum parse_res parse_int(struct reader *r, const char *atom_start,
   return P_SUCCESS;
 }
 
-static enum parse_res parse_real(struct reader *r, const char *atom_start,
-                                 const char *atom_end) {
+static enum parse_status parse_real(struct reader *r, const char *atom_start,
+                                    const char *atom_end) {
   char *endptr;
   // TODO strtod has some undesired behavior, like parsing as hex and parsing
   // nan/infinity.
@@ -116,8 +150,14 @@ static enum parse_res parse_real(struct reader *r, const char *atom_start,
   return P_SUCCESS;
 }
 
-static enum parse_res parse_char(struct reader *r, const char *atom_start,
-                                 const char *atom_end) {
+static bool equals_literal(const char *str_start, size_t str_len,
+                           const char *literal, size_t literal_len) {
+  assert(strlen(literal) == literal_len);
+  return str_len == literal_len && memcmp(str_start, literal, str_len) == 0;
+}
+
+static enum parse_status parse_char(struct reader *r, const char *atom_start,
+                                    const char *atom_end) {
   if (atom_start[0] == PRIM_PREFIX && atom_start[1] == PRIM_CHAR_PREFIX) {
     atom_start += 2;
 
@@ -128,13 +168,13 @@ static enum parse_res parse_char(struct reader *r, const char *atom_start,
       return P_FAILED;
     } else if (atom_len == 1) {
       r->token.as_char = *atom_start;
-    } else if (atom_len == 4 && memcmp(atom_start, "null", 4) == 0) {
+    } else if (equals_literal(atom_start, atom_len, "null", 4)) {
       r->token.as_char = 0;
-    } else if (atom_len == 5 && memcmp(atom_start, "space", 5) == 0) {
+    } else if (equals_literal(atom_start, atom_len, "space", 5)) {
       r->token.as_char = ' ';
-    } else if (atom_len == 3 && memcmp(atom_start, "tab", 3) == 0) {
+    } else if (equals_literal(atom_start, atom_len, "tab", 3)) {
       r->token.as_char = '\t';
-    } else if (atom_len == 7 && memcmp(atom_start, "newline", 7) == 0) {
+    } else if (equals_literal(atom_start, atom_len, "newline", 7)) {
       r->token.as_char = '\n';
     } else {
       return P_FAILED;
@@ -148,8 +188,8 @@ static enum parse_res parse_char(struct reader *r, const char *atom_start,
 /**
  * Parse symbols and special constants.
  */
-static enum parse_res parse_symbol(struct reader *r, const char *atom_start,
-                                   const char *atom_end) {
+static enum parse_status parse_symbol(struct reader *r, const char *atom_start,
+                                      const char *atom_end) {
   size_t atom_len = atom_end - atom_start;
 
   if (atom_len == 3 && memcmp(atom_start, "nil", 3) == 0) {
@@ -162,7 +202,7 @@ static enum parse_res parse_symbol(struct reader *r, const char *atom_start,
   return P_SUCCESS;
 }
 
-static enum parse_res read_next_atom(struct reader *r) {
+static enum parse_status read_next_atom(struct reader *r) {
   const char *atom_start = &r->input[r->pos];
   const char *atom_end = atom_start;
   while (is_atom_char(*atom_end)) {
@@ -172,7 +212,7 @@ static enum parse_res read_next_atom(struct reader *r) {
     return P_FAILED;
   }
 
-  enum parse_res res = parse_int(r, atom_start, atom_end);
+  enum parse_status res = parse_int(r, atom_start, atom_end);
   if (res == P_SUCCESS) {
     goto SUCCESS;
   }
@@ -195,7 +235,7 @@ static enum parse_res read_next_atom(struct reader *r) {
   return P_FAILED;
 
 SUCCESS:
-  r->pos += atom_end - atom_start;
+  reader_advance_n(r, atom_end - atom_start);
   return P_SUCCESS;
 }
 
@@ -218,7 +258,7 @@ static int translate_unescaped(char c) {
 
 static bool is_str_end(char c) { return c == TOK_STRING || is_eol(c); }
 
-static enum parse_res read_string_atom(struct reader *r) {
+static enum parse_status read_string_atom(struct reader *r) {
   const char *str_start = &r->input[r->pos];
   // Include starting quote
   unsigned str_tok_len = 1;
@@ -250,15 +290,15 @@ static enum parse_res read_string_atom(struct reader *r) {
       .as_slice = {.size = str_tok_len, .data = str_start},
   };
 
-  r->pos += str_tok_len;
+  reader_advance_n(r, str_tok_len);
   return P_SUCCESS;
 }
 
-static enum parse_res reader_next(struct reader *r) {
+static enum parse_status reader_next(struct reader *r) {
 START:
   skip_white(r);
 
-  char c = r->input[r->pos];
+  char c = reader_peek(r);
   switch (c) {
     case 0:
       r->token.type = TOK_EOF;
@@ -272,22 +312,22 @@ START:
     case TOK_BACKTICK:
     case TOK_AT:
       r->token.type = c;
-      r->pos++;
+      reader_advance(r);
       return P_SUCCESS;
     case TOK_TILDE:
-      if (r->input[r->pos + 1] == TOK_AT) {
+      reader_advance(r);
+      if (reader_peek(r) == TOK_AT) {
         r->token.type = TOK_TILDE_AT;
-        r->pos += 2;
+        reader_advance(r);
       } else {
         r->token.type = TOK_TILDE;
-        r->pos++;
       }
       return P_SUCCESS;
     case TOK_DOT:
       // These are special by themselves, but not if part of an atom
       if (!is_atom_char(r->input[r->pos + 1])) {
         r->token.type = c;
-        r->pos++;
+        reader_advance(r);
         return P_SUCCESS;
       } else {
         break;
@@ -299,21 +339,21 @@ START:
   return read_next_atom(r);
 }
 
-static enum parse_res reader_expect(struct reader *r, enum token_type t) {
-  enum parse_res res = reader_next(r);
+static enum parse_status reader_expect(struct reader *r, enum token_type t) {
+  enum parse_status res = reader_next(r);
   if (res != P_SUCCESS) {
     return res;
   }
   return r->token.type == t ? P_SUCCESS : P_FAILED;
 }
 
-static bool reader_at_eof(struct reader *r) { return r->input[r->pos] == 0; }
+static bool reader_at_eof(struct reader *r) { return reader_peek(r) == 0; }
 
-static enum parse_res read_form(struct reader *r, struct lisp_val *output);
+static enum parse_status read_form(struct reader *r, struct lisp_val *output);
 
-static enum parse_res read_list_or_pair(struct reader *r,
-                                        struct lisp_val *output) {
-  enum parse_res res;
+static enum parse_status read_list_or_pair(struct reader *r,
+                                           struct lisp_val *output) {
+  enum parse_status res;
   res = reader_next(r);
   if (res != P_SUCCESS) {
     return res;
@@ -361,9 +401,9 @@ static enum parse_res read_list_or_pair(struct reader *r,
   return res;
 }
 
-static enum parse_res read_macro(struct reader *r, const char *name,
-                                 struct lisp_val *output) {
-  enum parse_res res;
+static enum parse_status read_macro(struct reader *r, const char *name,
+                                    struct lisp_val *output) {
+  enum parse_status res;
   res = reader_next(r);
   if (res != P_SUCCESS) {
     return res;
@@ -409,7 +449,7 @@ static struct lisp_val build_lisp_string(struct slice raw_string) {
   return lisp_val_from_obj(str_build(&builder));
 }
 
-static enum parse_res read_form(struct reader *r, struct lisp_val *output) {
+static enum parse_status read_form(struct reader *r, struct lisp_val *output) {
   switch (r->token.type) {
     case TOK_INT:
       *output = lisp_val_from_int(r->token.as_integer);
@@ -450,33 +490,54 @@ static enum parse_res read_form(struct reader *r, struct lisp_val *output) {
   }
 }
 
-enum parse_res read_str(const char *input, struct lisp_val *output) {
-  struct reader r = {.input = input, .pos = 0};
+static inline struct parse_res make_error_res(const struct reader *r) {
+  return (struct parse_res){
+      .status = P_FAILED,
+      .error = {.error_pos = r->source_pos},
+  };
+}
 
-  enum parse_res res = reader_next(&r);
-  if (res != P_SUCCESS) {
-    return res;
+static inline struct parse_res make_status_res(enum parse_status status) {
+  return (struct parse_res){
+      .status = status,
+  };
+}
+
+struct parse_res read_str(const char *input, struct lisp_val *output) {
+  struct reader r;
+  reader_init(&r, input);
+
+  enum parse_status status;
+
+  status = reader_next(&r);
+  if (status == P_FAILED) {
+    return make_error_res(&r);
   }
 
   if (r.token.type == TOK_EOF) {
-    return P_EMPTY;
+    return make_status_res(P_EMPTY);
   }
 
-  res = read_form(&r, output);
-  if (res != P_SUCCESS) {
-    return res;
+  status = read_form(&r, output);
+  if (status == P_FAILED) {
+    return make_error_res(&r);
   }
 
-  return reader_expect(&r, TOK_EOF);
+  status = reader_expect(&r, TOK_EOF);
+  if (status == P_FAILED) {
+    return make_error_res(&r);
+  }
+  return make_status_res(P_SUCCESS);
 }
 
-enum parse_res read_str_many(const char *input, struct lisp_val *output) {
-  struct reader r = {.input = input, .pos = 0};
+struct parse_res read_str_many(const char *input, struct lisp_val *output) {
+  struct reader r;
+  reader_init(&r, input);
 
   struct list_builder builder;
   list_builder_init(&builder);
 
-  enum parse_res res = P_SUCCESS;
+  enum parse_status res = P_SUCCESS;
   while (true) {
     res = reader_next(&r);
     if (res != P_SUCCESS) {
@@ -497,7 +558,11 @@ enum parse_res read_str_many(const char *input, struct lisp_val *output) {
   }
 
   *output = list_build(&builder);
-  return res;
+  if (res == P_SUCCESS) {
+    return make_status_res(res);
+  } else {
+    return make_error_res(&r);
+  }
 }
 
 /**
@@ -505,8 +570,10 @@ enum parse_res read_str_many(const char *input, struct lisp_val *output) {
  */
 bool is_valid_symbol(const char *name) {
   // Leverage existing tokenizer
-  struct reader r = {.input = name, .pos = 0};
-  enum parse_res res = read_next_atom(&r);
+  struct reader r;
+  reader_init(&r, name);
+
+  enum parse_status res = read_next_atom(&r);
   if (res != P_SUCCESS) {
     return false;
   }
@@ -515,4 +582,9 @@ bool is_valid_symbol(const char *name) {
   }
 
   return reader_at_eof(&r);
+}
+
+struct lisp_string *parse_error_format(const struct parse_error *error) {
+  return lisp_string_format("parse error at %u:%u", error->error_pos.line + 1,
+                            error->error_pos.col + 1);
 }

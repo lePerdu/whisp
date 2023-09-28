@@ -137,15 +137,19 @@ static void load_prelude(struct lisp_vm *vm) { run_file(vm, PRELUDE_FILENAME); }
 
 static void rep(struct lisp_vm *vm, const char *input) {
   struct lisp_val ast;
-  enum parse_res read_res = read_str_many(input, &ast);
-  if (read_res == P_EMPTY) {
-    return;
-  } else if (read_res != P_SUCCESS) {
-    fprintf(stderr, "Read error\n");
-    return;
+  struct parse_res read_res = read_str_many(input, &ast);
+  switch (read_res.status) {
+    case P_EMPTY:
+      return;
+    case P_SUCCESS:
+      eval_print_many(vm, ast);
+      return;
+    case P_FAILED: {
+      struct lisp_string *err_str = parse_error_format(&read_res.error);
+      fprintf(stderr, "Read error: %s\n", lisp_string_as_cstr(err_str));
+      return;
+    }
   }
-
-  eval_print_many(vm, ast);
 }
 
 static void repl(struct lisp_vm *vm) {

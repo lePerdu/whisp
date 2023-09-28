@@ -80,16 +80,17 @@ enum eval_status load_file(struct lisp_vm *vm, const char *filename) {
   } else {
     gc_push_root_obj(contents);
     struct lisp_val ast;
-    enum parse_res read_res =
+    struct parse_res read_res =
         read_str_many(lisp_string_as_cstr(contents), &ast);
     gc_pop_root_expect_obj(contents);
 
-    if (read_res != P_SUCCESS) {
-      vm_raise_func_exception(vm, "cannot parse file '%s'", filename);
+    if (read_res.status == P_SUCCESS) {
+      // Eval but don't print
+      return eval_many(vm, ast);
+    } else {
+      vm_raise_exception(
+          vm, lisp_val_from_obj(parse_error_format(&read_res.error)));
       return EV_EXCEPTION;
     }
-
-    // Eval but don't print
-    return eval_many(vm, ast);
   }
 }
