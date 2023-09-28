@@ -22,6 +22,22 @@
       (f (car l))
       (for-each f (cdr l)))))
 
+(defn! (map-index f l)
+  (let-named loop ((index 0) (l l))
+    (if (null? l)
+      nil
+      (cons
+        (f (car l) index)
+        (loop (inc index) (cdr l))))))
+
+(defn! (for-each-index f l)
+  (let-named loop ((index 0) (l l))
+    (if (null? l)
+      nil
+      (do
+        (f (car l) index)
+        (loop (inc index) (cdr l))))))
+
 (defn! (filter p l)
   (if (null? l)
     nil
