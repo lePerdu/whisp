@@ -304,7 +304,7 @@ static enum compile_res parse_def(const char *label, struct compiler_ctx *ctx,
   *sym = lisp_val_cast(LISP_SYMBOL, args_cons->car);
   if (*sym == NULL) {
     vm_raise_format_exception(ctx->vm, "%s: first arg must be of type: %s",
-                              lisp_type_name(LISP_SYMBOL));
+                              label, lisp_type_name(LISP_SYMBOL));
     return COMP_FAILED;
   }
 
