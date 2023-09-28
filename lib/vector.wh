@@ -5,64 +5,65 @@
 (def! *vector-trie-mask* (int- *vector-trie-width* 1))
 
 (defrecord! <vector>
+  ; Only "export" vector-length and vector?
   ; TODO Decide on private export syntax/convention (or just wait for real modules)
-  build-vector-raw
+  _build-vector
   vector?
   (length vector-length _vector-length-set)
-  (shift vector-shift _vector-shift-set)
-  (root vector-root vector-root-set))
+  (shift _vector-shift _vector-shift-set)
+  (root _vector-root _vector-root-set))
 
-(def! empty-vector (build-vector-raw 0 0 (array)))
+(def! empty-vector (_build-vector 0 0 (array)))
 
-(defn! (vector-check-bounds v i)
+(defn! (_vector-check-bounds v i)
   (<= 0 i (dec (vector-length v))))
 
-(defn! (vector-dec-bits level) (int- level *vector-trie-bits*))
-(defn! (vector-inc-bits level) (int+ level *vector-trie-bits*))
+(defn! (_vector-dec-bits level) (int- level *vector-trie-bits*))
+(defn! (_vector-inc-bits level) (int+ level *vector-trie-bits*))
 
-(defn! (vector-level-index i level)
+(defn! (_vector-level-index i level)
   (bitand
     (bitshift i (int- 0 level))
     *vector-trie-mask*))
 
 ; Resolve the underlying array
-(defn! (vector-find-node v i)
-  (if (vector-check-bounds v i)
+(defn! (_vector-find-node v i)
+  (if (_vector-check-bounds v i)
     (let-named search-iter
-      ((level (vector-shift v)) (node (vector-root v)))
+      ((level (_vector-shift v)) (node (_vector-root v)))
       (if (= level 0)
         node
         (search-iter
-          (vector-dec-bits level)
-          (array-get node (vector-level-index i level)))))
+          (_vector-dec-bits level)
+          (array-get node (_vector-level-index i level)))))
     (error "vector-get: index out of bounds")))
 
 (defn! (vector-get v i)
-  (let ((node (vector-find-node v i)))
+  (let ((node (_vector-find-node v i)))
     (array-get node (bitand i *vector-trie-mask*))))
 
 ; Destructive set
 (defn! (vector-set! v i value)
-  (let ((node (vector-find-node v i)))
+  (let ((node (_vector-find-node v i)))
     (array-set! node (bitand i *vector-trie-mask*) value)))
 
 ; Persistent set (returns a new vector)
 (defn! (vector-set v i value)
-  (if (vector-check-bounds v i)
+  (if (_vector-check-bounds v i)
     (do
       (defn! (trie-set level node)
-        (let ((cur-index (vector-level-index i level)))
+        (let ((cur-index (_vector-level-index i level)))
           (array-set
             node
             cur-index
             (if (= level 0)
               value
               (trie-set
-                (vector-dec-bits level)
+                (_vector-dec-bits level)
                 (array-get node cur-index))))))
 
-      (vector-root-set v
-        (trie-set (vector-shift v) (vector-root v))))
+      (_vector-root-set v
+        (trie-set (_vector-shift v) (_vector-root v))))
     (error "vector-get: index out of bounds")))
 
 (defn! (make-new-branch shift single-elem)
@@ -77,7 +78,7 @@
     (def! len (vector-length v))
     (defn! (last-child-full? node level)
       (=
-        (vector-level-index len level)
+        (_vector-level-index len level)
         (bitand (array-length node) *vector-trie-mask*)))
     (defn! (trie-append shift node)
       (if (last-child-full? node shift)
@@ -93,24 +94,24 @@
               (array-get node last-index))))))
 
     (let*
-      ((root (vector-root v))
-       (shift (vector-shift v))
+      ((root (_vector-root v))
+       (shift (_vector-shift v))
        (root-full?
         (and
           (= (array-length root) *vector-trie-width*)
           (last-child-full? root shift))))
       (if root-full?
-        (let ((new-shift (vector-inc-bits shift)))
-          (build-vector-raw
+        (let ((new-shift (_vector-inc-bits shift)))
+          (_build-vector
             (inc len)
             new-shift
             (array root (make-new-branch new-shift value))))
-        (build-vector-raw
+        (_build-vector
           (inc len)
           shift
           (trie-append shift root))))))
 
-(defn! (array-pop-or-nil arr)
+(defn! (_array-pop-or-nil arr)
   (if (= (array-length arr) 1)
     nil
     (array-sub arr 0 (dec (array-length arr)))))
@@ -118,11 +119,11 @@
 (defn! (vector-pop v)
   (let*
     ((new-len (dec (vector-length v)))
-     (shift (vector-shift v))
+     (shift (_vector-shift v))
      (new-root
-      (let-named trie-pop ((level shift) (node (vector-root v)))
+      (let-named trie-pop ((level shift) (node (_vector-root v)))
         (if (= level 0)
-          (array-pop-or-nil node)
+          (_array-pop-or-nil node)
           (let*
             ((last-index (dec (array-length node)))
              (new-last-node
@@ -130,18 +131,18 @@
                 (int- level *vector-trie-bits*)
                 (array-get node last-index))))
             (if (null? new-last-node)
-              (array-pop-or-nil node)
+              (_array-pop-or-nil node)
               (array-set node last-index new-last-node)))))))
     (cond
       ; Vector is empty, so re-use the global instance
       ((null? new-root) empty-vector)
       ; Delete a level if possible
       ((and (int> shift 0) (= (array-length new-root) 1))
-        (build-vector-raw
+        (_build-vector
           new-len
           (int- shift *vector-trie-bits*)
           (array-get new-root 0)))
-      (else (build-vector-raw new-len shift new-root)))))
+      (else (_build-vector new-len shift new-root)))))
 
 (defn! (vector-equal? a b)
   (let ((a-len (vector-length a)))
@@ -176,15 +177,15 @@
         acc
         (loop (f acc (vector-get v index)) (inc index))))))
 
-(defn! (vector-concat2 v1 v2)
-  (vector-fold v1 vector-append v2))
-
 (defn! (vector-concat . vs)
   (if (null? vs)
     empty-vector
     ; Easy optimization: use the first vector as a starting point to avoid
     ; reconstructing it
-    (foldl (car vs) vector-concat2 (cdr vs))))
+    (foldl
+      (car vs)
+      (fn (v1 v2) (vector-fold v1 vector-append v2))
+      (cdr vs))))
 
 ; TODO More efficient tree structure copying?
 ; At least for vector-map, the resulting vector will have the same structure,
