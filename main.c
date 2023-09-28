@@ -144,7 +144,7 @@ static void rep(struct lisp_vm *vm, const char *input) {
     case P_SUCCESS:
       eval_print_many(vm, ast);
       return;
-    case P_FAILED: {
+    case P_ERROR: {
       struct lisp_string *err_str = parse_error_format(&read_res.error);
       fprintf(stderr, "Read error: %s\n", lisp_string_as_cstr(err_str));
       return;

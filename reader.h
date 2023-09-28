@@ -6,7 +6,7 @@
 enum parse_status {
   P_SUCCESS = 0,
   P_EMPTY,
-  P_FAILED,
+  P_ERROR,
 };
 
 struct source_pos {
@@ -18,6 +18,7 @@ struct source_pos {
 
 struct parse_error {
   const char *filename;
+  const char *message;
   struct source_pos error_pos;
 };
 
