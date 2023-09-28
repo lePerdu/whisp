@@ -137,7 +137,7 @@ static void load_prelude(struct lisp_vm *vm) { run_file(vm, PRELUDE_FILENAME); }
 
 static void rep(struct lisp_vm *vm, const char *input) {
   struct lisp_val ast;
-  struct parse_res read_res = read_str_many(input, &ast);
+  struct parse_res read_res = read_str_many("stdin", input, &ast);
   switch (read_res.status) {
     case P_EMPTY:
       return;

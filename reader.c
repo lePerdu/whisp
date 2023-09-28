@@ -490,10 +490,15 @@ static enum parse_status read_form(struct reader *r, struct lisp_val *output) {
   }
 }
 
-static inline struct parse_res make_error_res(const struct reader *r) {
+static inline struct parse_res make_error_res(const char *filename,
+                                              const struct reader *r) {
   return (struct parse_res){
       .status = P_FAILED,
-      .error = {.error_pos = r->source_pos},
+      .error =
+          {
+              .filename = filename,
+              .error_pos = r->source_pos,
+          },
   };
 }
 
@@ -503,7 +508,8 @@ static inline struct parse_res make_status_res(enum parse_status status) {
   };
 }
 
-struct parse_res read_str(const char *input, struct lisp_val *output) {
+struct parse_res read_str(const char *filename, const char *input,
+                          struct lisp_val *output) {
   struct reader r;
   reader_init(&r, input);
 
@@ -511,7 +517,7 @@ struct parse_res read_str(const char *input, struct lisp_val *output) {
 
   status = reader_next(&r);
   if (status == P_FAILED) {
-    return make_error_res(&r);
+    return make_error_res(filename, &r);
   }
 
   if (r.token.type == TOK_EOF) {
@@ -520,17 +526,18 @@ struct parse_res read_str(const char *input, struct lisp_val *output) {
 
   status = read_form(&r, output);
   if (status == P_FAILED) {
-    return make_error_res(&r);
+    return make_error_res(filename, &r);
   }
 
   status = reader_expect(&r, TOK_EOF);
   if (status == P_FAILED) {
-    return make_error_res(&r);
+    return make_error_res(filename, &r);
   }
   return make_status_res(P_SUCCESS);
 }
 
-struct parse_res read_str_many(const char *input, struct lisp_val *output) {
+struct parse_res read_str_many(const char *filename, const char *input,
+                               struct lisp_val *output) {
   struct reader r;
   reader_init(&r, input);
 
@@ -561,7 +568,7 @@ struct parse_res read_str_many(const char *input, struct lisp_val *output) {
   if (res == P_SUCCESS) {
     return make_status_res(res);
   } else {
-    return make_error_res(&r);
+    return make_error_res(filename, &r);
   }
 }
 
@@ -585,6 +592,7 @@ bool is_valid_symbol(const char *name) {
 }
 
 struct lisp_string *parse_error_format(const struct parse_error *error) {
-  return lisp_string_format("parse error at %u:%u", error->error_pos.line + 1,
+  return lisp_string_format("parse error: %s:%u:%u", error->filename,
+                            error->error_pos.line + 1,
                             error->error_pos.col + 1);
 }

@@ -515,7 +515,8 @@ DEF_BUILTIN(core_flush) {
 DEF_BUILTIN(core_read_str) {
   DEF_OBJ_ARG(struct lisp_string, arg, LISP_STRING, 0);
   struct lisp_val result;
-  struct parse_res res = read_str(lisp_string_as_cstr(arg), &result);
+  struct parse_res res =
+      read_str("#<unknown>", lisp_string_as_cstr(arg), &result);
   if (res.status == P_SUCCESS) {
     BUILTIN_RETURN(result);
   } else {

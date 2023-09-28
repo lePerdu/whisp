@@ -81,7 +81,7 @@ enum eval_status load_file(struct lisp_vm *vm, const char *filename) {
     gc_push_root_obj(contents);
     struct lisp_val ast;
     struct parse_res read_res =
-        read_str_many(lisp_string_as_cstr(contents), &ast);
+        read_str_many(filename, lisp_string_as_cstr(contents), &ast);
     gc_pop_root_expect_obj(contents);
 
     if (read_res.status == P_SUCCESS) {
