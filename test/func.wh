@@ -33,7 +33,7 @@
       (defn! (f a b . rest) (+ a b (count rest)))
       (assert= 6 (f 1 2 'a (list 90 91) "123"))))
 
-  (defsyntax! (def-apply-tests! group-name apply-fn)
+  (defmacro! (def-apply-tests! group-name apply-fn)
     `(defgroup! ~group-name
       (deftest! apply-no-args
         (defn! (f) 2)

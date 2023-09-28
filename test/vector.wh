@@ -1,8 +1,8 @@
 (defgroup! vector
-  (defsyntax! (assert-vector-not-equal expected actual)
+  (defmacro! (assert-vector-not-equal expected actual)
     `(assert (not (vector-equal? ~expected ~actual)) 'expected-not ~expected))
 
-  (defsyntax! (assert-vector-equal expected actual)
+  (defmacro! (assert-vector-equal expected actual)
     `(assert (vector-equal? ~expected ~actual) 'expected ~expected 'got ~actual))
 
   (defgroup! list->vector->list

@@ -52,7 +52,7 @@ struct compiler_ctx {
 static const struct lisp_symbol *SYMBOL_DO;
 static const struct lisp_symbol *SYMBOL_IF;
 static const struct lisp_symbol *SYMBOL_DEF;
-static const struct lisp_symbol *SYMBOL_DEFMACRO;
+static const struct lisp_symbol *SYMBOL_DEFSYNTAX;
 static const struct lisp_symbol *SYMBOL_FN;
 static const struct lisp_symbol *SYMBOL_QUOTE;
 
@@ -71,7 +71,7 @@ void init_global_compile_state(void) {
   DEF_GLOBAL_SYM(SYMBOL_DO, "do");
   DEF_GLOBAL_SYM(SYMBOL_IF, "if");
   DEF_GLOBAL_SYM(SYMBOL_DEF, "def!");
-  DEF_GLOBAL_SYM(SYMBOL_DEFMACRO, "defmacro!");
+  DEF_GLOBAL_SYM(SYMBOL_DEFSYNTAX, "defsyntax!");
   DEF_GLOBAL_SYM(SYMBOL_FN, "fn");
   DEF_GLOBAL_SYM(SYMBOL_QUOTE, "quote");
 
@@ -364,11 +364,11 @@ static enum compile_res compile_def(struct compiler_ctx *ctx,
   return COMP_SUCCESS;
 }
 
-static enum compile_res compile_defmacro(struct compiler_ctx *ctx,
-                                         struct lisp_val args) {
+static enum compile_res compile_defsyntax(struct compiler_ctx *ctx,
+                                          struct lisp_val args) {
   struct lisp_symbol *sym;
   struct lisp_val value_expr;
-  enum compile_res res = parse_def("defmacro!", ctx, args, &sym, &value_expr);
+  enum compile_res res = parse_def("defsyntax!", ctx, args, &sym, &value_expr);
   if (res == COMP_FAILED) {
     return res;
   }
@@ -399,7 +399,7 @@ static enum compile_res compile_defmacro(struct compiler_ctx *ctx,
 
   struct lisp_val macro_fn = vm_stack_pop(ctx->vm);
   if (!lisp_val_is_func(macro_fn)) {
-    vm_raise_format_exception(ctx->vm, "defmacro!: value must be a function");
+    vm_raise_format_exception(ctx->vm, "defsyntax!: value must be a function");
     return COMP_FAILED;
   }
 
@@ -680,8 +680,8 @@ static enum compile_res compile_call_or_special(struct compiler_ctx *ctx,
       if (head_sym == SYMBOL_DEF) {
         return compile_def(ctx, args);
       }
-      if (head_sym == SYMBOL_DEFMACRO) {
-        return compile_defmacro(ctx, args);
+      if (head_sym == SYMBOL_DEFSYNTAX) {
+        return compile_defsyntax(ctx, args);
       }
       if (head_sym == SYMBOL_QUOTE) {
         return compile_quote(ctx, args);

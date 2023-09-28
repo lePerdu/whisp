@@ -5,9 +5,9 @@
 ; Easy way to comment out a bunch of expressions
 ; It does still have to return a value, so has to be used at top-level or in a
 ; do block
-(defsyntax! (comment . ignore) nil)
+(defmacro! (comment . ignore) nil)
 
-(defsyntax! (let bindings ast)
+(defmacro! (let bindings ast)
   ; TODO Check structure
   (cons
     (list 'fn (map car bindings) ast)
@@ -30,7 +30,7 @@
             name
             (->string (swap! counter inc))))))))
 
-(defmacro! quasiquote
+(defsyntax! quasiquote
   (let () (do
     (defn! (process-unquote-args args)
       (if (cons? args)
@@ -65,7 +65,7 @@
 
     qq)))
 
-(defsyntax! (let* bindings ast)
+(defmacro! (let* bindings ast)
   (do
     (defn! (helper bindings ast)
       (if (null? bindings)
@@ -78,7 +78,7 @@
       (helper bindings ast))))
 
 ; TODO Validate structure
-(defsyntax! (cond . branches)
+(defmacro! (cond . branches)
   (if (null? branches)
     nil
     (let*
@@ -97,7 +97,7 @@
 ; TODO Allow more than 1 pattern
 ; TODO Allow nested / more complex patterns
 ; (let-cons ((first . rest) (list 1 2 3)) expr) -> first=1, rest=(list 2 3)
-(defsyntax! (let-cons binding body)
+(defmacro! (let-cons binding body)
   ; TODO Check structure
   (let
     ((bind-pair (car binding))
@@ -112,7 +112,7 @@
 ; Version of let-cons which allows an "else" branch if the binding is nil
 ; TODO Allow more than 1 pattern
 ; TODO Allow nested / more complex patterns
-(defsyntax! (let-if-cons binding if-cons . opt-if-nil)
+(defmacro! (let-if-cons binding if-cons . opt-if-nil)
   ; TODO Check structure
   (let
     ((if-nil
@@ -131,7 +131,7 @@
           (~(cdr bind-pair) (cdr ~cons-sym)))
          ~if-cons)))))
 
-(defsyntax! (letrec* bindings body)
+(defmacro! (letrec* bindings body)
   `(let ()
     (do
       ~@(map (fn (b) (cons 'def! b)) bindings)
@@ -140,7 +140,7 @@
 
 ; "Named let" from scheme
 ; TODO Change name? Keep as separate from the basic let?
-(defsyntax! (let-named name bindings body)
+(defmacro! (let-named name bindings body)
   `(letrec*
     ((~name (fn ~(map car bindings) ~body)))
     (~name ~@(map cadr bindings))))
@@ -148,7 +148,7 @@
 ; TODO Move these?
 
 ; Light syntax over with-exception-handler
-(defsyntax! (guard binding body)
+(defmacro! (guard binding body)
   ; TODO Check structure
   `(with-exception-handler
     ; TODO Use generated symbols to extract sub-expressions
@@ -157,7 +157,7 @@
 
 ; Combination of guard and cond to easily match on an error
 ; TODO Make this the only guard (like in scheme)
-(defsyntax! (guard-cond conditions body)
+(defmacro! (guard-cond conditions body)
   (let-cons ((binding . branches) conditions)
     `(guard
       (~binding

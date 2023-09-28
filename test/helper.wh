@@ -7,7 +7,7 @@
 (def! test-entry-name car)
 (def! test-entry-func cdr)
 
-(defsyntax! (deftest! name . body)
+(defmacro! (deftest! name . body)
   (let ((label (->string name)))
     `(swap! *all-tests*
       (fn (all-tests)
@@ -17,7 +17,7 @@
             (fn () ~(cons 'do body)))
           all-tests)))))
 
-(defsyntax! (defgroup! name . body)
+(defmacro! (defgroup! name . body)
   (let ((label (->string name)))
     `(let
       ((*test-group-prefix*
@@ -73,28 +73,28 @@
 (defn! (assert-make-error expr metadata)
   (error (concat (list 'assert-failed expr) metadata)))
 
-(defsyntax! (assert expr . extra)
+(defmacro! (assert expr . extra)
   `(if (not ~expr)
     (assert-make-error '~expr ~(cons 'list extra))))
 
-(defsyntax! (assert= expected actual)
+(defmacro! (assert= expected actual)
   `(assert (= ~expected ~actual) 'expected ~expected 'got ~actual))
 
-(defsyntax! (assert-not= expected actual)
+(defmacro! (assert-not= expected actual)
   `(assert (not (= ~expected ~actual)) 'expected-not ~expected))
 
-(defsyntax! (assert== expected actual)
+(defmacro! (assert== expected actual)
   `(assert (== ~expected ~actual) 'expected ~expected 'got ~actual))
 
-(defsyntax! (assert-not== expected actual)
+(defmacro! (assert-not== expected actual)
   `(assert (not (== ~expected ~actual)) 'expected-not ~expected))
 
-(defsyntax! (assert-not-equal expected actual)
+(defmacro! (assert-not-equal expected actual)
   `(assert (not (equal? ~expected ~actual)) 'expected-not ~expected))
 
-(defsyntax! (assert-equal expected actual)
+(defmacro! (assert-equal expected actual)
   `(assert (equal? ~expected ~actual) 'expected ~expected 'got ~actual))
 
-(defsyntax! (assert-error expr)
+(defmacro! (assert-error expr)
   `(if (guard (err false) (do ~expr true))
     (assert-make-error '~expr (list 'expected-error))))

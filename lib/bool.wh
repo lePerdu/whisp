@@ -4,15 +4,15 @@
 
 ; TODO Make these return values? It's useful sometimes and enables these forms
 ; to be tail-call optimized, but adds in overhead without good optimizations
-(defsyntax! (and . conds)
+(defmacro! (and . conds)
   (if (null? conds)
     true
     `(if ~(car conds) (and ~@(cdr conds)) false)))
-(defsyntax! (or . conds)
+(defmacro! (or . conds)
   (if (null? conds)
     false
     `(if ~(car conds) true (or ~@(cdr conds)))))
-(defsyntax! (xor . conds)
+(defmacro! (xor . conds)
   (if (null? conds)
     false
     `(if ~(car conds)
@@ -20,13 +20,13 @@
       (not (or ~@(cdr conds)))
       (xor ~@(cdr conds)))))
 
-(defsyntax! (let-if binding . branches)
+(defmacro! (let-if binding . branches)
   ; TODO Generate temporary symbol so that the binding is not available in the
   ; false branch
   `(let (~binding)
     (if ~(car binding) ~@branches)))
 
-(defsyntax! (let-cond binding . branches)
+(defmacro! (let-cond binding . branches)
   `(let (~binding)
     (cond ~@branches)))
 

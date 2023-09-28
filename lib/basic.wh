@@ -1,11 +1,11 @@
 (def! list (fn args args))
 
-(defmacro! defsyntax!
+(defsyntax! defmacro!
   (fn (pattern body)
-    (list 'defmacro! (car pattern)
+    (list 'defsyntax! (car pattern)
       (list 'fn (cdr pattern) body))))
 
-(defsyntax! (defn! pattern body)
+(defmacro! (defn! pattern body)
   (list 'def! (car pattern)
     (list 'fn (cdr pattern) body)))
 

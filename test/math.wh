@@ -13,7 +13,7 @@
     (deftest! div
       (assert= 4 (/ 22 5))))
 
-  (defsyntax! (assert-real= expected actual)
+  (defmacro! (assert-real= expected actual)
     `(assert (real= ~expected ~actual) 'expected ~expected 'got ~actual))
 
   (defgroup! real
