@@ -16,10 +16,9 @@
       ~@(map-index
         (fn (field-desc field-index)
           (let*
-            ((field-name-str (->string (car field-desc)))
-             (array-index (inc field-index))
-             (get-field-symbol (cadr field-desc))
-             (set-field-symbol (caddr field-desc)))
+            ((array-index (inc field-index))
+             (get-field-symbol (car field-desc))
+             (set-field-symbol (cadr field-desc)))
             `(do
               (defn! (~get-field-symbol obj)
                 (if (~pred-symbol obj)

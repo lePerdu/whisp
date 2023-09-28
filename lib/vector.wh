@@ -9,9 +9,9 @@
   ; TODO Decide on private export syntax/convention (or just wait for real modules)
   _build-vector
   vector?
-  (length vector-length _vector-length-set)
-  (shift _vector-shift _vector-shift-set)
-  (root _vector-root _vector-root-set))
+  (vector-length _vector-length-set)
+  (_vector-shift _vector-shift-set)
+  (_vector-root _vector-root-set))
 
 (def! empty-vector (_build-vector 0 0 (array)))
 
