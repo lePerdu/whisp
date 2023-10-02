@@ -100,12 +100,10 @@ enum bytecode_op {
   OP_TAIL_CALL,
 
   /**
-   * Pop a code chunk off the top of the stack and push a newly created closure.
+   * Pop a code chunk off the top of the stack and push a newly created closure
+   * capturing the current environment.
    *
-   * TODO Include the arg count descriptors and name in the code chunk (or maybe
-   * put some other structure on the stack)?
-   *
-   * `make-closure N-ARGS IS-VARIADIC`
+   * `make-closure`
    */
   OP_MAKE_CLOSURE,
 
@@ -162,8 +160,13 @@ struct bytecode_array {
 // function object)
 struct code_chunk {
   struct lisp_obj header;
-  /** Optional name for debugging. */
+
+  /** Function name (if known) for debugging. */
   struct lisp_symbol *name;
+
+  unsigned req_arg_count;
+  bool is_variadic;
+
   struct val_array const_table;
   // TODO Store bytecode inline with the template allocation?
   struct bytecode_array bytecode;

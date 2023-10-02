@@ -82,7 +82,7 @@ static enum compile_res compile(struct compiler_ctx *ctx, struct lisp_val ast);
 
 static struct lisp_closure *compile_chunk_to_closure(struct lisp_vm *vm,
                                                      struct code_chunk *code) {
-  return lisp_closure_create(0, false, vm_global_env(vm), code);
+  return lisp_closure_create(vm_global_env(vm), code);
 }
 
 static void emit_byte(struct compiler_ctx *ctx, uint8_t byte) {
@@ -425,9 +425,7 @@ static enum compile_res compile_defsyntax(struct compiler_ctx *ctx,
  * Outputs metadata through `req_arg_count` and `is_variadic`.
  */
 static enum compile_res compile_fn_params(struct compiler_ctx *ctx,
-                                          struct lisp_val raw_params,
-                                          unsigned *req_arg_count,
-                                          bool *is_variadic) {
+                                          struct lisp_val raw_params) {
   // TODO Process in reverse order to avoid copying values
   // TODO Leave arguments on the stack and do some sort of upvalue management
   enum compile_res res = COMP_SUCCESS;
@@ -469,10 +467,10 @@ static enum compile_res compile_fn_params(struct compiler_ctx *ctx,
     param_index++;
   }
 
-  *req_arg_count = param_index;
+  ctx->chunk->req_arg_count = param_index;
 
   if (!lisp_val_is_nil(raw_params)) {
-    *is_variadic = true;
+    ctx->chunk->is_variadic = true;
 
     struct lisp_symbol *rest_param = lisp_val_cast(LISP_SYMBOL, raw_params);
     if (rest_param == NULL) {
@@ -498,7 +496,7 @@ static enum compile_res compile_fn_params(struct compiler_ctx *ctx,
     }
     emit_instr(ctx, OP_BIND);
   } else {
-    *is_variadic = false;
+    ctx->chunk->is_variadic = false;
   }
 
   // Clean up the stack since the values are bound in the environment
@@ -547,10 +545,7 @@ static enum compile_res compile_fn(struct compiler_ctx *ctx,
       .binding_name = NULL,
   };
 
-  unsigned req_arg_count;
-  bool is_variadic;
-  enum compile_res res =
-      compile_fn_params(&func_ctx, params, &req_arg_count, &is_variadic);
+  enum compile_res res = compile_fn_params(&func_ctx, params);
 
   if (res == COMP_SUCCESS) {
     res = compile(&func_ctx, func_ast);
@@ -571,9 +566,6 @@ static enum compile_res compile_fn(struct compiler_ctx *ctx,
   }
 
   emit_instr(ctx, OP_MAKE_CLOSURE);
-  emit_byte(ctx, req_arg_count);
-  emit_byte(ctx, is_variadic);
-
   emit_return_if_tail_pos(ctx);
   return COMP_SUCCESS;
 }

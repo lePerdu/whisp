@@ -377,15 +377,14 @@ void lisp_env_set_macro(struct lisp_env *env, struct lisp_symbol *sym,
 struct lisp_closure;
 struct code_chunk;
 
-struct lisp_closure *lisp_closure_create(unsigned arg_count, bool is_variadic,
-                                         struct lisp_env *outer_env,
+struct lisp_closure *lisp_closure_create(struct lisp_env *outer_env,
                                          struct code_chunk *bytecode);
 struct lisp_symbol *lisp_closure_name(const struct lisp_closure *c);
 const char *lisp_closure_name_cstr(const struct lisp_closure *c);
-unsigned lisp_closure_arg_count(const struct lisp_closure *c);
-bool lisp_closure_is_variadic(const struct lisp_closure *c);
 struct lisp_env *lisp_closure_env(const struct lisp_closure *c);
 struct code_chunk *lisp_closure_code(const struct lisp_closure *c);
+unsigned lisp_closure_arg_count(const struct lisp_closure *c);
+bool lisp_closure_is_variadic(const struct lisp_closure *c);
 
 // TODO Force setting at construction time?
 void lisp_closure_set_name(struct lisp_closure *c, struct lisp_symbol *name);

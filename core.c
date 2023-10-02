@@ -937,7 +937,10 @@ static struct lisp_closure *make_builtin(struct lisp_env *global_env,
   chunk->name = lisp_symbol_create_cstr(name);
   gc_pop_root_expect_obj(chunk);
 
-  return lisp_closure_create(req_arg_count, is_variadic, global_env, chunk);
+  chunk->req_arg_count = req_arg_count;
+  chunk->is_variadic = is_variadic;
+
+  return lisp_closure_create(global_env, chunk);
 }
 
 static struct lisp_closure *make_builtin_apply(void) {
@@ -950,7 +953,9 @@ static struct lisp_closure *make_builtin_apply(void) {
   chunk->name = lisp_symbol_create_cstr("apply");
   gc_pop_root_expect_obj(chunk);
 
-  return lisp_closure_create(2, false, NULL, chunk);
+  chunk->req_arg_count = 2;
+
+  return lisp_closure_create(NULL, chunk);
 }
 
 static struct lisp_closure *make_builtin_eval(void) {
@@ -964,7 +969,9 @@ static struct lisp_closure *make_builtin_eval(void) {
   chunk->name = lisp_symbol_create_cstr("eval");
   gc_pop_root_expect_obj(chunk);
 
-  return lisp_closure_create(1, false, NULL, chunk);
+  chunk->req_arg_count = 1;
+
+  return lisp_closure_create(NULL, chunk);
 }
 
 static struct lisp_closure *make_builtin_with_exception_handler() {
@@ -999,7 +1006,9 @@ static struct lisp_closure *make_builtin_with_exception_handler() {
   chunk->name = lisp_symbol_create_cstr("with-exception-handler");
   gc_pop_root_expect_obj(chunk);
 
-  return lisp_closure_create(2, false, NULL, chunk);
+  chunk->req_arg_count = 2;
+
+  return lisp_closure_create(NULL, chunk);
 }
 
 enum eval_status call_intrinsic(uint8_t index, struct lisp_vm *vm) {

@@ -1095,8 +1095,6 @@ void lisp_env_set_macro(struct lisp_env *env, struct lisp_symbol *sym,
 
 struct lisp_closure {
   struct lisp_obj header;
-  unsigned arg_count;
-  bool is_variadic;
   struct lisp_env *outer_env;
   struct code_chunk *code;
 };
@@ -1116,15 +1114,12 @@ static const struct lisp_vtable CLOSURE_VTABLE = {
     .destroy = destroy_none,
 };
 
-struct lisp_closure *lisp_closure_create(unsigned arg_count, bool is_variadic,
-                                         struct lisp_env *outer_env,
+struct lisp_closure *lisp_closure_create(struct lisp_env *outer_env,
                                          struct code_chunk *bytecode) {
   gc_push_root_obj(outer_env);
   gc_push_root_obj(bytecode);
 
   struct lisp_closure *cl = lisp_obj_alloc(&CLOSURE_VTABLE, sizeof(*cl));
-  cl->arg_count = arg_count;
-  cl->is_variadic = is_variadic;
   cl->outer_env = outer_env;
   cl->code = bytecode;
 
@@ -1142,11 +1137,11 @@ const char *lisp_closure_name_cstr(const struct lisp_closure *c) {
 }
 
 unsigned lisp_closure_arg_count(const struct lisp_closure *c) {
-  return c->arg_count;
+  return c->code->req_arg_count;
 }
 
 bool lisp_closure_is_variadic(const struct lisp_closure *c) {
-  return c->is_variadic;
+  return c->code->is_variadic;
 }
 
 struct lisp_env *lisp_closure_env(const struct lisp_closure *c) {

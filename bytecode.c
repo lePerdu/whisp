@@ -59,7 +59,11 @@ static const struct lisp_vtable CODE_CHUNK_VTABLE = {
 
 struct code_chunk *chunk_create(void) {
   struct code_chunk *chunk = lisp_obj_alloc(&CODE_CHUNK_VTABLE, sizeof(*chunk));
+  // TODO Set the function metadata at construction time?
   chunk->name = NULL;
+  chunk->req_arg_count = 0;
+  chunk->is_variadic = false;
+
   chunk->const_table = VAL_ARRAY_EMPTY;
   bytecode_array_init(&chunk->bytecode);
   return chunk;
@@ -186,11 +190,8 @@ static int disassemble_instr(const struct code_chunk *chunk, unsigned offset) {
       return 2;
     }
     case OP_MAKE_CLOSURE:
-      ENSURE_INSTR_ARGS(OP_MAKE_CLOSURE, 2);
-      uint8_t arg_count = chunk->bytecode.data[offset + 1];
-      uint8_t variadic = chunk->bytecode.data[offset + 2];
-      printf("(make-closure %u %s)\n", arg_count, variadic ? "true" : "false");
-      return 3;
+      printf("(make-closure)\n");
+      return 1;
     case OP_BUILD_REST_ARGS: {
       ENSURE_INSTR_ARGS(OP_BUILD_REST_ARGS, 1);
       uint8_t fp = chunk->bytecode.data[offset + 1];

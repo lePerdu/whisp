@@ -185,19 +185,16 @@ static enum eval_status eval_bytecode(struct lisp_vm *vm) {
           continue;
         }
       case OP_MAKE_CLOSURE: {
-        uint8_t req_arg_count = chunk_read_byte(code, ip);
-        uint8_t is_variadic = chunk_read_byte(code, ip);
         struct lisp_val top_value = vm_stack_pop(vm);
         if (!is_chunk(top_value)) {
-          vm_raise_format_exception(
-              vm,
-              "ca(((fn () (fn x 1))))nnot make closure with code of type: %s",
-              lisp_val_type_name(top_value));
+          vm_raise_format_exception(vm,
+                                    "cannot make closure with code of type: %s",
+                                    lisp_val_type_name(top_value));
           goto HANDLE_EXCEPTION;
         }
 
-        struct lisp_closure *cl = lisp_closure_create(
-            req_arg_count, is_variadic, frame->env, lisp_val_as_obj(top_value));
+        struct lisp_closure *cl =
+            lisp_closure_create(frame->env, lisp_val_as_obj(top_value));
         vm_stack_push(vm, lisp_val_from_obj(cl));
         continue;
       }
