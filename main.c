@@ -11,7 +11,6 @@
 // clang-format on
 
 #include "compiler.h"
-#include "compiler_core.h"
 #include "core.h"
 #include "eval.h"
 #include "file.h"
