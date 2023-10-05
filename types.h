@@ -358,7 +358,7 @@ struct lisp_env_binding {
  */
 struct lisp_env;
 
-struct lisp_env *lisp_env_create(struct lisp_env *outer);
+struct lisp_env *lisp_env_create(void);
 
 /**
  * Lookup a value in the environment. Returns NULL (not LISP_VAL_NIL) if the
@@ -366,16 +366,6 @@ struct lisp_env *lisp_env_create(struct lisp_env *outer);
  */
 const struct lisp_env_binding *lisp_env_get(const struct lisp_env *env,
                                             struct lisp_symbol *sym);
-
-/**
- * Lookup a value in just the most local environment (does not recurse to
- * outer environments). Returns NULL (not LISP_VAL_NIL) if the symbol is not
- * mapped.
- */
-const struct lisp_env_binding *lisp_env_get_local(const struct lisp_env *env,
-                                                  struct lisp_symbol *sym);
-
-struct lisp_env *lisp_env_parent(const struct lisp_env *env);
 
 // Mutate the environment. If the value cannot be set (i.e. if tring to set
 // a constant), returns false

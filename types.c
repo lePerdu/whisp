@@ -983,16 +983,13 @@ void lisp_symbol_table_delete_if(struct lisp_symbol_table *m,
 
 struct lisp_env {
   struct lisp_obj header;
+  // Level of indirection is still needed for when the hash table resizes
   struct lisp_symbol_table *mappings;
-  struct lisp_env *outer;
 };
 
 static void lisp_env_visit(struct lisp_val v, visit_callback cb, void *ctx) {
   const struct lisp_env *env = lisp_val_as_obj(v);
   cb(ctx, lisp_val_from_obj(env->mappings));
-  if (env->outer != NULL) {
-    cb(ctx, lisp_val_from_obj(env->outer));
-  }
 }
 
 static const struct lisp_vtable ENV_VTABLE = {
@@ -1023,11 +1020,7 @@ static const struct lisp_vtable ENV_TABLE_ENTRY_VTABLE = {
     .destroy = destroy_none,
 };
 
-struct lisp_env *lisp_env_create(struct lisp_env *outer) {
-  // TODO Is this necessary? Can it always be assumed that the outer
-  // environment is already in the stack?
-  gc_push_root_obj(outer);
-
+struct lisp_env *lisp_env_create(void) {
   // Initialize the map before allocating the environment to ensure everything
   // is in a valid state immediately after allocation
 
@@ -1037,16 +1030,14 @@ struct lisp_env *lisp_env_create(struct lisp_env *outer) {
 
   struct lisp_env *env = lisp_obj_alloc(&ENV_VTABLE, sizeof(*env));
   env->mappings = mappings;
-  env->outer = outer;
 
   gc_pop_root_expect_obj(mappings);
-  gc_pop_root_expect_obj(outer);
 
   return env;
 }
 
-const struct lisp_env_binding *lisp_env_get_local(const struct lisp_env *env,
-                                                  struct lisp_symbol *sym) {
+const struct lisp_env_binding *lisp_env_get(const struct lisp_env *env,
+                                            struct lisp_symbol *sym) {
   struct lisp_env_table_entry *existing =
       (struct lisp_env_table_entry *)symbol_table_lookup_entry(
           env->mappings, lisp_symbol_name(sym), lisp_symbol_length(sym));
@@ -1055,24 +1046,6 @@ const struct lisp_env_binding *lisp_env_get_local(const struct lisp_env *env,
   } else {
     return &existing->binding;
   }
-}
-
-const struct lisp_env_binding *lisp_env_get(const struct lisp_env *env,
-                                            struct lisp_symbol *sym) {
-  const struct lisp_env_binding *existing = lisp_env_get_local(env, sym);
-  if (existing == NULL) {
-    if (env->outer != NULL) {
-      return lisp_env_get(env->outer, sym);
-    } else {
-      return NULL;
-    }
-  } else {
-    return existing;
-  }
-}
-
-struct lisp_env *lisp_env_parent(const struct lisp_env *env) {
-  return env->outer;
 }
 
 static void lisp_env_set_or_insert(struct lisp_env *env,
