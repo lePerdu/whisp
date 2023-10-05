@@ -1117,33 +1117,6 @@ void lisp_env_set_macro(struct lisp_env *env, struct lisp_symbol *sym,
                          });
 }
 
-struct lisp_val lisp_func_env_create(struct lisp_val parent, size_t size) {
-  struct lisp_array *arr = lisp_array_create(size + 1);
-  lisp_array_set(arr, 0, parent);
-  return lisp_val_from_obj(arr);
-}
-
-size_t lisp_func_env_size(struct lisp_val env) {
-  assert(lisp_val_type(env) == LISP_ARRAY);
-  return lisp_array_length(lisp_val_as_obj(env));
-}
-
-struct lisp_val lisp_func_env_get(struct lisp_val env, size_t index) {
-  assert(lisp_val_type(env) == LISP_ARRAY);
-  return lisp_array_get(lisp_val_as_obj(env), index + 1);
-}
-
-struct lisp_val lisp_func_env_parent(struct lisp_val env) {
-  assert(lisp_val_type(env) == LISP_ARRAY);
-  return lisp_array_get(lisp_val_as_obj(env), 0);
-}
-
-void lisp_func_env_set(struct lisp_val env, size_t index,
-                       struct lisp_val binding) {
-  assert(lisp_val_type(env) == LISP_ARRAY);
-  return lisp_array_set(lisp_val_as_obj(env), index + 1, binding);
-}
-
 struct lisp_closure {
   struct lisp_obj header;
   struct code_chunk *code;

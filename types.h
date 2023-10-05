@@ -385,17 +385,6 @@ void lisp_env_set(struct lisp_env *env, struct lisp_symbol *sym,
 void lisp_env_set_macro(struct lisp_env *env, struct lisp_symbol *sym,
                         struct lisp_val val);
 
-/**
- * Flat array of function bindings, keyed by index.
- */
-struct lisp_val lisp_func_env_create(struct lisp_val parent, size_t size);
-
-struct lisp_val lisp_func_env_get(struct lisp_val env, size_t index);
-size_t lisp_func_env_size(struct lisp_val env);
-struct lisp_val lisp_func_env_parent(struct lisp_val env);
-void lisp_func_env_set(struct lisp_val env, size_t index,
-                       struct lisp_val binding);
-
 struct lisp_closure;
 struct code_chunk;
 
