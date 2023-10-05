@@ -348,15 +348,11 @@ void list_mapper_append_next(struct list_mapper *m, struct lisp_val next);
  */
 struct lisp_val list_mapper_build(struct list_mapper *m);
 
-struct lisp_env_binding {
-  struct lisp_val value;
-  bool is_macro;
-};
-
 /**
  * Key-value mapping used for the global environment.
  */
 struct lisp_env;
+struct lisp_env_binding;
 
 struct lisp_env *lisp_env_create(void);
 
@@ -364,16 +360,23 @@ struct lisp_env *lisp_env_create(void);
  * Lookup a value in the environment. Returns NULL (not LISP_VAL_NIL) if the
  * symbol is not mapped.
  */
-const struct lisp_env_binding *lisp_env_get(const struct lisp_env *env,
-                                            struct lisp_symbol *sym);
+struct lisp_env_binding *lisp_env_get(struct lisp_env *env,
+                                      struct lisp_symbol *sym);
 
-// Mutate the environment. If the value cannot be set (i.e. if tring to set
-// a constant), returns false
+struct lisp_env_binding *lisp_env_set(struct lisp_env *env,
+                                      struct lisp_symbol *sym,
+                                      struct lisp_val val);
+struct lisp_env_binding *lisp_env_set_macro(struct lisp_env *env,
+                                            struct lisp_symbol *sym,
+                                            struct lisp_val val);
 
-void lisp_env_set(struct lisp_env *env, struct lisp_symbol *sym,
-                  struct lisp_val val);
-void lisp_env_set_macro(struct lisp_env *env, struct lisp_symbol *sym,
-                        struct lisp_val val);
+bool lisp_is_env_binding(struct lisp_val v);
+const struct lisp_symbol *lisp_env_binding_name(
+    const struct lisp_env_binding *b);
+struct lisp_val lisp_env_binding_value(const struct lisp_env_binding *b);
+void lisp_env_binding_set_value(struct lisp_env_binding *b,
+                                struct lisp_val new);
+bool lisp_env_binding_is_macro(const struct lisp_env_binding *b);
 
 struct lisp_closure;
 struct code_chunk;

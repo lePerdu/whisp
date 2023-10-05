@@ -156,10 +156,40 @@ static int disassemble_instr(const struct code_chunk *chunk, unsigned offset) {
       printf("(get-upvalue %u)\n", n);
       return 2;
     }
-    case OP_GET_GLOBAL:
-      printf("(get-global)\n");
-      return 1;
-    case OP_SET_GLOBAL:
+    case OP_GET_GLOBAL: {
+      ENSURE_INSTR_ARGS(OP_GET_GLOBAL, 1);
+      uint8_t const_index = chunk->bytecode.data[offset + 1];
+      if (const_index >= chunk->const_table.size) {
+        printf("\ninvalid constant index: %u\n", const_index);
+        return -1;
+      }
+      if (!lisp_is_env_binding(chunk->const_table.data[const_index])) {
+        printf("\nget-global argument must be an environment binding");
+        return -1;
+      }
+      struct lisp_env_binding *binding =
+          lisp_val_as_obj(chunk->const_table.data[const_index]);
+      printf("(get-global %u)\t; sym = %s\n", const_index,
+             lisp_symbol_name(lisp_env_binding_name(binding)));
+      return 2;
+    }
+    case OP_SET_GLOBAL: {
+      ENSURE_INSTR_ARGS(OP_SET_GLOBAL, 1);
+      uint8_t const_index = chunk->bytecode.data[offset + 1];
+      if (const_index >= chunk->const_table.size) {
+        printf("\ninvalid constant index: %u\n", const_index);
+        return -1;
+      }
+      if (!lisp_is_env_binding(chunk->const_table.data[const_index])) {
+        printf("\nset-global argument must be an environment binding");
+        return -1;
+      }
+      struct lisp_env_binding *binding =
+          lisp_val_as_obj(chunk->const_table.data[const_index]);
+      printf("(set-global %u)\t; sym = %s\n", const_index,
+             lisp_symbol_name(lisp_env_binding_name(binding)));
+      return 2;
+    }
       printf("(set-global)\n");
       return 1;
     case OP_POP:

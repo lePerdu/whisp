@@ -637,11 +637,11 @@ DEF_BUILTIN(core_macroexpand_1) {
   // note
   const struct lisp_env_binding *binding =
       lisp_env_get(vm_global_env(vm), head_sym);
-  if (binding == NULL || !binding->is_macro) {
+  if (binding == NULL || !lisp_env_binding_is_macro(binding)) {
     BUILTIN_RETURN(ast);
   }
 
-  return eval_apply(vm, binding->value, ast_cons->cdr);
+  return eval_apply(vm, lisp_env_binding_value(binding), ast_cons->cdr);
 }
 
 DEF_BUILTIN(core_disassemble) {

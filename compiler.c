@@ -348,6 +348,38 @@ static void emit_get_upvalue(struct compiler_ctx *ctx, uint8_t index) {
   }
 }
 
+static enum compile_res emit_get_global(struct compiler_ctx *ctx,
+                                        struct lisp_env_binding *binding) {
+  // TODO Check for existing constant
+  unsigned const_idx = chunk_add_const(ctx->chunk, lisp_val_from_obj(binding));
+  if (const_idx > UINT8_MAX) {
+    vm_raise_format_exception(ctx->vm,
+                              "too many constants in the current function");
+    return COMP_FAILED;
+  }
+
+  emit_instr(ctx, OP_GET_GLOBAL);
+  chunk_append_byte(ctx->chunk, const_idx);
+
+  return COMP_SUCCESS;
+}
+
+static enum compile_res emit_set_global(struct compiler_ctx *ctx,
+                                        struct lisp_env_binding *binding) {
+  // TODO Check for existing constant
+  unsigned const_idx = chunk_add_const(ctx->chunk, lisp_val_from_obj(binding));
+  if (const_idx > UINT8_MAX) {
+    vm_raise_format_exception(ctx->vm,
+                              "too many constants in the current function");
+    return COMP_FAILED;
+  }
+
+  emit_instr(ctx, OP_SET_GLOBAL);
+  chunk_append_byte(ctx->chunk, const_idx);
+
+  return COMP_SUCCESS;
+}
+
 static void emit_return_if_tail_pos(struct compiler_ctx *ctx) {
   if (ctx->tail_pos) {
     emit_instr(ctx, OP_RETURN);
@@ -464,21 +496,22 @@ struct resolved_sym {
   union {
     uint8_t index;
     struct lisp_val macro_fn;
+    struct lisp_env_binding *global_binding;
   } value;
 };
 
 static void resolve_global_type(struct compiler_ctx *ctx,
                                 struct lisp_symbol *sym,
                                 struct resolved_sym *resolved) {
-  const struct lisp_env_binding *binding =
-      lisp_env_get(vm_global_env(ctx->vm), sym);
+  struct lisp_env_binding *binding = lisp_env_get(vm_global_env(ctx->vm), sym);
   if (binding == NULL) {
     resolved->type = SYM_UNBOUND;
-  } else if (binding->is_macro) {
+  } else if (lisp_env_binding_is_macro(binding)) {
     resolved->type = SYM_MACRO;
-    resolved->value.macro_fn = binding->value;
+    resolved->value.macro_fn = lisp_env_binding_value(binding);
   } else {
     resolved->type = SYM_GLOBAL;
+    resolved->value.global_binding = binding;
   }
 }
 
@@ -599,13 +632,15 @@ static enum compile_res compile_symbol_ref(struct compiler_ctx *ctx,
     case SYM_CAPTURE:
       emit_get_upvalue(ctx, resolved.value.index);
       break;
-    case SYM_GLOBAL:
     case SYM_UNBOUND:
-      // TODO Custom logic for UNBOUND to create the binding?
-      if (emit_const(ctx, lisp_val_from_obj(sym)) == COMP_FAILED) {
+      resolved.value.global_binding =
+          lisp_env_set(vm_global_env(ctx->vm), sym, lisp_uninitialized());
+      // Fallthough to global case now that the binding is created
+      __attribute__((fallthrough));
+    case SYM_GLOBAL:
+      if (emit_get_global(ctx, resolved.value.global_binding) == COMP_FAILED) {
         return COMP_FAILED;
       }
-      emit_instr(ctx, OP_GET_GLOBAL);
       break;
     case SYM_MACRO:
       vm_raise_format_exception(
@@ -790,7 +825,8 @@ static enum compile_res compile_top_level_def(struct compiler_ctx *ctx,
   if (resolved.type != SYM_GLOBAL) {
     // Either SYM_MACRO or SYM_UNBOUND
     // TODO Special flag in lisp_env which indicates uninitialized?
-    lisp_env_set(vm_global_env(ctx->vm), sym, lisp_uninitialized());
+    resolved.value.global_binding =
+        lisp_env_set(vm_global_env(ctx->vm), sym, lisp_uninitialized());
   }
 
   bool outer_tail_pos = ctx->tail_pos;
@@ -804,12 +840,10 @@ static enum compile_res compile_top_level_def(struct compiler_ctx *ctx,
     return res;
   }
 
-  res = emit_const(ctx, lisp_val_from_obj(sym));
+  res = emit_set_global(ctx, resolved.value.global_binding);
   if (res == COMP_FAILED) {
     return res;
   }
-
-  emit_instr(ctx, OP_SET_GLOBAL);
 
   // Return value
   emit_const(ctx, lisp_non_printing());

@@ -1000,23 +1000,24 @@ static const struct lisp_vtable ENV_VTABLE = {
     .destroy = destroy_none,
 };
 
-struct lisp_env_table_entry {
+struct lisp_env_binding {
   struct lisp_hash_table_entry ht;
-  struct lisp_env_binding binding;
+  struct lisp_val value;
+  bool is_macro;
 };
 
-static void lisp_env_table_entry_visit(struct lisp_val v, visit_callback cb,
-                                       void *ctx) {
-  const struct lisp_env_table_entry *e = lisp_val_as_obj(v);
+static void lisp_env_binding_visit(struct lisp_val v, visit_callback cb,
+                                   void *ctx) {
+  const struct lisp_env_binding *e = lisp_val_as_obj(v);
   cb(ctx, lisp_val_from_obj(e->ht.key));
-  cb(ctx, e->binding.value);
+  cb(ctx, e->value);
 }
 
 static const struct lisp_vtable ENV_TABLE_ENTRY_VTABLE = {
     .type = LISP_INVALID,
     .is_gc_managed = true,
     .name = "environment-entry",
-    .visit_children = lisp_env_table_entry_visit,
+    .visit_children = lisp_env_binding_visit,
     .destroy = destroy_none,
 };
 
@@ -1036,58 +1037,77 @@ struct lisp_env *lisp_env_create(void) {
   return env;
 }
 
-const struct lisp_env_binding *lisp_env_get(const struct lisp_env *env,
-                                            struct lisp_symbol *sym) {
-  struct lisp_env_table_entry *existing =
-      (struct lisp_env_table_entry *)symbol_table_lookup_entry(
+struct lisp_env_binding *lisp_env_get(struct lisp_env *env,
+                                      struct lisp_symbol *sym) {
+  struct lisp_env_binding *existing =
+      (struct lisp_env_binding *)symbol_table_lookup_entry(
           env->mappings, lisp_symbol_name(sym), lisp_symbol_length(sym));
   if (existing == NULL) {
     return NULL;
   } else {
-    return &existing->binding;
+    return existing;
   }
 }
 
-static void lisp_env_set_or_insert(struct lisp_env *env,
-                                   struct lisp_symbol *sym,
-                                   struct lisp_env_binding binding) {
-  struct lisp_env_table_entry *entry =
-      (struct lisp_env_table_entry *)symbol_table_lookup_symbol(env->mappings,
-                                                                sym);
+static struct lisp_env_binding *lisp_env_set_or_insert(struct lisp_env *env,
+                                                       struct lisp_symbol *sym,
+                                                       struct lisp_val value,
+                                                       bool is_macro) {
+  struct lisp_env_binding *entry =
+      (struct lisp_env_binding *)symbol_table_lookup_symbol(env->mappings, sym);
   if (entry != NULL) {
-    entry->binding = binding;
+    entry->value = value;
+    entry->is_macro = is_macro;
   }
 
   gc_push_root_obj(sym);
-  gc_push_root(binding.value);
+  gc_push_root(value);
 
   entry = lisp_obj_alloc(&ENV_TABLE_ENTRY_VTABLE, sizeof(*entry));
   entry->ht.key = sym;
-  entry->binding = binding;
+  entry->value = value;
+  entry->is_macro = is_macro;
 
-  gc_pop_root_expect(binding.value);
+  gc_pop_root_expect(value);
   gc_pop_root_expect_obj(sym);
 
   env->mappings = lisp_symbl_table_insert(
       env->mappings, (struct lisp_hash_table_entry *)entry);
+  return entry;
 }
 
-void lisp_env_set(struct lisp_env *env, struct lisp_symbol *sym,
-                  struct lisp_val val) {
-  lisp_env_set_or_insert(env, sym,
-                         (struct lisp_env_binding){
-                             .value = val,
-                             .is_macro = false,
-                         });
+struct lisp_env_binding *lisp_env_set(struct lisp_env *env,
+                                      struct lisp_symbol *sym,
+                                      struct lisp_val val) {
+  return lisp_env_set_or_insert(env, sym, val, false);
 }
 
-void lisp_env_set_macro(struct lisp_env *env, struct lisp_symbol *sym,
-                        struct lisp_val val) {
-  lisp_env_set_or_insert(env, sym,
-                         (struct lisp_env_binding){
-                             .value = val,
-                             .is_macro = true,
-                         });
+struct lisp_env_binding *lisp_env_set_macro(struct lisp_env *env,
+                                            struct lisp_symbol *sym,
+                                            struct lisp_val val) {
+  return lisp_env_set_or_insert(env, sym, val, true);
+}
+
+bool lisp_is_env_binding(struct lisp_val v) {
+  return lisp_val_vtable(v) == &ENV_TABLE_ENTRY_VTABLE;
+}
+
+const struct lisp_symbol *lisp_env_binding_name(
+    const struct lisp_env_binding *b) {
+  return b->ht.key;
+}
+
+struct lisp_val lisp_env_binding_value(const struct lisp_env_binding *b) {
+  return b->value;
+}
+
+void lisp_env_binding_set_value(struct lisp_env_binding *b,
+                                struct lisp_val new) {
+  b->value = new;
+}
+
+bool lisp_env_binding_is_macro(const struct lisp_env_binding *b) {
+  return b->is_macro;
 }
 
 struct lisp_closure {

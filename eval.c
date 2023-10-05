@@ -110,35 +110,36 @@ static enum eval_status eval_bytecode(struct lisp_vm *vm) {
         continue;
       }
       case OP_GET_GLOBAL: {
-        struct lisp_val top_value = vm_stack_pop(vm);
-        struct lisp_symbol *sym = lisp_val_cast(LISP_SYMBOL, top_value);
-        if (sym == NULL) {
-          vm_raise_format_exception(vm, "cannot lookup value of type: %s",
-                                    lisp_val_type_name(top_value));
+        uint8_t const_idx = chunk_read_byte(code, ip);
+        assert(const_idx < code->const_table.size);
+        struct lisp_val const_val = code->const_table.data[const_idx];
+        if (!lisp_is_env_binding(const_val)) {
+          vm_raise_format_exception(
+              vm, "argument to get-global must be an environment binding");
           goto HANDLE_EXCEPTION;
         }
-        const struct lisp_env_binding *binding =
-            lisp_env_get(vm_global_env(vm), sym);
-        if (binding == NULL) {
-          vm_raise_format_exception(vm, "symbol not bound: %s",
-                                    lisp_symbol_name(sym));
+        struct lisp_env_binding *binding = lisp_val_as_obj(const_val);
+        struct lisp_val value = lisp_env_binding_value(binding);
+        if (lisp_is_uninitialized(value)) {
+          vm_raise_format_exception(
+              vm, "symbol not bound: %s",
+              lisp_symbol_name(lisp_env_binding_name(binding)));
           goto HANDLE_EXCEPTION;
         }
-
-        vm_stack_push(vm, binding->value);
+        vm_stack_push(vm, value);
         continue;
       }
       case OP_SET_GLOBAL: {
-        struct lisp_val top_value = vm_stack_pop(vm);
-        struct lisp_symbol *sym = lisp_val_cast(LISP_SYMBOL, top_value);
-        if (sym == NULL) {
-          vm_raise_format_exception(vm, "cannot bind value of type: %s",
-                                    lisp_val_type_name(top_value));
+        uint8_t const_idx = chunk_read_byte(code, ip);
+        assert(const_idx < code->const_table.size);
+        struct lisp_val const_val = code->const_table.data[const_idx];
+        if (!lisp_is_env_binding(const_val)) {
+          vm_raise_format_exception(
+              vm, "argument to set-global must be an environment binding");
           goto HANDLE_EXCEPTION;
         }
-
-        struct lisp_val bind_value = vm_stack_pop(vm);
-        lisp_env_set(vm_global_env(vm), sym, bind_value);
+        struct lisp_env_binding *binding = lisp_val_as_obj(const_val);
+        lisp_env_binding_set_value(binding, vm_stack_pop(vm));
         continue;
       }
       case OP_POP:
