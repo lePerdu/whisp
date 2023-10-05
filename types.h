@@ -170,6 +170,12 @@ bool lisp_val_is_false(struct lisp_val v);
 struct lisp_val lisp_non_printing(void);
 bool lisp_is_non_printing(struct lisp_val v);
 
+/**
+ * Special object to mark uninitialized value.
+ */
+struct lisp_val lisp_uninitialized(void);
+bool lisp_is_uninitialized(struct lisp_val v);
+
 bool lisp_val_is_number(struct lisp_val v);
 /**
  * Returns whether a value is a "proper" list. I.e. nil or a series of cons

@@ -154,6 +154,26 @@ bool lisp_is_non_printing(struct lisp_val v) {
   return lisp_val_vtable(v) == &NON_PRINTING_VTABLE;
 }
 
+static const struct lisp_vtable UNINIT_VTABLE = {
+    .type = LISP_OPAQUE,
+    .is_gc_managed = false,
+    .name = "uninitialized",
+    .visit_children = visit_none,
+    .destroy = destroy_none,
+};
+
+struct lisp_val lisp_uninitialized(void) {
+  static struct lisp_obj UNINITIALIZED_VAL = {
+      .vt = &UNINIT_VTABLE,
+  };
+
+  return lisp_val_from_obj(&UNINITIALIZED_VAL);
+}
+
+bool lisp_is_uninitialized(struct lisp_val v) {
+  return lisp_val_vtable(v) == &UNINIT_VTABLE;
+}
+
 struct lisp_val lisp_true(void) {
   // This only works because true is referenced by the global environment. If it
   // isn't this would segfault.
