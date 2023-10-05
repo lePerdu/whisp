@@ -1,9 +1,11 @@
 #include "compiler.h"
 
+#include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
 
 #include "bytecode.h"
+#include "core.h"
 #include "eval.h"
 #include "memory.h"
 #include "types.h"
@@ -19,6 +21,7 @@ enum compile_res {
 struct local_binding {
   struct lisp_symbol *sym;
   bool is_macro;
+  bool is_boxed;
   union {
     struct lisp_val as_macro;
     uint8_t as_index;
@@ -28,6 +31,12 @@ struct local_binding {
 struct capture_binding {
   uint8_t index;
   bool is_local;
+  bool is_boxed;
+};
+
+struct local_def {
+  struct lisp_symbol *sym;
+  struct lisp_val expr;
 };
 
 struct compiler_ctx {
@@ -55,10 +64,25 @@ struct compiler_ctx {
   uint8_t capture_count;
 
   /**
+   * Local `def!`s are collected and saved first, then code is generated in a
+   * separate step so that they can be mutually recursive.
+   */
+  struct local_def local_defs[MAX_LOCALS];
+  uint8_t local_def_count;
+
+  /**
    * Current code chunk being compiled.
    */
   struct code_chunk *chunk;
 
+  /**
+   * Whether at the beginning of a new scope.
+   */
+  bool begin_pos;
+
+  /**
+   * Whether in tail position of the current scope.
+   */
   bool tail_pos;
 
   /**
@@ -114,6 +138,11 @@ static void compiler_ctx_visit(struct lisp_val v, visit_callback cb,
     }
   }
 
+  for (unsigned i = 0; i < ctx->local_def_count; i++) {
+    cb(cb_ctx, lisp_val_from_obj(ctx->local_defs[i].sym));
+    cb(cb_ctx, ctx->local_defs[i].expr);
+  }
+
   cb(cb_ctx, lisp_val_from_obj(ctx->chunk));
   cb(cb_ctx, lisp_val_from_obj(ctx->binding_name));
 }
@@ -138,7 +167,10 @@ static struct compiler_ctx *compiler_ctx_create_top_level(struct lisp_vm *vm) {
   ctx->local_count = 0;
   ctx->local_next_index = 0;
   ctx->capture_count = 0;
+  ctx->local_def_count = 0;
 
+  // There is no significance of `begin_pos` at the top-level
+  ctx->begin_pos = false;
   ctx->tail_pos = true;
   ctx->binding_name = NULL;
   ctx->chunk = new_chunk;
@@ -152,6 +184,7 @@ static struct compiler_ctx *compiler_ctx_create_top_level(struct lisp_vm *vm) {
 static struct compiler_ctx *compiler_ctx_create_inner(
     struct compiler_ctx *outer) {
   struct compiler_ctx *ctx = compiler_ctx_create_top_level(outer->vm);
+  ctx->begin_pos = true;
   ctx->outer = outer;
   return ctx;
 }
@@ -175,40 +208,63 @@ static struct local_binding *compiler_lookup_local(struct compiler_ctx *ctx,
   return NULL;
 }
 
-static enum compile_res compiler_add_local(struct compiler_ctx *ctx,
-                                           struct lisp_symbol *sym) {
+static struct local_binding *compiler_alloc_local(struct compiler_ctx *ctx,
+                                                  struct lisp_symbol *sym) {
   if (compiler_lookup_local(ctx, sym) != NULL) {
     vm_raise_format_exception(ctx->vm, "duplicate local binding: %s",
                               lisp_symbol_name(sym));
-    return COMP_FAILED;
+    return NULL;
   }
 
   if (ctx->local_count == MAX_LOCALS) {
     vm_raise_format_exception(ctx->vm, "too many local bindings");
+    return NULL;
+  }
+
+  struct local_binding *created = &ctx->locals[ctx->local_count++];
+  *created = (struct local_binding){
+      .sym = sym,
+  };
+  return created;
+}
+
+static enum compile_res compiler_add_local(struct compiler_ctx *ctx,
+                                           struct lisp_symbol *sym) {
+  struct local_binding *b = compiler_alloc_local(ctx, sym);
+  if (b == NULL) {
     return COMP_FAILED;
   }
 
-  ctx->locals[ctx->local_count++] = (struct local_binding){
-      .sym = sym,
-      .is_macro = false,
-      .as_index = ctx->local_next_index++,
-  };
+  b->is_macro = false;
+  b->is_boxed = false;
+  b->as_index = ctx->local_next_index++;
+  return COMP_SUCCESS;
+}
+
+static enum compile_res compiler_add_boxed_local(struct compiler_ctx *ctx,
+                                                 struct lisp_symbol *sym) {
+  struct local_binding *b = compiler_alloc_local(ctx, sym);
+  if (b == NULL) {
+    return COMP_FAILED;
+  }
+
+  b->is_macro = false;
+  b->is_boxed = true;
+  b->as_index = ctx->local_next_index++;
   return COMP_SUCCESS;
 }
 
 static enum compile_res compiler_add_local_macro(struct compiler_ctx *ctx,
                                                  struct lisp_symbol *sym,
                                                  struct lisp_val macro_fn) {
-  if (ctx->local_count == MAX_LOCALS) {
-    vm_raise_format_exception(ctx->vm, "too many local bindings");
+  struct local_binding *b = compiler_alloc_local(ctx, sym);
+  if (b == NULL) {
     return COMP_FAILED;
   }
 
-  ctx->locals[ctx->local_count++] = (struct local_binding){
-      .sym = sym,
-      .is_macro = true,
-      .as_macro = macro_fn,
-  };
+  b->is_macro = true;
+  b->is_boxed = false;
+  b->as_macro = macro_fn;
   return COMP_SUCCESS;
 }
 
@@ -224,24 +280,6 @@ static void emit_byte(struct compiler_ctx *ctx, uint8_t byte) {
 
 static void emit_instr(struct compiler_ctx *ctx, enum bytecode_op op) {
   emit_byte(ctx, op);
-}
-
-static enum compile_res emit_get_fp(struct compiler_ctx *ctx,
-                                    unsigned fp_offset) {
-  if (fp_offset > UINT8_MAX) {
-    vm_raise_format_exception(ctx->vm, "stack frame too large");
-    return COMP_FAILED;
-  }
-
-  emit_instr(ctx, OP_GET_FP);
-  emit_byte(ctx, fp_offset);
-  return COMP_SUCCESS;
-}
-
-static void emit_return_if_tail_pos(struct compiler_ctx *ctx) {
-  if (ctx->tail_pos) {
-    emit_instr(ctx, OP_RETURN);
-  }
 }
 
 static enum compile_res emit_const(struct compiler_ctx *ctx,
@@ -260,9 +298,60 @@ static enum compile_res emit_const(struct compiler_ctx *ctx,
   return COMP_SUCCESS;
 }
 
-static void emit_get_upvalue(struct compiler_ctx *ctx, uint8_t index) {
+static enum compile_res emit_create_boxed_local(struct compiler_ctx *ctx) {
+  if (emit_const(ctx, lisp_uninitialized()) == COMP_FAILED) {
+    return COMP_FAILED;
+  }
+  emit_instr(ctx, OP_INTRINSIC);
+  // TODO Custom intrinsic for creating an uninitialized atom without the extra
+  // `emit_const`?
+  emit_byte(ctx, INTRINSIC_MAKE_ATOM);
+  return COMP_SUCCESS;
+}
+
+static void emit_set_boxed_local(struct compiler_ctx *ctx) {
+  emit_instr(ctx, OP_INTRINSIC);
+  emit_byte(ctx, INTRINSIC_RESET);
+  // Ignore return from `reset!`
+  emit_instr(ctx, OP_POP);
+}
+
+static void emit_unbox(struct compiler_ctx *ctx) {
+  emit_instr(ctx, OP_INTRINSIC);
+  emit_byte(ctx, INTRINSIC_DEREF);
+}
+
+static void emit_get_raw_local(struct compiler_ctx *ctx, uint8_t local_index) {
+  const struct local_binding *b = &ctx->locals[local_index];
+  assert(!b->is_macro);
+  emit_instr(ctx, OP_GET_FP);
+  emit_byte(ctx, b->as_index);
+}
+
+static void emit_get_local(struct compiler_ctx *ctx, uint8_t local_index) {
+  const struct local_binding *b = &ctx->locals[local_index];
+  emit_get_raw_local(ctx, local_index);
+  if (b->is_boxed) {
+    emit_unbox(ctx);
+  }
+}
+
+static void emit_get_raw_upvalue(struct compiler_ctx *ctx, uint8_t index) {
   emit_instr(ctx, OP_GET_UPVALUE);
   emit_byte(ctx, index);
+}
+
+static void emit_get_upvalue(struct compiler_ctx *ctx, uint8_t index) {
+  emit_get_raw_upvalue(ctx, index);
+  if (ctx->captures[index].is_boxed) {
+    emit_unbox(ctx);
+  }
+}
+
+static void emit_return_if_tail_pos(struct compiler_ctx *ctx) {
+  if (ctx->tail_pos) {
+    emit_instr(ctx, OP_RETURN);
+  }
 }
 
 static enum compile_res emit_alloc_closure(struct compiler_ctx *ctx,
@@ -339,7 +428,7 @@ static enum compile_res compile_constant(struct compiler_ctx *ctx,
 
 static enum compile_res add_upvalue(struct compiler_ctx *ctx,
                                     uint8_t parent_index, bool is_local,
-                                    uint8_t *created_index) {
+                                    bool is_boxed, uint8_t *created_index) {
   for (unsigned i = 0; i < ctx->capture_count; i++) {
     struct capture_binding *b = &ctx->captures[i];
     if (b->index == parent_index && b->is_local == is_local) {
@@ -356,6 +445,7 @@ static enum compile_res add_upvalue(struct compiler_ctx *ctx,
   ctx->captures[ctx->capture_count] = (struct capture_binding){
       .index = parent_index,
       .is_local = is_local,
+      .is_boxed = is_boxed,
   };
   *created_index = ctx->capture_count++;
   return COMP_SUCCESS;
@@ -408,7 +498,8 @@ static enum compile_res resolve_symbol(struct compiler_ctx *ctx,
       resolved->value.macro_fn = local->as_macro;
     } else {
       resolved->type = SYM_LOCAL;
-      resolved->value.index = local->as_index;
+      // TODO Cleaner way to get the index?
+      resolved->value.index = local - ctx->locals;
     }
     return COMP_SUCCESS;
   }
@@ -424,14 +515,20 @@ static enum compile_res resolve_symbol(struct compiler_ctx *ctx,
   }
 
   switch (resolved->type) {
-    case SYM_LOCAL:
+    case SYM_LOCAL: {
+      uint8_t parent_index = resolved->value.index;
       resolved->type = SYM_CAPTURE;
-      return add_upvalue(ctx, resolved->value.index, true,
+      return add_upvalue(ctx, parent_index, true,
+                         ctx->outer->locals[parent_index].is_boxed,
                          &resolved->value.index);
-    case SYM_CAPTURE:
+    }
+    case SYM_CAPTURE: {
+      uint8_t parent_index = resolved->value.index;
       // "Translate" the parent capture into a capture for the current context
-      return add_upvalue(ctx, resolved->value.index, false,
+      return add_upvalue(ctx, parent_index, false,
+                         ctx->outer->captures[parent_index].is_boxed,
                          &resolved->value.index);
+    }
     case SYM_GLOBAL:
     case SYM_MACRO:
     case SYM_UNBOUND:
@@ -441,14 +538,63 @@ static enum compile_res resolve_symbol(struct compiler_ctx *ctx,
   assert(false);
 }
 
+/**
+ * Generate code for all `def!`s in the current local scope. Called before
+ * compiling any non-def! form.
+ *
+ * For simplicity, all local `def!`s generate boxed locals (since they may be
+ * mutually recursive).
+ */
+static enum compile_res compile_prepare_non_def(struct compiler_ctx *ctx) {
+  if (!ctx->begin_pos) {
+    return COMP_SUCCESS;
+  }
+
+  ctx->begin_pos = false;
+  bool outer_tail_pos = ctx->tail_pos;
+  ctx->tail_pos = false;
+
+  enum compile_res res = COMP_SUCCESS;
+
+  unsigned starting_local_index = ctx->local_count;
+
+  // Pre-allocate boxes, but don't initialize
+  for (unsigned i = 0; i < ctx->local_def_count; i++) {
+    struct lisp_symbol *sym = ctx->local_defs[i].sym;
+    res = compiler_add_boxed_local(ctx, sym);
+    if (res == COMP_FAILED) {
+      return res;
+    }
+
+    res = emit_create_boxed_local(ctx);
+    if (res == COMP_FAILED) {
+      return res;
+    }
+  }
+
+  // Initialize each in order
+  for (unsigned i = 0; i < ctx->local_def_count; i++) {
+    emit_get_raw_local(ctx, starting_local_index + i);
+    ctx->binding_name = ctx->local_defs[i].sym;
+    res = compile(ctx, ctx->local_defs[i].expr);
+    ctx->binding_name = NULL;
+    if (res == COMP_FAILED) {
+      return res;
+    }
+    emit_set_boxed_local(ctx);
+  }
+
+  ctx->tail_pos = outer_tail_pos;
+  return COMP_SUCCESS;
+}
+
 static enum compile_res compile_symbol_ref(struct compiler_ctx *ctx,
                                            struct lisp_symbol *sym) {
   struct resolved_sym resolved;
   resolve_symbol(ctx, sym, &resolved);
   switch (resolved.type) {
     case SYM_LOCAL:
-      emit_instr(ctx, OP_GET_FP);
-      emit_byte(ctx, resolved.value.index);
+      emit_get_local(ctx, resolved.value.index);
       break;
     case SYM_CAPTURE:
       emit_get_upvalue(ctx, resolved.value.index);
@@ -472,10 +618,44 @@ static enum compile_res compile_symbol_ref(struct compiler_ctx *ctx,
   return COMP_SUCCESS;
 }
 
+static enum compile_res expand_macro(struct compiler_ctx *ctx,
+                                     struct lisp_val macro_fn,
+                                     struct lisp_val args,
+                                     struct lisp_val *expanded_ast) {
+  enum eval_status eval_res = eval_apply(ctx->vm, macro_fn, args);
+  if (eval_res == EV_EXCEPTION) {
+    return COMP_FAILED;
+  }
+
+  *expanded_ast = vm_stack_pop(ctx->vm);
+  return COMP_SUCCESS;
+}
+
+static enum compile_res expand_and_compile_macro(struct compiler_ctx *ctx,
+                                                 struct lisp_val macro_fn,
+                                                 struct lisp_val args) {
+  struct lisp_val expanded;
+  if (expand_macro(ctx, macro_fn, args, &expanded) == COMP_FAILED) {
+    return COMP_FAILED;
+  }
+  return compile(ctx, expanded);
+}
+
 static enum compile_res compile_do(struct compiler_ctx *ctx,
                                    struct lisp_val exprs) {
   if (lisp_val_is_nil(exprs)) {
-    return compile_constant(ctx, LISP_VAL_NIL);
+    if (ctx->begin_pos) {
+      // Non-tail position do at the beginning of a scope is a no-op
+      return COMP_SUCCESS;
+    } else {
+      compile_prepare_non_def(ctx);
+      if (compile_constant(ctx, LISP_VAL_NIL) == COMP_FAILED) {
+        return COMP_FAILED;
+      }
+
+      emit_return_if_tail_pos(ctx);
+      return COMP_SUCCESS;
+    }
   }
 
   bool outer_tail_pos = ctx->tail_pos;
@@ -606,6 +786,70 @@ static enum compile_res parse_def(const char *label, struct compiler_ctx *ctx,
   return COMP_SUCCESS;
 }
 
+static enum compile_res compile_top_level_def(struct compiler_ctx *ctx,
+                                              struct lisp_symbol *sym,
+                                              struct lisp_val expr) {
+  // Create the binding if it doesn't already exist so that the binding can
+  // shadow macros and keywords
+  struct resolved_sym resolved;
+  resolve_global_type(ctx, sym, &resolved);
+  if (resolved.type != SYM_GLOBAL) {
+    // Either SYM_MACRO or SYM_UNBOUND
+    // TODO Special flag in lisp_env which indicates uninitialized?
+    lisp_env_set(vm_global_env(ctx->vm), sym, lisp_uninitialized());
+  }
+
+  bool outer_tail_pos = ctx->tail_pos;
+  ctx->tail_pos = false;
+  ctx->binding_name = sym;
+  enum compile_res res = compile(ctx, expr);
+  ctx->binding_name = NULL;
+  ctx->tail_pos = outer_tail_pos;
+
+  if (res == COMP_FAILED) {
+    return res;
+  }
+
+  res = emit_const(ctx, lisp_val_from_obj(sym));
+  if (res == COMP_FAILED) {
+    return res;
+  }
+
+  emit_instr(ctx, OP_SET_GLOBAL);
+
+  // Return value
+  emit_const(ctx, lisp_non_printing());
+  emit_return_if_tail_pos(ctx);
+  return COMP_SUCCESS;
+}
+
+static enum compile_res compile_local_def(struct compiler_ctx *ctx,
+                                          struct lisp_symbol *sym,
+                                          struct lisp_val expr) {
+  if (!ctx->begin_pos) {
+    vm_raise_format_exception(ctx->vm,
+                              "def!: must occur at beginning of local scope");
+    return COMP_FAILED;
+  }
+
+  if (ctx->local_def_count >= MAX_LOCALS) {
+    vm_raise_format_exception(ctx->vm, "def!: too many local definitions");
+    return COMP_FAILED;
+  }
+
+  ctx->local_defs[ctx->local_def_count++] = (struct local_def){
+      .sym = sym,
+      .expr = expr,
+  };
+
+  // Still need to return a value so that the stack is in the proper state.
+  // Probably the only way to avoid it would be a separate pass to collect a
+  // strip out `def!`s.
+  emit_const(ctx, lisp_non_printing());
+  emit_return_if_tail_pos(ctx);
+  return COMP_SUCCESS;
+}
+
 static enum compile_res compile_def(struct compiler_ctx *ctx,
                                     struct lisp_val args) {
   struct lisp_symbol *sym;
@@ -615,52 +859,11 @@ static enum compile_res compile_def(struct compiler_ctx *ctx,
     return res;
   }
 
-  // Bind the variable first so it can be captured in the RHS if it's a closure
   if (compiler_ctx_is_top_level(ctx)) {
-    // Create the binding if it doesn't already exist so that the binding can
-    // shadow macros and keywords
-    struct resolved_sym resolved;
-    resolve_global_type(ctx, sym, &resolved);
-    if (resolved.type != SYM_GLOBAL) {
-      // Either SYM_MACRO or SYM_UNBOUND
-      // TODO Initialize with a special value so that usages before defining can
-      // be detected
-      lisp_env_set(vm_global_env(ctx->vm), sym, LISP_VAL_NIL);
-    }
+    return compile_top_level_def(ctx, sym, value_expr);
   } else {
-    // No instructions to emit since the value is just stored on the stack
-    res = compiler_add_local(ctx, sym);
-    if (res == COMP_FAILED) {
-      return res;
-    }
+    return compile_local_def(ctx, sym, value_expr);
   }
-
-  bool outer_tail_pos = ctx->tail_pos;
-  ctx->tail_pos = false;
-  ctx->binding_name = sym;
-  res = compile(ctx, value_expr);
-  ctx->binding_name = NULL;
-  ctx->tail_pos = outer_tail_pos;
-
-  if (res == COMP_FAILED) {
-    return res;
-  }
-
-  if (compiler_ctx_is_top_level(ctx)) {
-    res = emit_const(ctx, lisp_val_from_obj(sym));
-    if (res == COMP_FAILED) {
-      return res;
-    }
-
-    emit_instr(ctx, OP_SET_GLOBAL);
-  } else {
-    // No instructions to emit since the value is just stored on the stack
-  }
-
-  // Return value
-  emit_const(ctx, lisp_non_printing());
-  emit_return_if_tail_pos(ctx);
-  return COMP_SUCCESS;
 }
 
 static enum compile_res compile_defsyntax(struct compiler_ctx *ctx,
@@ -700,7 +903,6 @@ static enum compile_res compile_defsyntax(struct compiler_ctx *ctx,
     // Set in the VM environment so it persists
     lisp_env_set_macro(vm_global_env(ctx->vm), sym, macro_fn);
   } else {
-    // TODO Disallow local macros?
     if (compiler_add_local_macro(ctx, sym, macro_fn) == COMP_FAILED) {
       return COMP_FAILED;
     }
@@ -768,7 +970,6 @@ static enum compile_res compile_fn_params(struct compiler_ctx *ctx,
 }
 
 static enum compile_res compile_fn(struct compiler_ctx *ctx,
-                                   struct lisp_symbol *binding_name,
                                    struct lisp_val args) {
   struct lisp_cons *args_cons = lisp_val_cast(LISP_CONS, args);
   if (args_cons == NULL) {
@@ -790,8 +991,9 @@ static enum compile_res compile_fn(struct compiler_ctx *ctx,
   }
 
   struct compiler_ctx *func_ctx = compiler_ctx_create_inner(ctx);
-  if (binding_name != NULL) {
-    func_ctx->chunk->name = binding_name;
+  if (ctx->binding_name != NULL) {
+    func_ctx->chunk->name = ctx->binding_name;
+    ctx->binding_name = NULL;
   }
 
   enum compile_res res = compile_fn_params(func_ctx, params);
@@ -816,10 +1018,10 @@ static enum compile_res compile_fn(struct compiler_ctx *ctx,
     struct capture_binding *b = &func_ctx->captures[i];
     if (b->is_local) {
       // Capture local from outer context
-      emit_get_fp(ctx, b->index);
+      emit_get_raw_local(ctx, b->index);
     } else {
       // Capture capture from outer context
-      emit_get_upvalue(ctx, b->index);
+      emit_get_raw_upvalue(ctx, b->index);
     }
   }
 
@@ -887,18 +1089,6 @@ static enum compile_res compile_func_call(struct compiler_ctx *ctx,
   }
 }
 
-static enum compile_res expand_and_compile_macro(struct compiler_ctx *ctx,
-                                                 struct lisp_val macro_fn,
-                                                 struct lisp_val args) {
-  enum eval_status eval_res = eval_apply(ctx->vm, macro_fn, args);
-  if (eval_res == EV_EXCEPTION) {
-    return COMP_FAILED;
-  }
-
-  struct lisp_val macro_output = vm_stack_pop(ctx->vm);
-  return compile(ctx, macro_output);
-}
-
 static enum compile_res compile_call_or_special(struct compiler_ctx *ctx,
                                                 struct lisp_cons *call_ast) {
   struct lisp_val head = call_ast->car;
@@ -908,10 +1098,6 @@ static enum compile_res compile_call_or_special(struct compiler_ctx *ctx,
     vm_raise_format_exception(ctx->vm, "cannot compile improper list");
     return COMP_FAILED;
   }
-
-  // Unset the binding name for all cases except `fn`
-  struct lisp_symbol *binding_name = ctx->binding_name;
-  ctx->binding_name = NULL;
 
   struct lisp_symbol *head_sym = lisp_val_cast(LISP_SYMBOL, head);
   if (head_sym != NULL) {
@@ -927,21 +1113,30 @@ static enum compile_res compile_call_or_special(struct compiler_ctx *ctx,
       case SYM_UNBOUND:
         // Check special forms
         if (head_sym == SYMBOL_FN) {
-          return compile_fn(ctx, binding_name, args);
+          // Keep binding name
+          compile_prepare_non_def(ctx);
+          return compile_fn(ctx, args);
         }
         if (head_sym == SYMBOL_DO) {
+          ctx->binding_name = NULL;
           return compile_do(ctx, args);
         }
         if (head_sym == SYMBOL_IF) {
+          ctx->binding_name = NULL;
+          compile_prepare_non_def(ctx);
           return compile_if(ctx, args);
         }
         if (head_sym == SYMBOL_DEF) {
+          ctx->binding_name = NULL;
           return compile_def(ctx, args);
         }
         if (head_sym == SYMBOL_DEFSYNTAX) {
+          ctx->binding_name = NULL;
           return compile_defsyntax(ctx, args);
         }
         if (head_sym == SYMBOL_QUOTE) {
+          ctx->binding_name = NULL;
+          compile_prepare_non_def(ctx);
           return compile_quote(ctx, args);
         }
         break;
@@ -953,7 +1148,9 @@ static enum compile_res compile_call_or_special(struct compiler_ctx *ctx,
     }
   }
 
+  ctx->binding_name = NULL;
   // Not a macro or special form, so it's a normal function application
+  compile_prepare_non_def(ctx);
   return compile_func_call(ctx, head, args);
 }
 
@@ -978,11 +1175,13 @@ static enum compile_res compile(struct compiler_ctx *ctx, struct lisp_val ast) {
     case LISP_ATOM:
     case LISP_CLOSURE:
     case LISP_OPAQUE:
+      compile_prepare_non_def(ctx);
       res = compile_constant(ctx, ast);
       emit_return_if_tail_pos(ctx);
       break;
 
     case LISP_SYMBOL:
+      compile_prepare_non_def(ctx);
       res = compile_symbol_ref(ctx, lisp_val_as_obj(ast));
       break;
 
