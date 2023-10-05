@@ -196,6 +196,11 @@ void print_str_into(struct str_builder *b, struct lisp_val v, bool readable) {
     case LISP_ARRAY:
       print_array(b, lisp_val_as_obj(v), readable);
       break;
+    case LISP_OPAQUE:
+      str_builder_concat_cstr(b, "#<");
+      str_builder_concat_cstr(b, lisp_val_vtable(v)->name);
+      str_builder_append(b, '>');
+      break;
     default:
       str_builder_concat_cstr(b, "#<unknown>");
       break;
