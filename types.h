@@ -347,6 +347,9 @@ struct lisp_env_binding {
   bool is_macro;
 };
 
+/**
+ * Key-value mapping used for the global environment.
+ */
 struct lisp_env;
 
 struct lisp_env *lisp_env_create(struct lisp_env *outer);
@@ -366,6 +369,8 @@ const struct lisp_env_binding *lisp_env_get(const struct lisp_env *env,
 const struct lisp_env_binding *lisp_env_get_local(const struct lisp_env *env,
                                                   struct lisp_symbol *sym);
 
+struct lisp_env *lisp_env_parent(const struct lisp_env *env);
+
 // Mutate the environment. If the value cannot be set (i.e. if tring to set
 // a constant), returns false
 
@@ -374,19 +379,32 @@ void lisp_env_set(struct lisp_env *env, struct lisp_symbol *sym,
 void lisp_env_set_macro(struct lisp_env *env, struct lisp_symbol *sym,
                         struct lisp_val val);
 
+/**
+ * Flat array of function bindings, keyed by index.
+ */
+struct lisp_val lisp_func_env_create(struct lisp_val parent, size_t size);
+
+struct lisp_val lisp_func_env_get(struct lisp_val env, size_t index);
+size_t lisp_func_env_size(struct lisp_val env);
+struct lisp_val lisp_func_env_parent(struct lisp_val env);
+void lisp_func_env_set(struct lisp_val env, size_t index,
+                       struct lisp_val binding);
+
 struct lisp_closure;
 struct code_chunk;
 
-struct lisp_closure *lisp_closure_create(struct lisp_env *outer_env,
-                                         struct code_chunk *bytecode);
+struct lisp_closure *lisp_closure_create(struct code_chunk *bytecode,
+                                         size_t n_captures);
 struct lisp_symbol *lisp_closure_name(const struct lisp_closure *c);
 const char *lisp_closure_name_cstr(const struct lisp_closure *c);
-struct lisp_env *lisp_closure_env(const struct lisp_closure *c);
 struct code_chunk *lisp_closure_code(const struct lisp_closure *c);
 unsigned lisp_closure_arg_count(const struct lisp_closure *c);
 bool lisp_closure_is_variadic(const struct lisp_closure *c);
 
-// TODO Force setting at construction time?
-void lisp_closure_set_name(struct lisp_closure *c, struct lisp_symbol *name);
+size_t lisp_closure_n_captures(const struct lisp_closure *c);
+struct lisp_val lisp_closure_get_capture(const struct lisp_closure *c,
+                                         unsigned index);
+void lisp_closure_set_capture(struct lisp_closure *c, unsigned index,
+                              struct lisp_val val);
 
 #endif

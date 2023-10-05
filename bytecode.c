@@ -144,14 +144,23 @@ static int disassemble_instr(const struct code_chunk *chunk, unsigned offset) {
              lisp_string_as_cstr(print_str(const_val, true)), const_index);
       return 2;
     }
-    case OP_LOOKUP:
-      printf("(lookup)\n");
+    case OP_GET_FP: {
+      ENSURE_INSTR_ARGS(OP_GET_FP, 1);
+      unsigned n = chunk->bytecode.data[offset + 1];
+      printf("(get-fp %u)\n", n);
+      return 2;
+    }
+    case OP_GET_UPVALUE: {
+      ENSURE_INSTR_ARGS(OP_GET_UPVALUE, 1);
+      unsigned n = chunk->bytecode.data[offset + 1];
+      printf("(get-upvalue %u)\n", n);
+      return 2;
+    }
+    case OP_GET_GLOBAL:
+      printf("(get-global)\n");
       return 1;
-    case OP_BIND:
-      printf("(bind)\n");
-      return 1;
-    case OP_BIND_GLOBAL:
-      printf("(bind-global)\n");
+    case OP_SET_GLOBAL:
+      printf("(set-global)\n");
       return 1;
     case OP_POP:
       printf("(pop)\n");
@@ -163,15 +172,6 @@ static int disassemble_instr(const struct code_chunk *chunk, unsigned offset) {
       ENSURE_INSTR_ARGS(OP_SKIP_CLEAR, 1);
       unsigned n = chunk->bytecode.data[offset + 1];
       printf("(skip-clear %u)\n", n);
-      return 2;
-    }
-    case OP_DUP:
-      printf("(dup)\n");
-      return 1;
-    case OP_DUP_FP: {
-      ENSURE_INSTR_ARGS(OP_DUP_FP, 1);
-      unsigned n = chunk->bytecode.data[offset + 1];
-      printf("(dup-fp %u)\n", n);
       return 2;
     }
     case OP_CALL: {
@@ -189,9 +189,26 @@ static int disassemble_instr(const struct code_chunk *chunk, unsigned offset) {
       printf("(tail-call %u)\n", arg_count);
       return 2;
     }
-    case OP_MAKE_CLOSURE:
-      printf("(make-closure)\n");
-      return 1;
+    case OP_ALLOC_CLOSURE: {
+      ENSURE_INSTR_ARGS(OP_ALLOC_CLOSURE, 2);
+      uint8_t const_index = chunk->bytecode.data[offset + 1];
+      uint8_t n_captures = chunk->bytecode.data[offset + 2];
+      if (const_index >= chunk->const_table.size) {
+        printf("\ninvalid constant index: %u\n", const_index);
+        return -1;
+      }
+
+      struct lisp_val const_val = chunk->const_table.data[const_index];
+      printf("(alloc-closure %u %u)\t; const = %s\n", const_index, n_captures,
+             lisp_string_as_cstr(print_str(const_val, true)));
+      return 3;
+    }
+    case OP_INIT_CLOSURE: {
+      ENSURE_INSTR_ARGS(OP_INTRINSIC, 1);
+      uint8_t n_captures = chunk->bytecode.data[offset + 1];
+      printf("(init-closure %u)\n", n_captures);
+      return 2;
+    }
     case OP_BUILD_REST_ARGS: {
       ENSURE_INSTR_ARGS(OP_BUILD_REST_ARGS, 1);
       uint8_t fp = chunk->bytecode.data[offset + 1];

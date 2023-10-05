@@ -632,8 +632,11 @@ DEF_BUILTIN(core_macroexpand_1) {
     BUILTIN_RETURN(ast);
   }
 
+  // TODO This only works at the top level
+  // That's probably fine (and I don't know how to fix it), but something to
+  // note
   const struct lisp_env_binding *binding =
-      lisp_env_get(vm_current_env(vm), head_sym);
+      lisp_env_get(vm_global_env(vm), head_sym);
   if (binding == NULL || !binding->is_macro) {
     BUILTIN_RETURN(ast);
   }
@@ -801,8 +804,7 @@ static const struct builtin_config builtins[] = {
 // Not a 100% test, but as good as possible without some macro magic
 static_assert(BUILTIN_COUNT == INTRINSIC_INVALID, "missing builtins");
 
-static struct lisp_closure *make_builtin(struct lisp_env *global_env,
-                                         const char *name, uint8_t index,
+static struct lisp_closure *make_builtin(const char *name, uint8_t index,
                                          unsigned req_arg_count,
                                          bool is_variadic) {
   struct code_chunk *chunk = chunk_create();
@@ -817,7 +819,7 @@ static struct lisp_closure *make_builtin(struct lisp_env *global_env,
   chunk->req_arg_count = req_arg_count;
   chunk->is_variadic = is_variadic;
 
-  return lisp_closure_create(global_env, chunk);
+  return lisp_closure_create(chunk, 0);
 }
 
 static struct lisp_closure *make_builtin_apply(void) {
@@ -832,7 +834,7 @@ static struct lisp_closure *make_builtin_apply(void) {
 
   chunk->req_arg_count = 2;
 
-  return lisp_closure_create(NULL, chunk);
+  return lisp_closure_create(chunk, 0);
 }
 
 static struct lisp_closure *make_builtin_eval(void) {
@@ -848,7 +850,7 @@ static struct lisp_closure *make_builtin_eval(void) {
 
   chunk->req_arg_count = 1;
 
-  return lisp_closure_create(NULL, chunk);
+  return lisp_closure_create(chunk, 0);
 }
 
 static struct lisp_closure *make_builtin_with_exception_handler() {
@@ -857,7 +859,7 @@ static struct lisp_closure *make_builtin_with_exception_handler() {
   unsigned handler_offset_cell = chunk_append_byte(chunk, 0);
   chunk_append_byte(chunk, 0);
   // Fetch and call the thunk
-  chunk_append_byte(chunk, OP_DUP_FP);
+  chunk_append_byte(chunk, OP_GET_FP);
   chunk_append_byte(chunk, 1);
   // Separate call + return since the stack frame needs to stay intact for the
   // exception handler
@@ -867,7 +869,7 @@ static struct lisp_closure *make_builtin_with_exception_handler() {
 
   // In the exception handler code, the exception will be pushed on the stack
   // Fetch and call the handler
-  unsigned handler_offset = chunk_append_byte(chunk, OP_DUP_FP);
+  unsigned handler_offset = chunk_append_byte(chunk, OP_GET_FP);
   chunk_append_byte(chunk, 0);
   chunk_append_byte(chunk, OP_SKIP_CLEAR);
   chunk_append_byte(chunk, 2);  // Handler function and exception
@@ -885,7 +887,7 @@ static struct lisp_closure *make_builtin_with_exception_handler() {
 
   chunk->req_arg_count = 2;
 
-  return lisp_closure_create(NULL, chunk);
+  return lisp_closure_create(chunk, 0);
 }
 
 enum eval_status call_intrinsic(uint8_t index, struct lisp_vm *vm) {
@@ -909,8 +911,8 @@ static void define_cl(struct lisp_env *env, struct lisp_closure *cl) {
 void define_builtins(struct lisp_env *global_env) {
   for (unsigned i = INTRINSIC_FN_START; i < INTRINSIC_FN_END; i++) {
     const struct builtin_config *b = &builtins[i];
-    define_cl(global_env, make_builtin(global_env, b->name, i, b->req_arg_count,
-                                       b->is_variadic));
+    define_cl(global_env,
+              make_builtin(b->name, i, b->req_arg_count, b->is_variadic));
   }
 
   // Special builtins

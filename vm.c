@@ -13,8 +13,7 @@
 #define STACK_INIT_CAP 8
 static void stack_frame_visit(struct stack_frame *rec, visit_callback cb,
                               void *ctx) {
-  cb(ctx, lisp_val_from_obj(rec->env));
-  cb(ctx, lisp_val_from_obj(rec->code));
+  cb(ctx, lisp_val_from_obj(rec->func));
 }
 
 struct call_stack {
@@ -142,15 +141,6 @@ struct stack_frame *vm_current_frame(struct lisp_vm *vm) {
   }
 }
 
-struct lisp_env *vm_current_env(struct lisp_vm *vm) {
-  struct stack_frame *rec = vm_current_frame(vm);
-  if (rec == NULL) {
-    return vm->global_env;
-  } else {
-    return rec->env;
-  }
-}
-
 static inline unsigned active_frame_pointer(const struct lisp_vm *vm) {
   if (vm->call_frames.size == 0) {
     return 0;
@@ -195,26 +185,23 @@ void vm_stack_frame_skip_clear(struct lisp_vm *vm, unsigned n) {
   assert(active_frame_size(vm) == n);
 }
 
-void vm_create_stack_frame(struct lisp_vm *vm, struct lisp_env *env,
-                           struct code_chunk *code, unsigned arg_count) {
+void vm_create_stack_frame(struct lisp_vm *vm, struct lisp_closure *func,
+                           unsigned arg_count) {
   assert(arg_count <= active_frame_size(vm));
   unsigned new_fp = vm->stack.size - arg_count;
 
   call_stack_push(&vm->call_frames, (struct stack_frame){
                                         .frame_pointer = new_fp,
-                                        .env = env,
-                                        .code = code,
+                                        .func = func,
                                         .instr_pointer = 0,
                                         .exception_handler_ip = -1,
                                     });
 }
 
-void vm_replace_stack_frame(struct lisp_vm *vm, struct lisp_env *env,
-                            struct code_chunk *code) {
+void vm_replace_stack_frame(struct lisp_vm *vm, struct lisp_closure *func) {
   struct stack_frame *frame = call_stack_top(&vm->call_frames);
   // Don't need to replace the frame pointer as it is unchanged
-  frame->code = code;
-  frame->env = env;
+  frame->func = func;
   frame->instr_pointer = 0;
   // Reset this in case it was set
   frame->exception_handler_ip = -1;

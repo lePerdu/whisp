@@ -1051,6 +1051,10 @@ const struct lisp_env_binding *lisp_env_get(const struct lisp_env *env,
   }
 }
 
+struct lisp_env *lisp_env_parent(const struct lisp_env *env) {
+  return env->outer;
+}
+
 static void lisp_env_set_or_insert(struct lisp_env *env,
                                    struct lisp_symbol *sym,
                                    struct lisp_env_binding binding) {
@@ -1093,17 +1097,47 @@ void lisp_env_set_macro(struct lisp_env *env, struct lisp_symbol *sym,
                          });
 }
 
+struct lisp_val lisp_func_env_create(struct lisp_val parent, size_t size) {
+  struct lisp_array *arr = lisp_array_create(size + 1);
+  lisp_array_set(arr, 0, parent);
+  return lisp_val_from_obj(arr);
+}
+
+size_t lisp_func_env_size(struct lisp_val env) {
+  assert(lisp_val_type(env) == LISP_ARRAY);
+  return lisp_array_length(lisp_val_as_obj(env));
+}
+
+struct lisp_val lisp_func_env_get(struct lisp_val env, size_t index) {
+  assert(lisp_val_type(env) == LISP_ARRAY);
+  return lisp_array_get(lisp_val_as_obj(env), index + 1);
+}
+
+struct lisp_val lisp_func_env_parent(struct lisp_val env) {
+  assert(lisp_val_type(env) == LISP_ARRAY);
+  return lisp_array_get(lisp_val_as_obj(env), 0);
+}
+
+void lisp_func_env_set(struct lisp_val env, size_t index,
+                       struct lisp_val binding) {
+  assert(lisp_val_type(env) == LISP_ARRAY);
+  return lisp_array_set(lisp_val_as_obj(env), index + 1, binding);
+}
+
 struct lisp_closure {
   struct lisp_obj header;
-  struct lisp_env *outer_env;
   struct code_chunk *code;
+  size_t n_captures;
+  struct lisp_val captures[];
 };
 
 static void lisp_closure_visit(struct lisp_val v, visit_callback cb,
                                void *ctx) {
   const struct lisp_closure *cl = lisp_val_as_obj(v);
-  cb(ctx, lisp_val_from_obj(cl->outer_env));
   cb(ctx, lisp_val_from_obj(cl->code));
+  for (size_t i = 0; i < cl->n_captures; i++) {
+    cb(ctx, cl->captures[i]);
+  }
 }
 
 static const struct lisp_vtable CLOSURE_VTABLE = {
@@ -1114,17 +1148,20 @@ static const struct lisp_vtable CLOSURE_VTABLE = {
     .destroy = destroy_none,
 };
 
-struct lisp_closure *lisp_closure_create(struct lisp_env *outer_env,
-                                         struct code_chunk *bytecode) {
-  gc_push_root_obj(outer_env);
+struct lisp_closure *lisp_closure_create(struct code_chunk *bytecode,
+                                         size_t n_captures) {
   gc_push_root_obj(bytecode);
 
-  struct lisp_closure *cl = lisp_obj_alloc(&CLOSURE_VTABLE, sizeof(*cl));
-  cl->outer_env = outer_env;
+  struct lisp_closure *cl = lisp_obj_alloc(
+      &CLOSURE_VTABLE, sizeof(*cl) + sizeof(cl->captures[0]) * n_captures);
   cl->code = bytecode;
+  cl->n_captures = n_captures;
+  for (size_t i = 0; i < n_captures; i++) {
+    // TODO Use some "undefined" value to better detect errors?
+    cl->captures[i] = LISP_VAL_NIL;
+  }
 
   gc_pop_root_expect_obj(bytecode);
-  gc_pop_root_expect_obj(outer_env);
   return cl;
 }
 
@@ -1144,12 +1181,24 @@ bool lisp_closure_is_variadic(const struct lisp_closure *c) {
   return c->code->is_variadic;
 }
 
-struct lisp_env *lisp_closure_env(const struct lisp_closure *c) {
-  return c->outer_env;
-}
-
 struct code_chunk *lisp_closure_code(const struct lisp_closure *c) {
   return c->code;
+}
+
+size_t lisp_closure_n_captures(const struct lisp_closure *c) {
+  return c->n_captures;
+}
+
+struct lisp_val lisp_closure_get_capture(const struct lisp_closure *c,
+                                         unsigned index) {
+  assert(index < c->n_captures);
+  return c->captures[index];
+}
+
+void lisp_closure_set_capture(struct lisp_closure *c, unsigned index,
+                              struct lisp_val val) {
+  assert(index < c->n_captures);
+  c->captures[index] = val;
 }
 
 static const struct lisp_vtable *const TYPE_TO_VTABLE[] = {

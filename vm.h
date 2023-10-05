@@ -55,8 +55,7 @@ void vm_stack_frame_skip_clear(struct lisp_vm *vm, unsigned n);
 struct stack_frame {
   /** Index into the stack */
   unsigned frame_pointer;
-  struct lisp_env *env;
-  struct code_chunk *code;
+  struct lisp_closure *func;
   /** Offset into the bytecode array of the function. */
   unsigned instr_pointer;
   /**
@@ -69,20 +68,18 @@ struct stack_frame {
 
 unsigned vm_current_frame_index(const struct lisp_vm *vm);
 struct stack_frame *vm_current_frame(struct lisp_vm *vm);
-struct lisp_env *vm_current_env(struct lisp_vm *vm);
 struct lisp_env *vm_global_env(struct lisp_vm *vm);
 
 /**
  * Create a new stack frame with a given execution environment.
  */
-void vm_create_stack_frame(struct lisp_vm *vm, struct lisp_env *env,
-                           struct code_chunk *code, unsigned arg_count);
+void vm_create_stack_frame(struct lisp_vm *vm, struct lisp_closure *func,
+                           unsigned arg_count);
 
 /**
  * Replace the current stack frame with a new one to initiate a tail call.
  */
-void vm_replace_stack_frame(struct lisp_vm *vm, struct lisp_env *env,
-                            struct code_chunk *code);
+void vm_replace_stack_frame(struct lisp_vm *vm, struct lisp_closure *func);
 
 /**
  * Return from the current frame. The return value is on the top of the
