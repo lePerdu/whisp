@@ -65,7 +65,7 @@ static struct lisp_closure *check_call(struct lisp_vm *vm,
   struct lisp_closure *new_func = lisp_val_cast(LISP_CLOSURE, func_obj);
   if (new_func == NULL) {
     vm_raise_format_exception(vm, "cannot call value of type: %s",
-                              lisp_val_type(func_obj));
+                              lisp_val_type_name(func_obj));
     return NULL;
   }
 
