@@ -644,18 +644,12 @@ static enum compile_res expand_and_compile_macro(struct compiler_ctx *ctx,
 static enum compile_res compile_do(struct compiler_ctx *ctx,
                                    struct lisp_val exprs) {
   if (lisp_val_is_nil(exprs)) {
-    if (ctx->begin_pos) {
-      // Non-tail position do at the beginning of a scope is a no-op
-      return COMP_SUCCESS;
-    } else {
+    if (ctx->tail_pos) {
+      // Skip this if in non-tail-pos so that an empty `(do)` can be between
+      // `def!`s
       compile_prepare_non_def(ctx);
-      if (compile_constant(ctx, LISP_VAL_NIL) == COMP_FAILED) {
-        return COMP_FAILED;
-      }
-
-      emit_return_if_tail_pos(ctx);
-      return COMP_SUCCESS;
     }
+    return compile_constant(ctx, LISP_VAL_NIL);
   }
 
   bool outer_tail_pos = ctx->tail_pos;
