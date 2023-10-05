@@ -1,6 +1,7 @@
 #include "core_helper.h"
 
 #include "types.h"
+#include "vm.h"
 
 static double lisp_val_to_real(enum lisp_type type, struct lisp_val x) {
   switch (type) {
@@ -40,15 +41,14 @@ enum eval_status type_pred(struct lisp_vm *vm, const char *func_name,
 
 enum eval_status unary_pred(struct lisp_vm *vm, const char *func_name,
                             bool (*pred)(struct lisp_val arg)) {
-  DEF_ARG(single_arg, 0);
   (void)func_name;
-  BUILTIN_RETURN(pred(single_arg) ? lisp_true() : lisp_false());
+  BUILTIN_RETURN(pred(vm_stack_pop(vm)) ? lisp_true() : lisp_false());
 }
 
 enum eval_status unary_func(struct lisp_vm *vm, const char *func_name,
                             enum eval_status (*transform)(
                                 struct lisp_val arg, struct lisp_val *result)) {
-  DEF_ARG(single_arg, 0);
+  struct lisp_val single_arg = vm_stack_top(vm);
   (void)func_name;
 
   struct lisp_val result;
@@ -56,6 +56,7 @@ enum eval_status unary_func(struct lisp_vm *vm, const char *func_name,
   if (res == EV_EXCEPTION) {
     return res;
   } else {
+    vm_stack_pop(vm);
     BUILTIN_RETURN(result);
   }
 }
@@ -64,7 +65,7 @@ enum eval_status unary_func_with_type(
     struct lisp_vm *vm, const char *func_name, enum lisp_type required_type,
     enum eval_status (*transform)(struct lisp_val arg,
                                   struct lisp_val *result)) {
-  DEF_ARG(single_arg, 0);
+  struct lisp_val single_arg = vm_stack_top(vm);
 
   if (lisp_val_type(single_arg) != required_type) {
     raise_helper_exception(ERROR_ARG_TYPE, lisp_type_name(required_type));
@@ -76,6 +77,7 @@ enum eval_status unary_func_with_type(
   if (res == EV_EXCEPTION) {
     return res;
   } else {
+    vm_stack_pop(vm);
     BUILTIN_RETURN(result);
   }
 }
@@ -84,8 +86,8 @@ enum eval_status binary_func(
     struct lisp_vm *vm, const char *func_name,
     enum eval_status (*transform)(struct lisp_val a, struct lisp_val b,
                                   struct lisp_val *result)) {
-  DEF_ARG(first, 0);
-  DEF_ARG(second, 1);
+  struct lisp_val first = vm_from_stack_pointer(vm, 1);
+  struct lisp_val second = vm_stack_top(vm);
   (void)func_name;
 
   struct lisp_val result;
@@ -93,6 +95,8 @@ enum eval_status binary_func(
   if (res == EV_EXCEPTION) {
     return res;
   } else {
+    vm_stack_pop(vm);
+    vm_stack_pop(vm);
     BUILTIN_RETURN(result);
   }
 }
@@ -102,8 +106,8 @@ enum eval_status binary_func_with_types(
     enum lisp_type b_type,
     enum eval_status (*transform)(struct lisp_val a, struct lisp_val b,
                                   struct lisp_val *result)) {
-  DEF_ARG(first, 0);
-  DEF_ARG(second, 1);
+  struct lisp_val first = vm_from_stack_pointer(vm, 1);
+  struct lisp_val second = vm_stack_top(vm);
   (void)func_name;
 
   if (lisp_val_type(first) != a_type) {
