@@ -183,12 +183,9 @@ static int disassemble_instr(const struct code_chunk *chunk, unsigned offset) {
     case OP_RETURN:
       printf("(return)\n");
       return 1;
-    case OP_TAIL_CALL: {
-      ENSURE_INSTR_ARGS(OP_TAIL_CALL, 1);
-      unsigned arg_count = chunk->bytecode.data[offset + 1];
-      printf("(tail-call %u)\n", arg_count);
-      return 2;
-    }
+    case OP_TAIL_CALL:
+      printf("(tail-call)\n");
+      return 1;
     case OP_ALLOC_CLOSURE: {
       ENSURE_INSTR_ARGS(OP_ALLOC_CLOSURE, 2);
       uint8_t const_index = chunk->bytecode.data[offset + 1];
