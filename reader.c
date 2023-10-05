@@ -383,6 +383,7 @@ START:
     return P_SUCCESS;
   } else {
     assert(false);
+    return P_ERROR;
   }
 }
 

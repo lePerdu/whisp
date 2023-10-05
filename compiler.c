@@ -569,6 +569,7 @@ static enum compile_res resolve_symbol(struct compiler_ctx *ctx,
   }
 
   assert(false);
+  return COMP_FAILED;
 }
 
 /**
