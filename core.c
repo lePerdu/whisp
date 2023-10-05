@@ -641,6 +641,12 @@ DEF_BUILTIN(core_macroexpand_1) {
   return eval_apply(vm, binding->value, ast_cons->cdr);
 }
 
+DEF_BUILTIN(core_disassemble) {
+  DEF_OBJ_ARG(struct lisp_closure, func, LISP_CLOSURE, 0);
+  chunk_disassemble(lisp_closure_code(func));
+  BUILTIN_RETURN(lisp_non_printing());
+}
+
 DEF_BUILTIN(core_compile_to_closure) {
   struct lisp_val ast = vm_stack_pop(vm);
 
@@ -691,123 +697,6 @@ struct builtin_config {
   bool is_variadic;
 };
 
-enum intrinsic_id {
-  INTRINSIC_FN_START = 0,
-
-  INTRINSIC_IS_INTEGER = INTRINSIC_FN_START,
-  INTRINSIC_TO_INT,
-  INTRINSIC_INT_ADD,
-  INTRINSIC_INT_SUB,
-  INTRINSIC_INT_MUL,
-  INTRINSIC_INT_DIV,
-  INTRINSIC_INT_BITAND,
-  INTRINSIC_INT_BITOR,
-  INTRINSIC_INT_BITXOR,
-  INTRINSIC_INT_BITSHIFT,
-
-  INTRINSIC_INT_LT,
-  INTRINSIC_INT_LTE,
-  INTRINSIC_INT_GT,
-  INTRINSIC_INT_GTE,
-  INTRINSIC_INT_EQ,
-
-  INTRINSIC_IS_REAL,
-  INTRINSIC_TO_REAL,
-  INTRINSIC_REAL_ADD,
-  INTRINSIC_REAL_SUB,
-  INTRINSIC_REAL_MUL,
-  INTRINSIC_REAL_DIV,
-  INTRINSIC_REAL_LT,
-  INTRINSIC_REAL_LTE,
-  INTRINSIC_REAL_GT,
-  INTRINSIC_REAL_GTE,
-  INTRINSIC_REAL_EQ,
-
-  INTRINSIC_REAL_EXP,
-  INTRINSIC_REAL_LOG,
-  INTRINSIC_REAL_POW,
-
-  /* Implemented in the prelude
-    INTRINSIC_ADD,
-    INTRINSIC_SUB,
-    INTRINSIC_MUL,
-    INTRINSIC_DIV,
-    INTRINSIC_LT,
-    INTRINSIC_LTE,
-    INTRINSIC_GT,
-    INTRINSIC_GTE,
-  */
-
-  // TODO Get consistent set of equality checks. Current setup is:
-  // - =: compares by reference. Works for integers and symbols due to how
-  // they are implemented
-  // - equal?: structural comparison, working for strings and lists
-  // TODO Make equality checks variadic (this one and others)?
-  INTRINSIC_IDENTICAL,
-  INTRINSIC_STRING_TO_SYMBOL,
-  INTRINSIC_IS_SYMBOL,
-  INTRINSIC_IS_FUNCTION,
-  INTRINSIC_IS_NULL,
-  INTRINSIC_MAKE_CONS,
-  INTRINSIC_IS_CONS,
-  INTRINSIC_CAR,
-  INTRINSIC_CDR,
-
-  INTRINSIC_IS_CHAR,
-  // TODO Impl char comparisions via char->int?
-  INTRINSIC_CHAR_LT,
-  INTRINSIC_CHAR_LTE,
-  INTRINSIC_CHAR_GT,
-  INTRINSIC_CHAR_GTE,
-  INTRINSIC_CHAR_EQ,
-  INTRINSIC_CHAR_TO_INT,
-  INTRINSIC_INT_TO_CHAR,
-
-  INTRINSIC_IS_STRING,
-  INTRINSIC_STRING_EQ,
-  INTRINSIC_STRING_COUNT,
-  INTRINSIC_STRING_GET,
-  INTRINSIC_STRING_CONCAT,
-  INTRINSIC_TO_STRING,
-
-  INTRINSIC_IS_ATOM,
-  INTRINSIC_MAKE_ATOM,
-  INTRINSIC_DEREF,
-  INTRINSIC_RESET,
-
-  INTRINSIC_IS_ARRAY,
-  INTRINSIC_MAKE_ARRAY,
-  INTRINSIC_ARRAY_LENGTH,
-  INTRINSIC_ARRAY_GET,
-  INTRINSIC_ARRAY_SET,
-
-  INTRINSIC_READ_STR,
-  INTRINSIC_WRITE,
-  INTRINSIC_WRITE_STR,
-  INTRINSIC_DISPLAY,
-  INTRINSIC_NEWLINE,
-  INTRINSIC_FLUSH,
-  INTRINSIC_SLURP,
-  INTRINSIC_LOAD_FILE,
-  INTRINSIC_RAISE,
-  // INTRINSIC_WITH_EXCEPTION_HANDLER,
-  INTRINSIC_RUNTIME,
-  INTRINSIC_TIME_MS,
-  INTRINSIC_SLEEP,
-
-  INTRINSIC_MACROEXPAND_1,
-
-  INTRINSIC_FN_END,
-  INTRINSIC_INTERNAL_START = INTRINSIC_FN_END,
-
-  INTRINSIC_PERPARE_APPLY = INTRINSIC_INTERNAL_START,
-  INTRINSIC_COMPILE_TO_CLOSURE,
-
-  INTRINSIC_INVALID,
-};
-
-static_assert(INTRINSIC_INVALID <= UINT8_MAX, "too many intrinsics");
-
 static const struct builtin_config builtins[] = {
     [INTRINSIC_IS_INTEGER] = {"int?", core_is_integer, 1, false},
     [INTRINSIC_TO_INT] = {"int", core_to_int, 1, false},
@@ -841,17 +730,6 @@ static const struct builtin_config builtins[] = {
     [INTRINSIC_REAL_EXP] = {"e**", core_real_exp, 2, false},
     [INTRINSIC_REAL_LOG] = {"log", core_real_log, 2, false},
     [INTRINSIC_REAL_POW] = {"real**", core_real_pow, 2, false},
-
-    /* Implemented in the prelude
-      [INTRINSIC_ADD] = {"+", core_add},
-      [INTRINSIC_SUB] = {"-", core_sub},
-      [INTRINSIC_MUL] = {"*", core_mul},
-      [INTRINSIC_DIV] = {"/", core_div},
-      [INTRINSIC_LT] = {"<", core_lt},
-      [INTRINSIC_LTE] = {"<=", core_lte},
-      [INTRINSIC_GT] = {">", core_gt},
-      [INTRINSIC_GTE] = {">=", core_gte},
-    */
 
     // TODO Get consistent set of equality checks. Current setup is:
     // - =: compares by reference. Works for integers and symbols due to how
@@ -906,13 +784,12 @@ static const struct builtin_config builtins[] = {
     [INTRINSIC_SLURP] = {"slurp", core_slurp, 1, false},
     [INTRINSIC_LOAD_FILE] = {"load-file", core_load_file, 1, false},
     [INTRINSIC_RAISE] = {"raise", core_raise, 1, false},
-    // [INTRINSIC_WITH_EXCEPTION_HANDLER] = {"with-exception-handler",
-    // core_with_exception_handler, 2, false},
     [INTRINSIC_RUNTIME] = {"runtime", core_runtime, 0, false},
     [INTRINSIC_TIME_MS] = {"time-ms", core_time_ms, 0, false},
     [INTRINSIC_SLEEP] = {"sleep", core_sleep, 1, false},
 
     [INTRINSIC_MACROEXPAND_1] = {"macroexpand-1", core_macroexpand_1, 1, false},
+    [INTRINSIC_DISASSEMBLE] = {"disassemble", core_disassemble, 1, false},
 
     // These are intrinsics, but not exposed directly as functions
     [INTRINSIC_PERPARE_APPLY] = {NULL, core_prepare_apply, 2, false},
