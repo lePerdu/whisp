@@ -5,7 +5,7 @@
 ; Easy way to comment out a bunch of expressions
 ; It does still have to return a value, so has to be used at top-level or in a
 ; do block
-(defmacro! (comment . ignore) nil)
+(defmacro! (comment . ignore) '(do))
 
 (defmacro! (let bindings ast)
   ; TODO Check structure

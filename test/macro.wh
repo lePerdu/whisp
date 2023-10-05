@@ -111,6 +111,21 @@
     (deftest! unique-with-custom-name
       (assert-not= (gensym "abc") (gensym "abc"))))
 
+  (defgroup! comment-macro
+    (deftest! comment-not-executed
+      (def! a (atom 5))
+      (comment (reset! a 6))
+      (assert= 5 @a))
+    (deftest! def!-after-comment
+      (assert= 5
+        ; Wrap in eval since it's a compiler test
+        ; Wrap in `let` to ensure the new scope
+        (eval '(let ()
+          (do
+            (comment "stuff")
+            (def! a 5)
+            a))))))
+
   (defgroup! let-cons
     (deftest! extracts-first
       (assert= 1 (let-cons ((a . b) (cons 1 2)) a)))
