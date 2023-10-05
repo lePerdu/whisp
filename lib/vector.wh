@@ -49,22 +49,21 @@
 
 ; Persistent set (returns a new vector)
 (defn! (vector-set v i value)
-  (if (_vector-check-bounds v i)
-    (do
-      (defn! (trie-set level node)
-        (let ((cur-index (_vector-level-index i level)))
-          (array-set
-            node
-            cur-index
-            (if (= level 0)
-              value
-              (trie-set
-                (_vector-dec-bits level)
-                (array-get node cur-index))))))
-
-      (_vector-root-set v
-        (trie-set (_vector-shift v) (_vector-root v))))
-    (error "vector-get: index out of bounds")))
+  (do
+    (defn! (trie-set level node)
+      (let ((cur-index (_vector-level-index i level)))
+        (array-set
+          node
+          cur-index
+          (if (= level 0)
+            value
+            (trie-set
+              (_vector-dec-bits level)
+              (array-get node cur-index))))))
+    (if (not (_vector-check-bounds v i))
+      (error "vector-get: index out of bounds"))
+    (_vector-root-set
+      v (trie-set (_vector-shift v) (_vector-root v)))))
 
 (defn! (make-new-branch shift single-elem)
   ; TODO Make iterative?

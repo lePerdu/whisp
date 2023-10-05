@@ -96,12 +96,12 @@
     (assert= 1 (f)))
 
   (deftest! macros-not-expanded-in-outer-scope
+    (def! a (atom 0))
     (defn! (f) (do
       (defmacro! (twice expr) (list 'do expr expr))
       nil))
     (f)
 
-    (def! a (atom 0))
     (assert-error (twice (swap! a inc)))))
 
 (defgroup! standard-macros

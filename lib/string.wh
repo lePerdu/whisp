@@ -36,9 +36,6 @@
 (defn! (substring str . opt-start-end) (do
   (def! n-extra (count opt-start-end))
 
-  (if (> n-extra 2)
-    (error "substring: too many arguments"))
-
   (def! start
     (if (>= n-extra 1)
       (car opt-start-end)
@@ -55,4 +52,7 @@
       (rec
         (string-concat acc (->string (string-get str index)))
         (inc index))))
+
+  (if (> n-extra 2)
+    (error "substring: too many arguments"))
   (rec "" start)))

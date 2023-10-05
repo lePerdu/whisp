@@ -21,9 +21,8 @@
     (def! a (atom 'x))
     (def! first @a)
     (reset! a 'y)
-    (def! second @a)
     (assert= 'x first)
-    (assert= 'y second))
+    (assert= 'y @a))
 
   (deftest! same-value-with-alias
     (def! a (atom 'x))
