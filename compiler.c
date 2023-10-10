@@ -1165,7 +1165,8 @@ DONE:
 
 static enum compile_res compile_let_bindings(struct compiler_ctx *ctx,
                                              struct lisp_val bindings) {
-  int starting_local_index = ctx->current_stack_size;
+  uint8_t starting_local_index = ctx->local_count;
+  int starting_stack_index = ctx->current_stack_size;
   int bind_count = 0;
 
   struct lisp_cons *bindings_cons;
@@ -1229,7 +1230,7 @@ static enum compile_res compile_let_bindings(struct compiler_ctx *ctx,
       return COMP_FAILED;
     }
 
-    if (compiler_add_local(ctx, bind_sym, starting_local_index + i) ==
+    if (compiler_add_local(ctx, bind_sym, starting_stack_index + i) ==
         COMP_FAILED) {
       return COMP_FAILED;
     }
