@@ -1039,14 +1039,8 @@ struct lisp_env *lisp_env_create(void) {
 
 struct lisp_env_binding *lisp_env_get(struct lisp_env *env,
                                       struct lisp_symbol *sym) {
-  struct lisp_env_binding *existing =
-      (struct lisp_env_binding *)symbol_table_lookup_entry(
-          env->mappings, lisp_symbol_name(sym), lisp_symbol_length(sym));
-  if (existing == NULL) {
-    return NULL;
-  } else {
-    return existing;
-  }
+  return (struct lisp_env_binding *)symbol_table_lookup_symbol(env->mappings,
+                                                               sym);
 }
 
 static struct lisp_env_binding *lisp_env_set_or_insert(struct lisp_env *env,
