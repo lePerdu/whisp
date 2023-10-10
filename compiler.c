@@ -86,6 +86,11 @@ struct compiler_ctx {
   bool tail_pos;
 
   /**
+   * Whether at the top level scope.
+   */
+  bool top_level;
+
+  /**
    * Name of the current binding.
    *
    * TODO Find a cleaner way to do this?
@@ -174,6 +179,7 @@ static struct compiler_ctx *compiler_ctx_create_top_level(struct lisp_vm *vm) {
   // There is no significance of `begin_pos` at the top-level
   ctx->begin_pos = false;
   ctx->tail_pos = true;
+  ctx->top_level = true;
   ctx->binding_name = NULL;
   ctx->chunk = new_chunk;
   gc_pop_root_expect_obj(new_chunk);
@@ -188,6 +194,7 @@ static struct compiler_ctx *compiler_ctx_create_inner(
   struct compiler_ctx *ctx = compiler_ctx_create_top_level(outer->vm);
   ctx->begin_pos = true;
   ctx->outer = outer;
+  ctx->top_level = false;
   return ctx;
 }
 
@@ -197,7 +204,7 @@ static struct code_chunk *compiler_ctx_complete(struct compiler_ctx *ctx) {
 }
 
 static bool compiler_ctx_is_top_level(const struct compiler_ctx *ctx) {
-  return ctx->outer == NULL;
+  return ctx->top_level;
 }
 
 static enum compile_res compile(struct compiler_ctx *ctx, struct lisp_val ast);
@@ -208,6 +215,15 @@ static enum compile_res compile_non_tail(struct compiler_ctx *ctx,
   ctx->tail_pos = false;
   enum compile_res res = compile(ctx, ast);
   ctx->tail_pos = outer_tail_pos;
+  return res;
+}
+
+static enum compile_res compile_non_top_level(struct compiler_ctx *ctx,
+                                              struct lisp_val ast) {
+  bool outer_top_level = ctx->top_level;
+  ctx->top_level = false;
+  enum compile_res res = compile(ctx, ast);
+  ctx->top_level = outer_top_level;
   return res;
 }
 
@@ -1256,9 +1272,9 @@ static enum compile_res compile_let(struct compiler_ctx *ctx,
   ctx->begin_pos = true;
 
   if (ctx->tail_pos) {
-    return compile(ctx, ast);
+    return compile_non_top_level(ctx, ast);
   } else {
-    if (compile(ctx, ast) == COMP_FAILED) {
+    if (compile_non_top_level(ctx, ast) == COMP_FAILED) {
       return COMP_FAILED;
     }
 
