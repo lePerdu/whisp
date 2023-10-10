@@ -55,10 +55,10 @@ struct compiler_ctx {
   struct local_binding locals[MAX_LOCALS];
   uint8_t local_count;
   /**
-   * Next index is not always `local_count` since macros are not really bound at
-   * runtime.
+   * Track the current stack frame size so that locals can be created in the
+   * middle of the stack.
    */
-  uint8_t local_next_index;
+  int current_stack_size;
 
   struct capture_binding captures[MAX_LOCALS];
   uint8_t capture_count;
@@ -165,7 +165,7 @@ static struct compiler_ctx *compiler_ctx_create_top_level(struct lisp_vm *vm) {
   ctx->vm = vm;
   ctx->outer = NULL;
   ctx->local_count = 0;
-  ctx->local_next_index = 0;
+  ctx->current_stack_size = 0;
   ctx->capture_count = 0;
   ctx->local_def_count = 0;
 
@@ -198,6 +198,219 @@ static bool compiler_ctx_is_top_level(const struct compiler_ctx *ctx) {
   return ctx->outer == NULL;
 }
 
+static enum compile_res compile(struct compiler_ctx *ctx, struct lisp_val ast);
+
+static struct lisp_closure *compile_chunk_to_closure(struct code_chunk *code) {
+  return lisp_closure_create(code, 0);
+}
+
+static void inc_stack_size(struct compiler_ctx *ctx, int n) {
+  ctx->current_stack_size += n;
+  assert(ctx->current_stack_size >= 0);
+}
+
+static void emit_byte(struct compiler_ctx *ctx, uint8_t byte) {
+  chunk_append_byte(ctx->chunk, byte);
+}
+
+static void emit_instr(struct compiler_ctx *ctx, enum bytecode_op op) {
+  emit_byte(ctx, op);
+}
+
+static enum compile_res emit_const(struct compiler_ctx *ctx,
+                                   struct lisp_val constant) {
+  // TODO Check for existing constant
+  unsigned const_idx = chunk_add_const(ctx->chunk, constant);
+  if (const_idx > UINT8_MAX) {
+    vm_raise_format_exception(ctx->vm,
+                              "too many constants in the current function");
+    return COMP_FAILED;
+  }
+
+  emit_instr(ctx, OP_CONST);
+  chunk_append_byte(ctx->chunk, const_idx);
+  inc_stack_size(ctx, 1);
+
+  return COMP_SUCCESS;
+}
+
+static void emit_pop(struct compiler_ctx *ctx) {
+  emit_instr(ctx, OP_POP);
+  inc_stack_size(ctx, -1);
+}
+
+static enum compile_res emit_create_uninitialized_box(
+    struct compiler_ctx *ctx) {
+  if (emit_const(ctx, lisp_uninitialized()) == COMP_FAILED) {
+    return COMP_FAILED;
+  }
+  emit_instr(ctx, OP_INTRINSIC);
+  // TODO Custom intrinsic for creating an uninitialized atom without the extra
+  // `emit_const`?
+  emit_byte(ctx, INTRINSIC_MAKE_ATOM);
+  return COMP_SUCCESS;
+}
+
+static void emit_set_boxed_local(struct compiler_ctx *ctx) {
+  emit_instr(ctx, OP_INTRINSIC);
+  emit_byte(ctx, INTRINSIC_RESET);
+  inc_stack_size(ctx, -1);
+
+  // Ignore return from `reset!`
+  emit_pop(ctx);
+}
+
+static void emit_unbox(struct compiler_ctx *ctx) {
+  emit_instr(ctx, OP_INTRINSIC);
+  emit_byte(ctx, INTRINSIC_DEREF);
+}
+
+static void emit_get_raw_local(struct compiler_ctx *ctx, uint8_t local_index) {
+  const struct local_binding *b = &ctx->locals[local_index];
+  assert(!b->is_macro);
+  emit_instr(ctx, OP_GET_FP);
+  emit_byte(ctx, b->as_index);
+  inc_stack_size(ctx, 1);
+}
+
+static void emit_get_local(struct compiler_ctx *ctx, uint8_t local_index) {
+  const struct local_binding *b = &ctx->locals[local_index];
+  emit_get_raw_local(ctx, local_index);
+  if (b->is_boxed) {
+    emit_unbox(ctx);
+  }
+}
+
+static void emit_get_raw_upvalue(struct compiler_ctx *ctx, uint8_t index) {
+  emit_instr(ctx, OP_GET_UPVALUE);
+  emit_byte(ctx, index);
+  inc_stack_size(ctx, 1);
+}
+
+static void emit_get_upvalue(struct compiler_ctx *ctx, uint8_t index) {
+  emit_get_raw_upvalue(ctx, index);
+  if (ctx->captures[index].is_boxed) {
+    emit_unbox(ctx);
+  }
+}
+
+static enum compile_res emit_get_global(struct compiler_ctx *ctx,
+                                        struct lisp_env_binding *binding) {
+  // TODO Check for existing constant
+  unsigned const_idx = chunk_add_const(ctx->chunk, lisp_val_from_obj(binding));
+  if (const_idx > UINT8_MAX) {
+    vm_raise_format_exception(ctx->vm,
+                              "too many constants in the current function");
+    return COMP_FAILED;
+  }
+
+  emit_instr(ctx, OP_GET_GLOBAL);
+  chunk_append_byte(ctx->chunk, const_idx);
+  inc_stack_size(ctx, 1);
+
+  return COMP_SUCCESS;
+}
+
+static enum compile_res emit_set_global(struct compiler_ctx *ctx,
+                                        struct lisp_env_binding *binding) {
+  // TODO Check for existing constant
+  unsigned const_idx = chunk_add_const(ctx->chunk, lisp_val_from_obj(binding));
+  if (const_idx > UINT8_MAX) {
+    vm_raise_format_exception(ctx->vm,
+                              "too many constants in the current function");
+    return COMP_FAILED;
+  }
+
+  emit_instr(ctx, OP_SET_GLOBAL);
+  chunk_append_byte(ctx->chunk, const_idx);
+  inc_stack_size(ctx, -1);
+
+  return COMP_SUCCESS;
+}
+
+static void emit_return_if_tail_pos(struct compiler_ctx *ctx) {
+  if (ctx->tail_pos) {
+    emit_instr(ctx, OP_RETURN);
+    ctx->current_stack_size = 0;
+  }
+}
+
+static enum compile_res emit_alloc_closure(struct compiler_ctx *ctx,
+                                           struct code_chunk *closure_code,
+                                           uint8_t n_captures) {
+  // TODO Check for existing constant
+  unsigned const_idx =
+      chunk_add_const(ctx->chunk, lisp_val_from_obj(closure_code));
+  if (const_idx > UINT8_MAX) {
+    vm_raise_format_exception(ctx->vm,
+                              "too many constants in the current function");
+    return COMP_FAILED;
+  }
+
+  emit_instr(ctx, OP_ALLOC_CLOSURE);
+  emit_byte(ctx, const_idx);
+  emit_byte(ctx, n_captures);
+  inc_stack_size(ctx, 1);
+  return COMP_SUCCESS;
+}
+
+static void emit_init_closure(struct compiler_ctx *ctx, uint8_t n_captures) {
+  emit_instr(ctx, OP_INIT_CLOSURE);
+  emit_byte(ctx, n_captures);
+  inc_stack_size(ctx, -(int)n_captures);
+}
+
+static enum compile_res emit_call(struct compiler_ctx *ctx,
+                                  unsigned arg_count) {
+  if (arg_count > UINT8_MAX) {
+    vm_raise_format_exception(ctx->vm, "too many arguments");
+    return COMP_FAILED;
+  }
+
+  emit_instr(ctx, OP_CALL);
+  emit_byte(ctx, arg_count);
+  // N*ARGS + 1*FUNCTION -> 1*RETURN
+  inc_stack_size(ctx, -(int)arg_count);
+
+  return COMP_SUCCESS;
+}
+
+static enum compile_res emit_tail_call(struct compiler_ctx *ctx,
+                                       unsigned arg_count) {
+  // Clear out the stack frame except for the arguments and the function
+  unsigned remaining_stack_size = arg_count + 1;
+  if (remaining_stack_size > UINT8_MAX) {
+    vm_raise_format_exception(ctx->vm, "too many arguments");
+    return COMP_FAILED;
+  }
+
+  emit_instr(ctx, OP_SKIP_CLEAR);
+  emit_byte(ctx, remaining_stack_size);
+  emit_instr(ctx, OP_TAIL_CALL);
+  ctx->current_stack_size = arg_count;
+  return COMP_SUCCESS;
+}
+
+static unsigned emit_init_branch(struct compiler_ctx *ctx,
+                                 enum bytecode_op branch_op) {
+  chunk_append_byte(ctx->chunk, branch_op);
+  return chunk_append_short(ctx->chunk, -1);
+}
+
+static enum compile_res fixup_branch_to_here(struct compiler_ctx *ctx,
+                                             unsigned branch_code) {
+  unsigned target = ctx->chunk->bytecode.size;
+  int diff = target - branch_code;
+  if (diff < INT16_MIN || INT16_MAX < diff) {
+    vm_raise_format_exception(ctx->vm,
+                              "branch target too far away: %d -> %d = %d",
+                              branch_code, target, diff);
+    return COMP_FAILED;
+  }
+  chunk_set_short(ctx->chunk, branch_code, diff);
+  return COMP_SUCCESS;
+}
+
 static struct local_binding *compiler_lookup_local(struct compiler_ctx *ctx,
                                                    struct lisp_symbol *sym) {
   for (unsigned i = 0; i < ctx->local_count; i++) {
@@ -228,7 +441,7 @@ static struct local_binding *compiler_alloc_local(struct compiler_ctx *ctx,
   return created;
 }
 
-static enum compile_res compiler_add_local(struct compiler_ctx *ctx,
+static enum compile_res compiler_add_param(struct compiler_ctx *ctx,
                                            struct lisp_symbol *sym) {
   struct local_binding *b = compiler_alloc_local(ctx, sym);
   if (b == NULL) {
@@ -237,12 +450,21 @@ static enum compile_res compiler_add_local(struct compiler_ctx *ctx,
 
   b->is_macro = false;
   b->is_boxed = false;
-  b->as_index = ctx->local_next_index++;
+  b->as_index = ctx->current_stack_size++;
   return COMP_SUCCESS;
 }
 
 static enum compile_res compiler_add_boxed_local(struct compiler_ctx *ctx,
                                                  struct lisp_symbol *sym) {
+  int stack_index = ctx->current_stack_size;
+  if (stack_index > UINT8_MAX) {
+    return COMP_FAILED;
+  }
+
+  if (emit_create_uninitialized_box(ctx) == COMP_FAILED) {
+    return COMP_FAILED;
+  }
+
   struct local_binding *b = compiler_alloc_local(ctx, sym);
   if (b == NULL) {
     return COMP_FAILED;
@@ -250,7 +472,7 @@ static enum compile_res compiler_add_boxed_local(struct compiler_ctx *ctx,
 
   b->is_macro = false;
   b->is_boxed = true;
-  b->as_index = ctx->local_next_index++;
+  b->as_index = stack_index;
   return COMP_SUCCESS;
 }
 
@@ -265,189 +487,6 @@ static enum compile_res compiler_add_local_macro(struct compiler_ctx *ctx,
   b->is_macro = true;
   b->is_boxed = false;
   b->as_macro = macro_fn;
-  return COMP_SUCCESS;
-}
-
-static enum compile_res compile(struct compiler_ctx *ctx, struct lisp_val ast);
-
-static struct lisp_closure *compile_chunk_to_closure(struct code_chunk *code) {
-  return lisp_closure_create(code, 0);
-}
-
-static void emit_byte(struct compiler_ctx *ctx, uint8_t byte) {
-  chunk_append_byte(ctx->chunk, byte);
-}
-
-static void emit_instr(struct compiler_ctx *ctx, enum bytecode_op op) {
-  emit_byte(ctx, op);
-}
-
-static enum compile_res emit_const(struct compiler_ctx *ctx,
-                                   struct lisp_val constant) {
-  // TODO Check for existing constant
-  unsigned const_idx = chunk_add_const(ctx->chunk, constant);
-  if (const_idx > UINT8_MAX) {
-    vm_raise_format_exception(ctx->vm,
-                              "too many constants in the current function");
-    return COMP_FAILED;
-  }
-
-  emit_instr(ctx, OP_CONST);
-  chunk_append_byte(ctx->chunk, const_idx);
-
-  return COMP_SUCCESS;
-}
-
-static enum compile_res emit_create_boxed_local(struct compiler_ctx *ctx) {
-  if (emit_const(ctx, lisp_uninitialized()) == COMP_FAILED) {
-    return COMP_FAILED;
-  }
-  emit_instr(ctx, OP_INTRINSIC);
-  // TODO Custom intrinsic for creating an uninitialized atom without the extra
-  // `emit_const`?
-  emit_byte(ctx, INTRINSIC_MAKE_ATOM);
-  return COMP_SUCCESS;
-}
-
-static void emit_set_boxed_local(struct compiler_ctx *ctx) {
-  emit_instr(ctx, OP_INTRINSIC);
-  emit_byte(ctx, INTRINSIC_RESET);
-  // Ignore return from `reset!`
-  emit_instr(ctx, OP_POP);
-}
-
-static void emit_unbox(struct compiler_ctx *ctx) {
-  emit_instr(ctx, OP_INTRINSIC);
-  emit_byte(ctx, INTRINSIC_DEREF);
-}
-
-static void emit_get_raw_local(struct compiler_ctx *ctx, uint8_t local_index) {
-  const struct local_binding *b = &ctx->locals[local_index];
-  assert(!b->is_macro);
-  emit_instr(ctx, OP_GET_FP);
-  emit_byte(ctx, b->as_index);
-}
-
-static void emit_get_local(struct compiler_ctx *ctx, uint8_t local_index) {
-  const struct local_binding *b = &ctx->locals[local_index];
-  emit_get_raw_local(ctx, local_index);
-  if (b->is_boxed) {
-    emit_unbox(ctx);
-  }
-}
-
-static void emit_get_raw_upvalue(struct compiler_ctx *ctx, uint8_t index) {
-  emit_instr(ctx, OP_GET_UPVALUE);
-  emit_byte(ctx, index);
-}
-
-static void emit_get_upvalue(struct compiler_ctx *ctx, uint8_t index) {
-  emit_get_raw_upvalue(ctx, index);
-  if (ctx->captures[index].is_boxed) {
-    emit_unbox(ctx);
-  }
-}
-
-static enum compile_res emit_get_global(struct compiler_ctx *ctx,
-                                        struct lisp_env_binding *binding) {
-  // TODO Check for existing constant
-  unsigned const_idx = chunk_add_const(ctx->chunk, lisp_val_from_obj(binding));
-  if (const_idx > UINT8_MAX) {
-    vm_raise_format_exception(ctx->vm,
-                              "too many constants in the current function");
-    return COMP_FAILED;
-  }
-
-  emit_instr(ctx, OP_GET_GLOBAL);
-  chunk_append_byte(ctx->chunk, const_idx);
-
-  return COMP_SUCCESS;
-}
-
-static enum compile_res emit_set_global(struct compiler_ctx *ctx,
-                                        struct lisp_env_binding *binding) {
-  // TODO Check for existing constant
-  unsigned const_idx = chunk_add_const(ctx->chunk, lisp_val_from_obj(binding));
-  if (const_idx > UINT8_MAX) {
-    vm_raise_format_exception(ctx->vm,
-                              "too many constants in the current function");
-    return COMP_FAILED;
-  }
-
-  emit_instr(ctx, OP_SET_GLOBAL);
-  chunk_append_byte(ctx->chunk, const_idx);
-
-  return COMP_SUCCESS;
-}
-
-static void emit_return_if_tail_pos(struct compiler_ctx *ctx) {
-  if (ctx->tail_pos) {
-    emit_instr(ctx, OP_RETURN);
-  }
-}
-
-static enum compile_res emit_alloc_closure(struct compiler_ctx *ctx,
-                                           struct code_chunk *closure_code,
-                                           uint8_t n_captures) {
-  // TODO Check for existing constant
-  unsigned const_idx =
-      chunk_add_const(ctx->chunk, lisp_val_from_obj(closure_code));
-  if (const_idx > UINT8_MAX) {
-    vm_raise_format_exception(ctx->vm,
-                              "too many constants in the current function");
-    return COMP_FAILED;
-  }
-
-  emit_instr(ctx, OP_ALLOC_CLOSURE);
-  emit_byte(ctx, const_idx);
-  emit_byte(ctx, n_captures);
-  return COMP_SUCCESS;
-}
-
-static enum compile_res emit_call(struct compiler_ctx *ctx,
-                                  unsigned arg_count) {
-  if (arg_count > UINT8_MAX) {
-    vm_raise_format_exception(ctx->vm, "too many arguments");
-    return COMP_FAILED;
-  }
-
-  emit_instr(ctx, OP_CALL);
-  emit_byte(ctx, arg_count);
-  return COMP_SUCCESS;
-}
-
-static enum compile_res emit_tail_call(struct compiler_ctx *ctx,
-                                       unsigned arg_count) {
-  // Clear out the stack frame except for the arguments and the function
-  unsigned remaining_stack_size = arg_count + 1;
-  if (remaining_stack_size > UINT8_MAX) {
-    vm_raise_format_exception(ctx->vm, "too many arguments");
-    return COMP_FAILED;
-  }
-
-  emit_instr(ctx, OP_SKIP_CLEAR);
-  emit_byte(ctx, remaining_stack_size);
-  emit_instr(ctx, OP_TAIL_CALL);
-  return COMP_SUCCESS;
-}
-
-static unsigned emit_init_branch(struct compiler_ctx *ctx,
-                                 enum bytecode_op branch_op) {
-  chunk_append_byte(ctx->chunk, branch_op);
-  return chunk_append_short(ctx->chunk, -1);
-}
-
-static enum compile_res fixup_branch_to_here(struct compiler_ctx *ctx,
-                                             unsigned branch_code) {
-  unsigned target = ctx->chunk->bytecode.size;
-  int diff = target - branch_code;
-  if (diff < INT16_MIN || INT16_MAX < diff) {
-    vm_raise_format_exception(ctx->vm,
-                              "branch target too far away: %d -> %d = %d",
-                              branch_code, target, diff);
-    return COMP_FAILED;
-  }
-  chunk_set_short(ctx->chunk, branch_code, diff);
   return COMP_SUCCESS;
 }
 
@@ -599,11 +638,6 @@ static enum compile_res compile_prepare_non_def(struct compiler_ctx *ctx) {
     if (res == COMP_FAILED) {
       return res;
     }
-
-    res = emit_create_boxed_local(ctx);
-    if (res == COMP_FAILED) {
-      return res;
-    }
   }
 
   // Initialize each in order
@@ -701,7 +735,7 @@ static enum compile_res compile_do(struct compiler_ctx *ctx,
     }
 
     // Ignore the result
-    emit_instr(ctx, OP_POP);
+    emit_pop(ctx);
 
     exprs = exprs_cons->cdr;
   }
@@ -950,9 +984,10 @@ static enum compile_res compile_defsyntax(struct compiler_ctx *ctx,
  */
 static enum compile_res compile_fn_params(struct compiler_ctx *ctx,
                                           struct lisp_val raw_params) {
+  assert(ctx->current_stack_size == 0);
+
   // TODO Process in reverse order to avoid copying values
   // TODO Leave arguments on the stack and do some sort of upvalue management
-  unsigned param_index = 0;
   while (lisp_val_type(raw_params) == LISP_CONS) {
     struct lisp_cons *cons_cell = lisp_val_as_obj(raw_params);
     struct lisp_val param_name = cons_cell->car;
@@ -965,15 +1000,14 @@ static enum compile_res compile_fn_params(struct compiler_ctx *ctx,
     }
 
     // compiler_add_local checks for duplicates, so no need to here
-    if (compiler_add_local(ctx, sym_name) == COMP_FAILED) {
+    if (compiler_add_param(ctx, sym_name) == COMP_FAILED) {
       return COMP_FAILED;
     }
 
     raw_params = cons_cell->cdr;
-    param_index++;
   }
 
-  ctx->chunk->req_arg_count = param_index;
+  ctx->chunk->req_arg_count = ctx->current_stack_size;
 
   if (!lisp_val_is_nil(raw_params)) {
     ctx->chunk->is_variadic = true;
@@ -985,12 +1019,12 @@ static enum compile_res compile_fn_params(struct compiler_ctx *ctx,
       return COMP_FAILED;
     }
 
-    if (compiler_add_local(ctx, rest_param) == COMP_FAILED) {
+    emit_instr(ctx, OP_BUILD_REST_ARGS);
+    emit_byte(ctx, ctx->current_stack_size);
+
+    if (compiler_add_param(ctx, rest_param) == COMP_FAILED) {
       return COMP_FAILED;
     }
-
-    emit_instr(ctx, OP_BUILD_REST_ARGS);
-    emit_byte(ctx, param_index);
   } else {
     ctx->chunk->is_variadic = false;
   }
@@ -1054,9 +1088,7 @@ static enum compile_res compile_fn(struct compiler_ctx *ctx,
     }
   }
 
-  emit_instr(ctx, OP_INIT_CLOSURE);
-  emit_byte(ctx, func_ctx->capture_count);
-
+  emit_init_closure(ctx, func_ctx->capture_count);
   emit_return_if_tail_pos(ctx);
 
 DONE:
