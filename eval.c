@@ -41,12 +41,12 @@ static enum eval_status build_rest_args(struct lisp_vm *vm, unsigned from_fp) {
 static enum eval_status check_call_args(struct lisp_vm *vm,
                                         struct lisp_closure *func,
                                         unsigned arg_count) {
-  unsigned req_args = lisp_closure_arg_count(func);
+  unsigned req_args = func->code->req_arg_count;
   if (arg_count < req_args) {
     vm_raise_format_exception(vm, "not enough arguments");
     return EV_EXCEPTION;
   }
-  if (arg_count > req_args && !lisp_closure_is_variadic(func)) {
+  if (arg_count > req_args && !func->code->is_variadic) {
     vm_raise_format_exception(vm, "too many arguments");
     return EV_EXCEPTION;
   }
@@ -90,7 +90,7 @@ static enum eval_status eval_bytecode(struct lisp_vm *vm) {
 
 LOOP_NEW_FRAME:
   frame = vm_current_frame(vm);
-  code = lisp_closure_code(frame->func);
+  code = frame->func->code;
   ip = &frame->instr_pointer;
   assert(*ip < code->bytecode.size);
 
@@ -112,7 +112,6 @@ LOOP:
     }
     case OP_GET_UPVALUE: {
       uint8_t idx = chunk_read_byte(code, ip);
-      assert(idx < lisp_closure_n_captures(frame->func));
       vm_stack_push(vm, lisp_closure_get_capture(frame->func, idx));
       goto LOOP;
     }
@@ -216,11 +215,11 @@ LOOP:
         goto HANDLE_EXCEPTION;
       }
 
-      if (lisp_closure_n_captures(closure) != n_captures) {
+      if (closure->n_captures != n_captures) {
         vm_raise_format_exception(vm,
                                   "tried to initialize closure with wrong "
                                   "number of captures. Expected %u, got %u",
-                                  lisp_closure_n_captures(closure), n_captures);
+                                  closure->n_captures, n_captures);
         goto HANDLE_EXCEPTION;
       }
 

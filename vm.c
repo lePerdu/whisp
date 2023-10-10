@@ -16,12 +16,6 @@ static void stack_frame_visit(struct stack_frame *rec, visit_callback cb,
   cb(ctx, lisp_val_from_obj(rec->func));
 }
 
-struct call_stack {
-  size_t size;
-  size_t cap;
-  struct stack_frame *data;
-};
-
 #define CALL_STACK_EMPTY \
   ((struct call_stack){.size = 0, .cap = 0, .data = NULL})
 
@@ -45,18 +39,6 @@ static void call_stack_pop(struct call_stack *s) {
 }
 
 static void call_stack_destroy(struct call_stack *s) { free(s->data); }
-
-struct lisp_vm {
-  struct lisp_obj header;
-
-  // TODO Store global env as a base call frame?
-  struct lisp_env *global_env;
-  struct call_stack call_frames;
-  struct val_array stack;
-
-  bool has_exception;
-  struct lisp_val current_exception;
-};
 
 static void vm_visit_children(struct lisp_val v, visit_callback cb, void *ctx) {
   struct lisp_vm *vm = lisp_val_as_obj(v);
@@ -102,17 +84,6 @@ struct lisp_vm *vm_create(void) {
   return vm;
 }
 
-bool vm_has_exception(const struct lisp_vm *vm) { return vm->has_exception; }
-
-struct lisp_val vm_current_exception(const struct lisp_vm *vm) {
-  return vm->current_exception;
-}
-
-void vm_raise_exception(struct lisp_vm *vm, struct lisp_val exception) {
-  vm->has_exception = true;
-  vm->current_exception = exception;
-}
-
 void vm_raise_format_exception(struct lisp_vm *vm, const char *format, ...) {
   va_list ap;
   va_start(ap, format);
@@ -120,20 +91,7 @@ void vm_raise_format_exception(struct lisp_vm *vm, const char *format, ...) {
   va_end(ap);
 }
 
-void vm_clear_exception(struct lisp_vm *vm) {
-  vm->has_exception = false;
-  vm->current_exception = LISP_VAL_NIL;
-}
-
-// TODO is this necessary? Would it be reasonable to just always use
-// vm_current_env?
-struct lisp_env *vm_global_env(struct lisp_vm *vm) { return vm->global_env; }
-
-unsigned vm_current_frame_index(const struct lisp_vm *vm) {
-  return vm->call_frames.size;
-}
-
-struct stack_frame *vm_current_frame(struct lisp_vm *vm) {
+inline struct stack_frame *vm_current_frame(struct lisp_vm *vm) {
   if (vm->call_frames.size == 0) {
     return NULL;
   } else {

@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "bytecode.h"
 #include "types.h"
 
 static void print_cons(struct str_builder *b, struct lisp_cons *cons,
@@ -32,7 +33,7 @@ static void print_cons(struct str_builder *b, struct lisp_cons *cons,
 static void print_array(struct str_builder *b, struct lisp_array *arr,
                         bool readble) {
   str_builder_concat_cstr(b, "#<array");
-  for (size_t i = 0; i < lisp_array_length(arr); i++) {
+  for (size_t i = 0; i < arr->length; i++) {
     str_builder_append(b, ' ');
     print_str_into(b, lisp_array_get(arr, i), readble);
   }
@@ -84,7 +85,7 @@ static int translate_escaped(char c) {
 
 static void print_escaped(struct str_builder *b, struct lisp_string *s) {
   str_builder_append(b, '"');
-  for (unsigned i = 0; i < lisp_string_length(s); i++) {
+  for (unsigned i = 0; i < s->length; i++) {
     char c = lisp_string_get(s, i);
     int escaped = translate_escaped(c);
     if (escaped == -1) {
@@ -108,8 +109,8 @@ static void print_real(struct str_builder *b, double v) {
   const struct lisp_string *str_buf = str_builder_get_str(b);
 
   // Make sure there is at least 1 char which indicates a real number
-  size_t end_index = lisp_string_length(str_buf);
-  size_t start_index = lisp_string_length(str_buf) - n_chars;
+  size_t end_index = str_buf->length;
+  size_t start_index = str_buf->length - n_chars;
   for (unsigned i = start_index; i < end_index; i++) {
     if (!is_int_char(lisp_string_get(str_buf, i))) {
       return;
@@ -182,8 +183,8 @@ void print_str_into(struct str_builder *b, struct lisp_val v, bool readable) {
     case LISP_CLOSURE: {
       struct lisp_closure *closure = lisp_val_as_obj(v);
       const char *name = lisp_closure_name_cstr(closure);
-      print_function(b, name, lisp_closure_arg_count(closure),
-                     lisp_closure_is_variadic(closure));
+      print_function(b, name, closure->code->req_arg_count,
+                     closure->code->is_variadic);
       break;
     }
     case LISP_ATOM: {
@@ -215,7 +216,7 @@ struct lisp_string *print_str(struct lisp_val v, bool readble) {
 }
 
 void display_str(const struct lisp_string *s) {
-  for (unsigned i = 0; i < lisp_string_length(s); i++) {
+  for (unsigned i = 0; i < s->length; i++) {
     putchar(lisp_string_get(s, i));
   }
 }

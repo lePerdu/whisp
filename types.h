@@ -70,6 +70,15 @@ struct lisp_val {
   uintptr_t tagged_ptr;
 };
 
+enum ptr_tag {
+  TAG_INT = 1,
+  TAG_OBJ = 0,
+};
+
+#define TAG_SHIFT 1
+#define TAG_MASK ((uintptr_t)1)
+#define VALUE_MASK (~TAG_MASK)
+
 enum lisp_type lisp_val_type(struct lisp_val v);
 
 // TODO Remove one of these
@@ -119,8 +128,19 @@ void *lisp_obj_alloc(const struct lisp_vtable *vt, size_t size);
  */
 const struct lisp_vtable *lisp_val_vtable(struct lisp_val v);
 
-struct lisp_val lisp_val_from_obj(void *obj);
-void *lisp_val_as_obj(struct lisp_val v);
+// Since the object tag is 0, pointer conversions can be a no-op
+static_assert(TAG_OBJ == 0, "Object tag is non-0");
+
+static inline void *lisp_val_as_obj(struct lisp_val v) {
+  assert((v.tagged_ptr & TAG_MASK) == TAG_OBJ);
+  return (void *)v.tagged_ptr;
+}
+
+static inline struct lisp_val lisp_val_from_obj(void *obj) {
+  uintptr_t raw = (uintptr_t)obj;
+  assert((raw & TAG_MASK) == 0);
+  return (struct lisp_val){raw};
+}
 
 /**
  * Check the type of a lisp_val and convert to an object pointer.
@@ -153,13 +173,21 @@ void *lisp_val_cast(enum lisp_type type, struct lisp_val v);
 #define LISP_CAST(t, v) ((t *)lisp_val_cast(LISP_CONVERT_C_TYPE(t), v))
 */
 
-bool lisp_val_is_nil(struct lisp_val v);
+static inline bool lisp_val_is_nil(struct lisp_val v) {
+  return lisp_val_type(v) == LISP_NIL;
+}
 
 // Cannonical true and false values
 struct lisp_val lisp_true(void);
 struct lisp_val lisp_false(void);
-bool lisp_val_is_true(struct lisp_val v);
-bool lisp_val_is_false(struct lisp_val v);
+
+static inline bool lisp_val_is_false(struct lisp_val v) {
+  return lisp_val_is_nil(v);
+}
+
+static inline bool lisp_val_is_true(struct lisp_val v) {
+  return !lisp_val_is_false(v);
+}
 
 /**
  * Object returned by forms of unspecified return to indicate that the REPL
@@ -187,8 +215,18 @@ bool lisp_val_is_func(struct lisp_val v);
 #define LISP_INT_MIN (LONG_MIN >> 2)
 #define LISP_INT_MAX (LONG_MAX >> 2)
 
-struct lisp_val lisp_val_from_int(long n);
-long lisp_val_as_int(struct lisp_val v);
+static inline struct lisp_val lisp_val_from_int(long n) {
+  // Having the assertions aborts the program on integer overflow.
+  // TODO Make a runtime error? Just ignore overflow?
+  // assert(n >= LISP_INT_MIN);
+  // assert(n <= LISP_INT_MAX);
+  return (struct lisp_val){(uintptr_t)(n << TAG_SHIFT) | TAG_INT};
+}
+
+static inline long lisp_val_as_int(struct lisp_val v) {
+  assert((v.tagged_ptr & TAG_MASK) == TAG_INT);
+  return ((long)v.tagged_ptr) >> TAG_SHIFT;
+}
 
 struct lisp_val lisp_val_from_real(double d);
 double lisp_val_as_real(struct lisp_val v);
@@ -204,14 +242,25 @@ lisp_char_t lisp_val_as_char(struct lisp_val v);
 /**
  * Mutable cell which can contain any value.
  */
-struct lisp_atom;
+struct lisp_atom {
+  struct lisp_obj header;
+  struct lisp_val value;
+};
 
 struct lisp_atom *lisp_atom_create(struct lisp_val v);
-struct lisp_val lisp_atom_deref(const struct lisp_atom *a);
-void lisp_atom_reset(struct lisp_atom *a, struct lisp_val v);
-bool lisp_atom_eq(const struct lisp_atom *a, const struct lisp_atom *b);
 
-struct lisp_array;
+static inline struct lisp_val lisp_atom_deref(const struct lisp_atom *a) {
+  return a->value;
+}
+static inline void lisp_atom_reset(struct lisp_atom *a, struct lisp_val v) {
+  a->value = v;
+}
+
+struct lisp_array {
+  struct lisp_obj header;
+  size_t length;
+  struct lisp_val data[];
+};
 
 /**
  * Create a new array filled with nil values.
@@ -219,10 +268,29 @@ struct lisp_array;
 struct lisp_array *lisp_array_create(size_t length);
 
 size_t lisp_array_length(const struct lisp_array *arr);
-struct lisp_val lisp_array_get(const struct lisp_array *arr, size_t index);
-void lisp_array_set(struct lisp_array *arr, size_t index, struct lisp_val new);
 
-struct lisp_symbol;
+static inline struct lisp_val lisp_array_get(const struct lisp_array *arr,
+                                             size_t index) {
+  assert(index < arr->length);
+  return arr->data[index];
+}
+
+static inline void lisp_array_set(struct lisp_array *arr, size_t index,
+                                  struct lisp_val new) {
+  assert(index < arr->length);
+  arr->data[index] = new;
+}
+
+typedef unsigned hash_t;
+
+struct lisp_symbol {
+  struct lisp_obj header;
+  // Hash code is computed at initialization since symbols are mainly used as
+  // lookup keys
+  hash_t hash_code;
+  size_t length;
+  char data[];
+};
 
 struct lisp_symbol *lisp_symbol_create(const char *s, size_t len);
 /**
@@ -232,8 +300,11 @@ struct lisp_symbol *lisp_symbol_create(const char *s, size_t len);
  * so checking should be done up-front.
  */
 struct lisp_symbol *lisp_symbol_create_cstr(const char *s);
-const char *lisp_symbol_name(const struct lisp_symbol *s);
-size_t lisp_symbol_length(const struct lisp_symbol *s);
+
+static inline const char *lisp_symbol_name(const struct lisp_symbol *s) {
+  return s->data;
+}
+
 bool lisp_symbol_eq(const struct lisp_symbol *a, const struct lisp_symbol *b);
 
 extern struct lisp_symbol_table *symbol_intern_table;
@@ -242,7 +313,11 @@ extern struct lisp_symbol_table *symbol_intern_table;
 void lisp_symbol_table_delete_if(struct lisp_symbol_table *map,
                                  bool (*pred)(struct lisp_symbol *sym));
 
-struct lisp_string;
+struct lisp_string {
+  struct lisp_obj header;
+  size_t length;
+  char data[];
+};
 
 struct lisp_string *lisp_string_create(const char *s, size_t len);
 struct lisp_string *lisp_string_create_cstr(const char *s);
@@ -253,9 +328,16 @@ struct lisp_string *lisp_string_create_cstr(const char *s);
 struct lisp_string *lisp_string_format(const char *format, ...);
 struct lisp_string *lisp_string_vformat(const char *format, va_list ap);
 
-size_t lisp_string_length(const struct lisp_string *s);
-char lisp_string_get(const struct lisp_string *s, size_t i);
-const char *lisp_string_as_cstr(const struct lisp_string *s);
+static inline char lisp_string_get(const struct lisp_string *s, size_t i) {
+  // <= to allow fetching the null byte
+  assert(i <= s->length);
+  return s->data[i];
+}
+
+static inline const char *lisp_string_as_cstr(const struct lisp_string *s) {
+  return s->data;
+}
+
 bool lisp_string_eq(const struct lisp_string *a, const struct lisp_string *b);
 
 struct str_builder {
@@ -378,21 +460,32 @@ void lisp_env_binding_set_value(struct lisp_env_binding *b,
                                 struct lisp_val new);
 bool lisp_env_binding_is_macro(const struct lisp_env_binding *b);
 
-struct lisp_closure;
 struct code_chunk;
+
+struct lisp_closure {
+  struct lisp_obj header;
+  struct code_chunk *code;
+  size_t n_captures;
+  struct lisp_val captures[];
+};
 
 struct lisp_closure *lisp_closure_create(struct code_chunk *bytecode,
                                          size_t n_captures);
+
 struct lisp_symbol *lisp_closure_name(const struct lisp_closure *c);
 const char *lisp_closure_name_cstr(const struct lisp_closure *c);
-struct code_chunk *lisp_closure_code(const struct lisp_closure *c);
-unsigned lisp_closure_arg_count(const struct lisp_closure *c);
-bool lisp_closure_is_variadic(const struct lisp_closure *c);
 
-size_t lisp_closure_n_captures(const struct lisp_closure *c);
-struct lisp_val lisp_closure_get_capture(const struct lisp_closure *c,
-                                         unsigned index);
-void lisp_closure_set_capture(struct lisp_closure *c, unsigned index,
-                              struct lisp_val val);
+static inline struct lisp_val lisp_closure_get_capture(
+    const struct lisp_closure *c, unsigned index) {
+  assert(index < c->n_captures);
+  return c->captures[index];
+}
+
+static inline void lisp_closure_set_capture(struct lisp_closure *c,
+                                            unsigned index,
+                                            struct lisp_val val) {
+  assert(index < c->n_captures);
+  c->captures[index] = val;
+}
 
 #endif

@@ -108,7 +108,7 @@ static struct lisp_vm *setup_vm(int argc, char **argv) {
   // Save the VM permenantly
   gc_push_root_obj(vm);
 
-  struct lisp_env *global_env = vm_global_env(vm);
+  struct lisp_env *global_env = vm->global_env;
 
   define_builtins(global_env);
   // Just for testing purposes

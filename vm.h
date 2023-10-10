@@ -4,8 +4,42 @@
 #include <stdbool.h>
 
 #include "types.h"
+#include "val_array.h"
 
-struct lisp_vm;
+/**
+ * Stack frame for an executing function.
+ */
+struct stack_frame {
+  /** Index into the stack */
+  unsigned frame_pointer;
+  struct lisp_closure *func;
+  /** Offset into the bytecode array of the function. */
+  unsigned instr_pointer;
+  /**
+   * Offset into the bytecode array to return to when catching an exception.
+   *
+   * Negative if there is no exception handler.
+   */
+  int exception_handler_ip;
+};
+
+struct call_stack {
+  size_t size;
+  size_t cap;
+  struct stack_frame *data;
+};
+
+struct lisp_vm {
+  struct lisp_obj header;
+
+  // TODO Store global env as a base call frame?
+  struct lisp_env *global_env;
+  struct call_stack call_frames;
+  struct val_array stack;
+
+  bool has_exception;
+  struct lisp_val current_exception;
+};
 
 struct lisp_vm *vm_create(void);
 
@@ -16,10 +50,24 @@ struct lisp_vm *vm_create(void);
  * a pointer to the exception (returning NULL if there is none and allowing it
  * to be overwritten).
  */
-bool vm_has_exception(const struct lisp_vm *vm);
-struct lisp_val vm_current_exception(const struct lisp_vm *vm);
-void vm_raise_exception(struct lisp_vm *vm, struct lisp_val exception);
-void vm_clear_exception(struct lisp_vm *vm);
+static inline bool vm_has_exception(const struct lisp_vm *vm) {
+  return vm->has_exception;
+}
+
+static inline struct lisp_val vm_current_exception(const struct lisp_vm *vm) {
+  return vm->current_exception;
+}
+
+static inline void vm_raise_exception(struct lisp_vm *vm,
+                                      struct lisp_val exception) {
+  vm->has_exception = true;
+  vm->current_exception = exception;
+}
+
+static inline void vm_clear_exception(struct lisp_vm *vm) {
+  vm->has_exception = false;
+  vm->current_exception = LISP_VAL_NIL;
+}
 
 void vm_raise_format_exception(struct lisp_vm *vm, const char *format, ...);
 
@@ -50,26 +98,11 @@ struct lisp_val vm_stack_pop(struct lisp_vm *vm);
 void vm_stack_frame_skip_delete(struct lisp_vm *vm, unsigned skip_n,
                                 unsigned delete_n);
 
-/**
- * Stack frame for an executing function.
- */
-struct stack_frame {
-  /** Index into the stack */
-  unsigned frame_pointer;
-  struct lisp_closure *func;
-  /** Offset into the bytecode array of the function. */
-  unsigned instr_pointer;
-  /**
-   * Offset into the bytecode array to return to when catching an exception.
-   *
-   * Negative if there is no exception handler.
-   */
-  int exception_handler_ip;
-};
+static inline unsigned vm_current_frame_index(const struct lisp_vm *vm) {
+  return vm->call_frames.size;
+}
 
-unsigned vm_current_frame_index(const struct lisp_vm *vm);
 struct stack_frame *vm_current_frame(struct lisp_vm *vm);
-struct lisp_env *vm_global_env(struct lisp_vm *vm);
 
 /**
  * Create a new stack frame with a given execution environment.

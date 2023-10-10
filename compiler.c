@@ -613,7 +613,7 @@ struct resolved_sym {
 static void resolve_global_type(struct compiler_ctx *ctx,
                                 struct lisp_symbol *sym,
                                 struct resolved_sym *resolved) {
-  struct lisp_env_binding *binding = lisp_env_get(vm_global_env(ctx->vm), sym);
+  struct lisp_env_binding *binding = lisp_env_get(ctx->vm->global_env, sym);
   if (binding == NULL) {
     resolved->type = SYM_UNBOUND;
   } else if (lisp_env_binding_is_macro(binding)) {
@@ -741,7 +741,7 @@ static enum compile_res compile_symbol_ref(struct compiler_ctx *ctx,
       break;
     case SYM_UNBOUND:
       resolved.value.global_binding =
-          lisp_env_set(vm_global_env(ctx->vm), sym, lisp_uninitialized());
+          lisp_env_set(ctx->vm->global_env, sym, lisp_uninitialized());
       // Fallthough to global case now that the binding is created
       __attribute__((fallthrough));
     case SYM_GLOBAL:
@@ -931,7 +931,7 @@ static enum compile_res compile_top_level_def(struct compiler_ctx *ctx,
     // Either SYM_MACRO or SYM_UNBOUND
     // TODO Special flag in lisp_env which indicates uninitialized?
     resolved.value.global_binding =
-        lisp_env_set(vm_global_env(ctx->vm), sym, lisp_uninitialized());
+        lisp_env_set(ctx->vm->global_env, sym, lisp_uninitialized());
   }
 
   ctx->binding_name = sym;
@@ -1031,7 +1031,7 @@ static enum compile_res compile_defsyntax(struct compiler_ctx *ctx,
 
   if (compiler_ctx_is_top_level(ctx)) {
     // Set in the VM environment so it persists
-    lisp_env_set_macro(vm_global_env(ctx->vm), sym, macro_fn);
+    lisp_env_set_macro(ctx->vm->global_env, sym, macro_fn);
   } else {
     if (compiler_add_local_macro(ctx, sym, macro_fn) == COMP_FAILED) {
       return COMP_FAILED;

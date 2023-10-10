@@ -265,7 +265,7 @@ ERROR:
 }
 
 enum eval_status string_count(struct lisp_val arg, struct lisp_val *result) {
-  *result = lisp_val_from_int(lisp_string_length(lisp_val_as_obj(arg)));
+  *result = lisp_val_from_int(LISP_VAL_AS(struct lisp_string, arg)->length);
   return EV_SUCCESS;
 }
 
@@ -277,7 +277,7 @@ DEF_BUILTIN(core_string_get) {
   DEF_OBJ_ARG(struct lisp_string, str, LISP_STRING, 0);
   DEF_INT_ARG(index, 1);
 
-  if (index < 0 || (long)lisp_string_length(str) <= index) {
+  if (index < 0 || (long)str->length <= index) {
     vm_raise_func_exception(vm, "string index out of bounds: %ld", index);
     return EV_EXCEPTION;
   }
@@ -326,8 +326,7 @@ DEF_BUILTIN(core_string_to_symbol) {
 
   const char *name = lisp_string_as_cstr(str);
   if (is_valid_symbol(name)) {
-    BUILTIN_RETURN(
-        lisp_val_from_obj(lisp_symbol_create(name, lisp_string_length(str))));
+    BUILTIN_RETURN(lisp_val_from_obj(lisp_symbol_create(name, str->length)));
   } else {
     vm_raise_func_exception(vm, "invalid symbol name: '%s'", name);
     return EV_EXCEPTION;
@@ -425,14 +424,14 @@ DEF_BUILTIN(core_make_array) {
 DEF_BUILTIN(core_array_length) {
   DEF_OBJ_ARG(struct lisp_array, arr, LISP_ARRAY, 0);
 
-  BUILTIN_RETURN(lisp_val_from_int(lisp_array_length(arr)));
+  BUILTIN_RETURN(lisp_val_from_int(arr->length));
 }
 
 DEF_BUILTIN(core_array_get) {
   DEF_OBJ_ARG(struct lisp_array, arr, LISP_ARRAY, 0);
   DEF_INT_ARG(index, 1);
 
-  if (0 <= index && index < (long)lisp_array_length(arr)) {
+  if (0 <= index && index < (long)arr->length) {
     BUILTIN_RETURN(lisp_array_get(arr, index));
   } else {
     vm_raise_func_exception(vm, "index out of bounds: %ld", index);
@@ -445,7 +444,7 @@ DEF_BUILTIN(core_array_set) {
   DEF_INT_ARG(index, 1);
   DEF_ARG(value, 2);
 
-  if (0 <= index && index < (long)lisp_array_length(arr)) {
+  if (0 <= index && index < (long)arr->length) {
     lisp_array_set(arr, index, value);
     BUILTIN_RETURN(LISP_VAL_NIL);
   } else {
@@ -636,7 +635,7 @@ DEF_BUILTIN(core_macroexpand_1) {
   // That's probably fine (and I don't know how to fix it), but something to
   // note
   const struct lisp_env_binding *binding =
-      lisp_env_get(vm_global_env(vm), head_sym);
+      lisp_env_get(vm->global_env, head_sym);
   if (binding == NULL || !lisp_env_binding_is_macro(binding)) {
     BUILTIN_RETURN(ast);
   }
@@ -646,7 +645,7 @@ DEF_BUILTIN(core_macroexpand_1) {
 
 DEF_BUILTIN(core_disassemble) {
   DEF_OBJ_ARG(struct lisp_closure, func, LISP_CLOSURE, 0);
-  chunk_disassemble(lisp_closure_code(func));
+  chunk_disassemble(func->code);
   BUILTIN_RETURN(lisp_non_printing());
 }
 
@@ -902,7 +901,7 @@ static void define_const(struct lisp_env *env, const char *name,
 }
 
 static void define_cl(struct lisp_env *env, struct lisp_closure *cl) {
-  struct lisp_symbol *name = lisp_closure_name(cl);
+  struct lisp_symbol *name = cl->code->name;
   assert(name != NULL);
   lisp_env_set(env, name, lisp_val_from_obj(cl));
 }

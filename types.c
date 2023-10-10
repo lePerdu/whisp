@@ -12,37 +12,10 @@
 #include "bytecode.h"
 #include "memory.h"
 
-enum ptr_tag {
-  TAG_INT = 1,
-  TAG_OBJ = 0,
-};
-
-#define TAG_SHIFT 1
-#define TAG_MASK ((uintptr_t)1)
-#define VALUE_MASK (~TAG_MASK)
 #define REQUIRED_ALIGN (TAG_MASK + 1)
 
 static_assert(alignof(struct lisp_obj) >= REQUIRED_ALIGN,
               "Alignment not big enough for tagged pointers");
-
-static inline bool lisp_val_is_obj(struct lisp_val v) {
-  return (v.tagged_ptr & TAG_MASK) == TAG_OBJ;
-}
-
-inline void *lisp_val_as_obj(struct lisp_val v) {
-  assert(lisp_val_is_obj(v));
-  // Since the object tag is 0, this can be a no-op
-  static_assert(TAG_OBJ == 0, "Object tag is non-0");
-  return (void *)v.tagged_ptr;
-}
-
-inline struct lisp_val lisp_val_from_obj(void *obj) {
-  uintptr_t raw = (uintptr_t)obj;
-  assert((raw & TAG_MASK) == 0);
-  // Since the object tag is 0, this can be a no-op
-  static_assert(TAG_OBJ == 0, "Object tag is non-0");
-  return (struct lisp_val){raw};
-}
 
 void *lisp_obj_alloc(const struct lisp_vtable *vt, size_t size) {
   struct lisp_obj *obj = lisp_alloc(size);
@@ -119,21 +92,6 @@ void *lisp_val_cast(enum lisp_type type, struct lisp_val v) {
 // passed to it. = lisp_val_from_obj(NULL)
 const struct lisp_val LISP_VAL_NIL = {TAG_OBJ};
 
-bool lisp_val_is_nil(struct lisp_val v) { return lisp_val_type(v) == LISP_NIL; }
-
-long lisp_val_as_int(struct lisp_val v) {
-  assert((v.tagged_ptr & TAG_MASK) == TAG_INT);
-  return ((long)v.tagged_ptr) >> TAG_SHIFT;
-}
-
-struct lisp_val lisp_val_from_int(long n) {
-  // Having the assertions aborts the program on integer overflow.
-  // TODO Make a runtime error? Just ignore overflow?
-  // assert(n >= LISP_INT_MIN);
-  // assert(n <= LISP_INT_MAX);
-  return (struct lisp_val){(uintptr_t)(n << TAG_SHIFT) | TAG_INT};
-}
-
 static const struct lisp_vtable NON_PRINTING_VTABLE = {
     .type = LISP_OPAQUE,
     .is_gc_managed = false,
@@ -186,12 +144,6 @@ struct lisp_val lisp_true(void) {
 }
 
 struct lisp_val lisp_false(void) { return LISP_VAL_NIL; }
-
-bool lisp_val_is_true(struct lisp_val v) { return !lisp_val_is_false(v); }
-
-bool lisp_val_is_false(struct lisp_val v) {
-  return lisp_val_type(v) == LISP_NIL;
-}
 
 bool lisp_val_is_number(struct lisp_val v) {
   enum lisp_type type = lisp_val_type(v);
@@ -265,11 +217,6 @@ bool lisp_val_identical(struct lisp_val a, struct lisp_val b) {
   return a.tagged_ptr == b.tagged_ptr;
 }
 
-struct lisp_atom {
-  struct lisp_obj header;
-  struct lisp_val value;
-};
-
 static void lisp_atom_visit(struct lisp_val a, visit_callback cb, void *ctx) {
   cb(ctx, LISP_VAL_AS(struct lisp_atom, a)->value);
 }
@@ -285,20 +232,10 @@ static const struct lisp_vtable ATOM_VTABLE = {
 struct lisp_atom *lisp_atom_create(struct lisp_val v) {
   gc_push_root(v);
   struct lisp_atom *atom = lisp_obj_alloc(&ATOM_VTABLE, sizeof(*atom));
-  lisp_atom_reset(atom, v);
+  atom->value = v;
   gc_pop_root_expect(v);
   return atom;
 }
-
-struct lisp_val lisp_atom_deref(const struct lisp_atom *a) { return a->value; }
-
-void lisp_atom_reset(struct lisp_atom *a, struct lisp_val v) { a->value = v; }
-
-struct lisp_array {
-  struct lisp_obj header;
-  size_t length;
-  struct lisp_val data[];
-};
 
 static void lisp_array_visit(struct lisp_val v, visit_callback cb, void *ctx) {
   struct lisp_array *arr = lisp_val_as_obj(v);
@@ -326,24 +263,6 @@ struct lisp_array *lisp_array_create(size_t length) {
   return arr;
 }
 
-size_t lisp_array_length(const struct lisp_array *arr) { return arr->length; }
-
-struct lisp_val lisp_array_get(const struct lisp_array *arr, size_t index) {
-  assert(index < arr->length);
-  return arr->data[index];
-}
-
-void lisp_array_set(struct lisp_array *arr, size_t index, struct lisp_val new) {
-  assert(index < arr->length);
-  arr->data[index] = new;
-}
-
-struct lisp_string {
-  struct lisp_obj header;
-  size_t size;
-  char data[];
-};
-
 static const struct lisp_vtable STRING_VTABLE = {
     .type = LISP_STRING,
     .is_gc_managed = true,
@@ -354,14 +273,14 @@ static const struct lisp_vtable STRING_VTABLE = {
 
 static struct lisp_string *lisp_string_alloc(size_t capacity) {
   struct lisp_string *s = lisp_obj_alloc(&STRING_VTABLE, sizeof(*s) + capacity);
-  s->size = 0;
+  s->length = 0;
   return s;
 }
 
 struct lisp_string *lisp_string_create(const char *s, size_t len) {
   struct lisp_string *str =
       lisp_obj_alloc(&STRING_VTABLE, sizeof(*str) + len + 1);
-  str->size = len;
+  str->length = len;
   memcpy(str->data, s, len);
   str->data[len] = 0;
 
@@ -387,7 +306,7 @@ struct lisp_string *lisp_string_vformat(const char *format, va_list ap) {
   struct lisp_string *str = lisp_string_alloc(cap);
 
   int n_chars_actual = vsnprintf(str->data, cap, format, ap);
-  str->size = n_chars;
+  str->length = n_chars;
 
   assert(n_chars_actual == n_chars);
   (void)n_chars_actual;
@@ -402,21 +321,11 @@ struct lisp_string *lisp_string_format(const char *format, ...) {
   return str;
 }
 
-size_t lisp_string_length(const struct lisp_string *s) { return s->size; }
-
-char lisp_string_get(const struct lisp_string *s, size_t i) {
-  // <= to allow fetching the null byte
-  assert(i <= s->size);
-  return s->data[i];
-}
-
-const char *lisp_string_as_cstr(const struct lisp_string *s) { return s->data; }
-
 bool lisp_string_eq(const struct lisp_string *a, const struct lisp_string *b) {
-  if (a->size != b->size) {
+  if (a->length != b->length) {
     return false;
   }
-  return memcmp(a->data, b->data, a->size) == 0;
+  return memcmp(a->data, b->data, a->length) == 0;
 }
 
 #define STR_BUILDER_INIT_CAP 8
@@ -444,15 +353,15 @@ const struct lisp_string *str_builder_get_str(const struct str_builder *b) {
 static struct lisp_string *str_builder_ensure_cap(struct str_builder *b,
                                                   size_t added_size) {
   struct lisp_string *str = str_builder_get(b);
-  size_t new_size = str->size + added_size;
+  size_t new_size = str->length + added_size;
   if (new_size > b->capacity) {
     // TODO Avoid loop and just do max(cap*2, new_size)?
     do {
       b->capacity *= 2;
     } while (new_size > b->capacity);
     struct lisp_string *new_str = lisp_string_alloc(b->capacity);
-    new_str->size = str->size;
-    memcpy(new_str->data, str->data, str->size);
+    new_str->length = str->length;
+    memcpy(new_str->data, str->data, str->length);
     lisp_atom_reset(b->str_atom, lisp_val_from_obj(new_str));
     return new_str;
   } else {
@@ -462,13 +371,13 @@ static struct lisp_string *str_builder_ensure_cap(struct str_builder *b,
 
 void str_builder_append(struct str_builder *b, char c) {
   struct lisp_string *str = str_builder_ensure_cap(b, 1);
-  str->data[str->size++] = c;
+  str->data[str->length++] = c;
 }
 
 void str_builder_concat(struct str_builder *b, const struct lisp_string *s) {
   // TODO Save the string in case the buffer is reallocated?
   // gc_push_root_obj((void *)s);
-  str_builder_concat_n(b, s->data, s->size);
+  str_builder_concat_n(b, s->data, s->length);
   // gc_pop_root_expect_obj((void *)s);
 }
 
@@ -481,8 +390,8 @@ void str_builder_concat_cstr(struct str_builder *b, const char *cstr) {
 
 void str_builder_concat_n(struct str_builder *b, const char *buf, size_t n) {
   struct lisp_string *str = str_builder_ensure_cap(b, n);
-  memcpy(&str->data[str->size], buf, n);
-  str->size += n;
+  memcpy(&str->data[str->length], buf, n);
+  str->length += n;
 }
 
 int str_builder_format(struct str_builder *b, const char *format, ...) {
@@ -496,8 +405,8 @@ int str_builder_format(struct str_builder *b, const char *format, ...) {
 int str_builder_vformat(struct str_builder *b, const char *format, va_list ap) {
   struct lisp_string *str = str_builder_get(b);
   // Try to build with existing capacity first
-  char *format_buf = &str->data[str->size];
-  size_t remaining_cap = b->capacity - str->size;
+  char *format_buf = &str->data[str->length];
+  size_t remaining_cap = b->capacity - str->length;
 
   // Call vsnprintf with NULL buffer first to get the required buffer
   // size, then allocate the string and run it again.
@@ -517,27 +426,25 @@ int str_builder_vformat(struct str_builder *b, const char *format, va_list ap) {
   if ((unsigned)n_chars >= remaining_cap) {
     size_t req_cap = n_chars + 1;
     str = str_builder_ensure_cap(b, req_cap);
-    format_buf = &str->data[str->size];
+    format_buf = &str->data[str->length];
 
     int n_chars_actual = vsnprintf(format_buf, req_cap, format, ap);
     assert(n_chars_actual == n_chars);
     (void)n_chars_actual;
   }
 
-  str->size += n_chars;
+  str->length += n_chars;
   return n_chars;
 }
 
 struct lisp_string *str_build(struct str_builder *b) {
   // Add in null byte, but don't count in string size
   struct lisp_string *str = str_builder_ensure_cap(b, 1);
-  str->data[str->size] = 0;
+  str->data[str->length] = 0;
 
   gc_pop_root_expect_obj(b->str_atom);
   return str;
 }
-
-typedef unsigned hash_t;
 
 #define STR_HASH_FACTOR 31
 // Only hash the beginning of strings to avoid extra cost for long strings
@@ -558,15 +465,6 @@ static hash_t str_hash(const char *str, size_t length) {
   return hash;
 }
 
-struct lisp_symbol {
-  struct lisp_obj header;
-  // Hash code is computed at initialization since symbols are mainly used as
-  // lookup keys
-  hash_t hash_code;
-  size_t size;
-  char data[];
-};
-
 static const struct lisp_vtable SYMBOL_VTABLE = {
     .type = LISP_SYMBOL,
     // TODO Mark as non-GC managed since they really aren't?
@@ -584,7 +482,7 @@ static struct lisp_symbol *lisp_symbol_create_uninterned(const char *name,
                                                          size_t length) {
   struct lisp_symbol *sym =
       lisp_obj_alloc(&SYMBOL_VTABLE, sizeof(*sym) + length + 1);
-  sym->size = length;
+  sym->length = length;
   memcpy(sym->data, name, length);
   sym->data[length] = 0;
   sym->hash_code = str_hash(name, length);
@@ -595,16 +493,13 @@ struct lisp_symbol *lisp_symbol_create_cstr(const char *s) {
   return lisp_symbol_create(s, strlen(s));
 }
 
-const char *lisp_symbol_name(const struct lisp_symbol *s) { return s->data; }
-
-size_t lisp_symbol_length(const struct lisp_symbol *s) { return s->size; }
-
-bool lisp_symbol_eq(const struct lisp_symbol *a, const struct lisp_symbol *b) {
+inline bool lisp_symbol_eq(const struct lisp_symbol *a,
+                           const struct lisp_symbol *b) {
 #ifdef NDEBUG
   return a == b;
 #else
   bool contents_equal =
-      a->size == b->size && strncmp(a->data, b->data, a->size) == 0;
+      a->length == b->length && strncmp(a->data, b->data, a->length) == 0;
   // Symbols should never be semantically equal without being referentially
   // equal
   assert(contents_equal == (a == b));
@@ -1104,13 +999,6 @@ bool lisp_env_binding_is_macro(const struct lisp_env_binding *b) {
   return b->is_macro;
 }
 
-struct lisp_closure {
-  struct lisp_obj header;
-  struct code_chunk *code;
-  size_t n_captures;
-  struct lisp_val captures[];
-};
-
 static void lisp_closure_visit(struct lisp_val v, visit_callback cb,
                                void *ctx) {
   const struct lisp_closure *cl = lisp_val_as_obj(v);
@@ -1145,40 +1033,8 @@ struct lisp_closure *lisp_closure_create(struct code_chunk *bytecode,
   return cl;
 }
 
-struct lisp_symbol *lisp_closure_name(const struct lisp_closure *c) {
-  return c->code->name;
-}
-
 const char *lisp_closure_name_cstr(const struct lisp_closure *c) {
   return chunk_get_name(c->code);
-}
-
-unsigned lisp_closure_arg_count(const struct lisp_closure *c) {
-  return c->code->req_arg_count;
-}
-
-bool lisp_closure_is_variadic(const struct lisp_closure *c) {
-  return c->code->is_variadic;
-}
-
-struct code_chunk *lisp_closure_code(const struct lisp_closure *c) {
-  return c->code;
-}
-
-size_t lisp_closure_n_captures(const struct lisp_closure *c) {
-  return c->n_captures;
-}
-
-struct lisp_val lisp_closure_get_capture(const struct lisp_closure *c,
-                                         unsigned index) {
-  assert(index < c->n_captures);
-  return c->captures[index];
-}
-
-void lisp_closure_set_capture(struct lisp_closure *c, unsigned index,
-                              struct lisp_val val) {
-  assert(index < c->n_captures);
-  c->captures[index] = val;
 }
 
 static const struct lisp_vtable *const TYPE_TO_VTABLE[] = {
