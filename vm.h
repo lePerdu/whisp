@@ -45,9 +45,10 @@ struct lisp_val vm_stack_top(struct lisp_vm *vm);
 struct lisp_val vm_stack_pop(struct lisp_vm *vm);
 
 /**
- * Delete all items from the current stack frame.
+ * Delete `delete_n` items after the top `skip_n`.
  */
-void vm_stack_frame_skip_clear(struct lisp_vm *vm, unsigned n);
+void vm_stack_frame_skip_delete(struct lisp_vm *vm, unsigned skip_n,
+                                unsigned delete_n);
 
 /**
  * Stack frame for an executing function.

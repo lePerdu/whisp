@@ -195,14 +195,12 @@ static int disassemble_instr(const struct code_chunk *chunk, unsigned offset) {
     case OP_POP:
       printf("(pop)\n");
       return 1;
-    case OP_CLEAR:
-      printf("(clear)\n");
-      return 1;
-    case OP_SKIP_CLEAR: {
-      ENSURE_INSTR_ARGS(OP_SKIP_CLEAR, 1);
-      unsigned n = chunk->bytecode.data[offset + 1];
-      printf("(skip-clear %u)\n", n);
-      return 2;
+    case OP_SKIP_DELETE: {
+      ENSURE_INSTR_ARGS(OP_SKIP_DELETE, 2);
+      unsigned skip_n = chunk->bytecode.data[offset + 1];
+      unsigned del_n = chunk->bytecode.data[offset + 2];
+      printf("(skip-delete %u %u)\n", skip_n, del_n);
+      return 3;
     }
     case OP_CALL: {
       ENSURE_INSTR_ARGS(OP_CALL, 1);

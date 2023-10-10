@@ -369,6 +369,20 @@ static void emit_init_closure(struct compiler_ctx *ctx, uint8_t n_captures) {
   inc_stack_size(ctx, -(int)n_captures);
 }
 
+static enum compile_res emit_skip_delete(struct compiler_ctx *ctx,
+                                         uint8_t skip_n, uint8_t delete_n) {
+  if (skip_n + delete_n > ctx->current_stack_size) {
+    vm_raise_format_exception(ctx->vm,
+                              "tried to delete too many stack elements");
+    return COMP_FAILED;
+  }
+  emit_instr(ctx, OP_SKIP_DELETE);
+  emit_byte(ctx, skip_n);
+  emit_byte(ctx, delete_n);
+  inc_stack_size(ctx, -(int)delete_n);
+  return COMP_SUCCESS;
+}
+
 static enum compile_res emit_call(struct compiler_ctx *ctx,
                                   unsigned arg_count) {
   if (arg_count > UINT8_MAX) {
@@ -393,8 +407,13 @@ static enum compile_res emit_tail_call(struct compiler_ctx *ctx,
     return COMP_FAILED;
   }
 
-  emit_instr(ctx, OP_SKIP_CLEAR);
-  emit_byte(ctx, remaining_stack_size);
+  enum compile_res res =
+      emit_skip_delete(ctx, remaining_stack_size,
+                       ctx->current_stack_size - remaining_stack_size);
+  if (res == COMP_FAILED) {
+    return res;
+  }
+
   emit_instr(ctx, OP_TAIL_CALL);
   ctx->current_stack_size = arg_count;
   return COMP_SUCCESS;

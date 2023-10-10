@@ -177,12 +177,10 @@ struct lisp_val vm_stack_pop(struct lisp_vm *vm) {
   return val_array_pop(&vm->stack);
 }
 
-void vm_stack_frame_skip_clear(struct lisp_vm *vm, unsigned n) {
-  unsigned frame_size = active_frame_size(vm);
-  assert(n <= frame_size);
-  // Clear the stack except for the arguments
-  val_array_skip_delete(&vm->stack, n, frame_size - n);
-  assert(active_frame_size(vm) == n);
+void vm_stack_frame_skip_delete(struct lisp_vm *vm, unsigned skip_n,
+                                unsigned delete_n) {
+  assert(skip_n + delete_n <= active_frame_size(vm));
+  val_array_skip_delete(&vm->stack, skip_n, delete_n);
 }
 
 void vm_create_stack_frame(struct lisp_vm *vm, struct lisp_closure *func,
@@ -243,7 +241,10 @@ void vm_run_exception_handler(struct lisp_vm *vm) {
 }
 
 void vm_stack_frame_unwind(struct lisp_vm *vm) {
+  unsigned old_fp = vm_current_frame(vm)->frame_pointer;
   call_stack_pop(&vm->call_frames);
+  // Stack gets reset to the point before the next frame was created
+  vm->stack.size = old_fp;
 }
 
 struct lisp_val vm_from_frame_pointer(const struct lisp_vm *vm,

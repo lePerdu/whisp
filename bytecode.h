@@ -54,20 +54,12 @@ enum bytecode_op {
   OP_POP,
 
   /**
-   * Clears all values off the current stack frame.
+   * Delete `N` stack elements after the top `M` elements (and move the top `M`
+   * down to fill the gap).
    *
-   * `clear`
+   * `skip-delete M N`
    */
-  OP_CLEAR,
-
-  /**
-   * Clears the stack except for the top N elements.
-   *
-   * `skip-clear N`
-   *
-   * TODO Better name?
-   */
-  OP_SKIP_CLEAR,
+  OP_SKIP_DELETE,
 
   /**
    * Call the top of the stack with the specified number of arguments.

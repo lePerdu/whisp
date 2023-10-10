@@ -858,9 +858,7 @@ static struct lisp_closure *make_builtin_with_exception_handler() {
   chunk_append_byte(chunk, OP_SET_EX_HANDLER);
   unsigned handler_offset_cell = chunk_append_byte(chunk, 0);
   chunk_append_byte(chunk, 0);
-  // Fetch and call the thunk
-  chunk_append_byte(chunk, OP_GET_FP);
-  chunk_append_byte(chunk, 1);
+  // Fetch and call the thunk aleady on top of the stack
   // Separate call + return since the stack frame needs to stay intact for the
   // exception handler
   chunk_append_byte(chunk, OP_CALL);
@@ -871,8 +869,9 @@ static struct lisp_closure *make_builtin_with_exception_handler() {
   // Fetch and call the handler
   unsigned handler_offset = chunk_append_byte(chunk, OP_GET_FP);
   chunk_append_byte(chunk, 0);
-  chunk_append_byte(chunk, OP_SKIP_CLEAR);
+  chunk_append_byte(chunk, OP_SKIP_DELETE);
   chunk_append_byte(chunk, 2);  // Handler function and exception
+  chunk_append_byte(chunk, 1);  // Handle function arg (thunk arg was called)
   chunk_append_byte(chunk, OP_TAIL_CALL);
 
   // TODO Use helper functions from the compiler

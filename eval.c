@@ -145,12 +145,10 @@ static enum eval_status eval_bytecode(struct lisp_vm *vm) {
       case OP_POP:
         vm_stack_pop(vm);
         continue;
-      case OP_CLEAR:
-        vm_stack_frame_skip_clear(vm, 0);
-        continue;
-      case OP_SKIP_CLEAR: {
-        uint8_t new_size = chunk_read_byte(code, ip);
-        vm_stack_frame_skip_clear(vm, new_size);
+      case OP_SKIP_DELETE: {
+        uint8_t skip_n = chunk_read_byte(code, ip);
+        uint8_t del_n = chunk_read_byte(code, ip);
+        vm_stack_frame_skip_delete(vm, skip_n, del_n);
         continue;
       }
       case OP_CALL: {
