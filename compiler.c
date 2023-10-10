@@ -99,6 +99,7 @@ static const struct lisp_symbol *SYMBOL_IF;
 static const struct lisp_symbol *SYMBOL_DEF;
 static const struct lisp_symbol *SYMBOL_DEFSYNTAX;
 static const struct lisp_symbol *SYMBOL_FN;
+static const struct lisp_symbol *SYMBOL_LET;
 static const struct lisp_symbol *SYMBOL_QUOTE;
 
 void init_global_compile_state(void) {
@@ -118,6 +119,7 @@ void init_global_compile_state(void) {
   DEF_GLOBAL_SYM(SYMBOL_DEF, "def!");
   DEF_GLOBAL_SYM(SYMBOL_DEFSYNTAX, "defsyntax!");
   DEF_GLOBAL_SYM(SYMBOL_FN, "fn");
+  DEF_GLOBAL_SYM(SYMBOL_LET, "let");
   DEF_GLOBAL_SYM(SYMBOL_QUOTE, "quote");
 
 #undef DEF_GLOBAL_SYM
@@ -444,9 +446,10 @@ static enum compile_res fixup_branch_to_here(struct compiler_ctx *ctx,
   return COMP_SUCCESS;
 }
 
-static struct local_binding *compiler_lookup_local(struct compiler_ctx *ctx,
-                                                   struct lisp_symbol *sym) {
-  for (unsigned i = 0; i < ctx->local_count; i++) {
+static struct local_binding *compiler_lookup_local_after(
+    struct compiler_ctx *ctx, struct lisp_symbol *sym, uint8_t starting_local) {
+  // Search in reverse so later bindings take priority
+  for (int i = (int)ctx->local_count - 1; i >= starting_local; i--) {
     if (lisp_symbol_eq(ctx->locals[i].sym, sym)) {
       return &ctx->locals[i];
     }
@@ -454,14 +457,13 @@ static struct local_binding *compiler_lookup_local(struct compiler_ctx *ctx,
   return NULL;
 }
 
+static struct local_binding *compiler_lookup_local(struct compiler_ctx *ctx,
+                                                   struct lisp_symbol *sym) {
+  return compiler_lookup_local_after(ctx, sym, 0);
+}
+
 static struct local_binding *compiler_alloc_local(struct compiler_ctx *ctx,
                                                   struct lisp_symbol *sym) {
-  if (compiler_lookup_local(ctx, sym) != NULL) {
-    vm_raise_format_exception(ctx->vm, "duplicate local binding: %s",
-                              lisp_symbol_name(sym));
-    return NULL;
-  }
-
   if (ctx->local_count == MAX_LOCALS) {
     vm_raise_format_exception(ctx->vm, "too many local bindings");
     return NULL;
@@ -476,6 +478,12 @@ static struct local_binding *compiler_alloc_local(struct compiler_ctx *ctx,
 
 static enum compile_res compiler_add_param(struct compiler_ctx *ctx,
                                            struct lisp_symbol *sym) {
+  if (compiler_lookup_local(ctx, sym) != NULL) {
+    vm_raise_format_exception(ctx->vm, "duplicate parameter binding: %s",
+                              lisp_symbol_name(sym));
+    return COMP_FAILED;
+  }
+
   struct local_binding *b = compiler_alloc_local(ctx, sym);
   if (b == NULL) {
     return COMP_FAILED;
@@ -484,6 +492,20 @@ static enum compile_res compiler_add_param(struct compiler_ctx *ctx,
   b->is_macro = false;
   b->is_boxed = false;
   b->as_index = ctx->current_stack_size++;
+  return COMP_SUCCESS;
+}
+
+static enum compile_res compiler_add_local(struct compiler_ctx *ctx,
+                                           struct lisp_symbol *sym,
+                                           int stack_index) {
+  struct local_binding *b = compiler_alloc_local(ctx, sym);
+  if (b == NULL) {
+    return COMP_FAILED;
+  }
+
+  b->is_macro = false;
+  b->is_boxed = false;
+  b->as_index = stack_index;
   return COMP_SUCCESS;
 }
 
@@ -686,6 +708,7 @@ static enum compile_res compile_prepare_non_def(struct compiler_ctx *ctx) {
   }
 
   ctx->tail_pos = outer_tail_pos;
+  ctx->local_def_count = 0;
   return COMP_SUCCESS;
 }
 
@@ -1124,6 +1147,131 @@ DONE:
   return res;
 }
 
+static enum compile_res compile_let_bindings(struct compiler_ctx *ctx,
+                                             struct lisp_val bindings) {
+  int starting_local_index = ctx->current_stack_size;
+  int bind_count = 0;
+
+  struct lisp_cons *bindings_cons;
+  struct lisp_val rest_bindings = bindings;
+  while ((bindings_cons = lisp_val_cast(LISP_CONS, rest_bindings)) != NULL) {
+    struct lisp_cons *bind_cons = lisp_val_cast(LISP_CONS, bindings_cons->car);
+    if (bind_cons == NULL) {
+      vm_raise_format_exception(
+          ctx->vm, "let: each binding must be a proper list of 2 elements");
+      return COMP_FAILED;
+    }
+    struct lisp_symbol *bind_sym = lisp_val_cast(LISP_SYMBOL, bind_cons->car);
+    if (bind_sym == NULL) {
+      vm_raise_format_exception(
+          ctx->vm, "let: first element of each binding must be a symbol");
+      return COMP_FAILED;
+    }
+
+    bind_cons = lisp_val_cast(LISP_CONS, bind_cons->cdr);
+    if (bind_cons == NULL) {
+      vm_raise_format_exception(
+          ctx->vm, "let: each binding must be a proper list of 2 elements");
+      return COMP_FAILED;
+    }
+    struct lisp_val bind_expr = bind_cons->car;
+
+    if (!lisp_val_is_nil(bind_cons->cdr)) {
+      vm_raise_format_exception(
+          ctx->vm, "let: each binding must be a proper list of 2 elements");
+      return COMP_FAILED;
+    }
+
+    if (compile_non_tail(ctx, bind_expr) == COMP_FAILED) {
+      return COMP_FAILED;
+    }
+
+    rest_bindings = bindings_cons->cdr;
+    bind_count += 1;
+  }
+
+  if (!lisp_val_is_nil(rest_bindings)) {
+    vm_raise_format_exception(ctx->vm, "let: bindings must be a proper list");
+    return COMP_FAILED;
+  }
+
+  // Loop through again to create the bindings
+  rest_bindings = bindings;
+  for (int i = 0; i < bind_count; i++) {
+    // Type checks already happened above
+    bindings_cons = lisp_val_cast(LISP_CONS, rest_bindings);
+    assert(bindings_cons != NULL);
+    struct lisp_cons *bind_cons = lisp_val_cast(LISP_CONS, bindings_cons->car);
+    assert(bind_cons != NULL);
+    struct lisp_symbol *bind_sym = lisp_val_cast(LISP_SYMBOL, bind_cons->car);
+    assert(bind_sym != NULL);
+
+    if (compiler_lookup_local_after(ctx, bind_sym, starting_local_index) !=
+        NULL) {
+      vm_raise_format_exception(ctx->vm, "duplicate local binding: %s",
+                                lisp_symbol_name(bind_sym));
+      return COMP_FAILED;
+    }
+
+    if (compiler_add_local(ctx, bind_sym, starting_local_index + i) ==
+        COMP_FAILED) {
+      return COMP_FAILED;
+    }
+
+    rest_bindings = bindings_cons->cdr;
+  }
+
+  return COMP_SUCCESS;
+}
+
+static enum compile_res compile_let(struct compiler_ctx *ctx,
+                                    struct lisp_val args) {
+  struct lisp_cons *args_cons = lisp_val_cast(LISP_CONS, args);
+  if (args_cons == NULL) {
+    vm_raise_format_exception(ctx->vm, "let: not enough args");
+    return COMP_FAILED;
+  }
+
+  struct lisp_val bindings = args_cons->car;
+  args_cons = lisp_val_cast(LISP_CONS, args_cons->cdr);
+  if (args_cons == NULL) {
+    vm_raise_format_exception(ctx->vm, "let: not enough args");
+    return COMP_FAILED;
+  }
+
+  struct lisp_val ast = args_cons->car;
+  if (!lisp_val_is_nil(args_cons->cdr)) {
+    vm_raise_format_exception(ctx->vm, "let: too many args");
+    return COMP_FAILED;
+  }
+
+  // Save stack state to restore it (i.e. clear the locals) after the let
+  uint8_t outer_local_count = ctx->local_count;
+
+  if (compile_let_bindings(ctx, bindings) == COMP_FAILED) {
+    return COMP_FAILED;
+  }
+
+  // Allow `def!` inside `let`
+  ctx->begin_pos = true;
+
+  if (ctx->tail_pos) {
+    return compile(ctx, ast);
+  } else {
+    if (compile(ctx, ast) == COMP_FAILED) {
+      return COMP_FAILED;
+    }
+
+    int to_remove = ctx->local_count - outer_local_count;
+    if (emit_skip_delete(ctx, 1, to_remove) == COMP_FAILED) {
+      return COMP_FAILED;
+    }
+    ctx->local_count = outer_local_count;
+
+    return COMP_SUCCESS;
+  }
+}
+
 static enum compile_res compile_quote(struct compiler_ctx *ctx,
                                       struct lisp_val args) {
   struct lisp_cons *args_cons = lisp_val_cast(LISP_CONS, args);
@@ -1205,6 +1353,11 @@ static enum compile_res compile_call_or_special(struct compiler_ctx *ctx,
           // Keep binding name
           compile_prepare_non_def(ctx);
           return compile_fn(ctx, args);
+        }
+        if (head_sym == SYMBOL_LET) {
+          ctx->binding_name = NULL;
+          compile_prepare_non_def(ctx);
+          return compile_let(ctx, args);
         }
         if (head_sym == SYMBOL_DO) {
           ctx->binding_name = NULL;
