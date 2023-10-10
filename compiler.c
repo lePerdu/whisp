@@ -200,6 +200,15 @@ static bool compiler_ctx_is_top_level(const struct compiler_ctx *ctx) {
 
 static enum compile_res compile(struct compiler_ctx *ctx, struct lisp_val ast);
 
+static enum compile_res compile_non_tail(struct compiler_ctx *ctx,
+                                         struct lisp_val ast) {
+  bool outer_tail_pos = ctx->tail_pos;
+  ctx->tail_pos = false;
+  enum compile_res res = compile(ctx, ast);
+  ctx->tail_pos = outer_tail_pos;
+  return res;
+}
+
 static struct lisp_closure *compile_chunk_to_closure(struct code_chunk *code) {
   return lisp_closure_create(code, 0);
 }
@@ -391,9 +400,14 @@ static enum compile_res emit_tail_call(struct compiler_ctx *ctx,
   return COMP_SUCCESS;
 }
 
-static unsigned emit_init_branch(struct compiler_ctx *ctx,
-                                 enum bytecode_op branch_op) {
-  chunk_append_byte(ctx->chunk, branch_op);
+static unsigned emit_init_branch(struct compiler_ctx *ctx) {
+  chunk_append_byte(ctx->chunk, OP_BRANCH);
+  return chunk_append_short(ctx->chunk, -1);
+}
+
+static unsigned emit_init_branch_if_false(struct compiler_ctx *ctx) {
+  chunk_append_byte(ctx->chunk, OP_BRANCH_IF_FALSE);
+  inc_stack_size(ctx, -1);
   return chunk_append_short(ctx->chunk, -1);
 }
 
@@ -775,18 +789,15 @@ static enum compile_res compile_if(struct compiler_ctx *ctx,
     }
   }
 
-  bool outer_tail_pos = ctx->tail_pos;
-
   // Condition is never in tail position
-  ctx->tail_pos = false;
-  enum compile_res res = compile(ctx, cond_expr);
+  enum compile_res res = compile_non_tail(ctx, cond_expr);
   if (res == COMP_FAILED) {
     return res;
   }
 
-  ctx->tail_pos = outer_tail_pos;
-
-  unsigned false_branch_offset = emit_init_branch(ctx, OP_BRANCH_IF_FALSE);
+  unsigned false_branch_offset = emit_init_branch_if_false(ctx);
+  // Save the stack size since it needs to be restored for the other branch
+  int branch_stack_size = ctx->current_stack_size;
 
   res = compile(ctx, true_expr);
   if (res == COMP_FAILED) {
@@ -796,7 +807,7 @@ static enum compile_res compile_if(struct compiler_ctx *ctx,
   // Only need a branch after the true code if it's not in tail position
   unsigned end_branch_offset = -1;
   if (!ctx->tail_pos) {
-    end_branch_offset = emit_init_branch(ctx, OP_BRANCH);
+    end_branch_offset = emit_init_branch(ctx);
   }
 
   res = fixup_branch_to_here(ctx, false_branch_offset);
@@ -804,6 +815,7 @@ static enum compile_res compile_if(struct compiler_ctx *ctx,
     return res;
   }
 
+  ctx->current_stack_size = branch_stack_size;
   res = compile(ctx, false_expr);
   if (res == COMP_FAILED) {
     return res;
@@ -864,12 +876,9 @@ static enum compile_res compile_top_level_def(struct compiler_ctx *ctx,
         lisp_env_set(vm_global_env(ctx->vm), sym, lisp_uninitialized());
   }
 
-  bool outer_tail_pos = ctx->tail_pos;
-  ctx->tail_pos = false;
   ctx->binding_name = sym;
-  enum compile_res res = compile(ctx, expr);
+  enum compile_res res = compile_non_tail(ctx, expr);
   ctx->binding_name = NULL;
-  ctx->tail_pos = outer_tail_pos;
 
   if (res == COMP_FAILED) {
     return res;
