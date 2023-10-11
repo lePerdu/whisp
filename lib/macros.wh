@@ -68,7 +68,7 @@
           ~(helper (cdr bindings) ast))))
     (if (null? bindings)
       ; Special case for no bindings so that it still generates a new scope
-      `(fn () ~ast)
+      `(let () ~ast)
       (helper bindings ast))))
 
 ; TODO Validate structure
