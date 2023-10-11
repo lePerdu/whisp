@@ -33,6 +33,28 @@
       (defn! (f a b . rest) (+ a b (count rest)))
       (assert= 6 (f 1 2 'a (list 90 91) "123"))))
 
+  (defgroup! fn-name
+    (deftest! anonymous-function-name-is-nil
+      (assert= nil (fn-name (fn () 1))))
+    (deftest! function-name-set-with-def!
+      (def! my-func (fn () 1))
+      (assert= 'my-func (fn-name my-func)))
+    (deftest! function-name-is-from-original-def!
+      (def! my-func (fn () 1))
+      (def! also-my-func my-func)
+      (assert= 'my-func (fn-name also-my-func)))
+    (deftest! function-name-is-nil-when-not-direct-child-of-def!
+      (def! my-func (if true (fn () 1) (fn () 2)))
+      (assert= nil (fn-name my-func)))
+    (deftest! function-name-set-with-let
+      (let ((my-func (fn () 1)))
+        (assert= 'my-func (fn-name my-func))))
+    (deftest! function-name-set-with-let*
+      (let* ((val 2) (my-func (fn () val)))
+        (assert= 'my-func (fn-name my-func))))
+    (deftest! function-name-set-with-fn-named
+      (assert= 'my-func (fn-name (fn-named my-func () 1)))))
+
   (defmacro! (def-apply-tests! group-name apply-fn)
     `(defgroup! ~group-name
       (deftest! apply-no-args

@@ -379,6 +379,14 @@ DEF_BUILTIN(core_is_function) {
   return unary_pred(vm, __func__, lisp_val_is_func);
 }
 
+/**
+ * Return the name of a function, or `NIL` if the function is anonymous.
+ */
+DEF_BUILTIN(core_function_name) {
+  DEF_OBJ_ARG(struct lisp_closure, func, LISP_CLOSURE, 0);
+  BUILTIN_RETURN(lisp_val_from_obj(func->code->name));
+}
+
 DEF_BUILTIN(core_is_atom) { return type_pred(vm, __func__, LISP_ATOM); }
 
 static enum eval_status make_atom(struct lisp_val arg,
@@ -743,6 +751,7 @@ static const struct builtin_config builtins[] = {
                                     false},
     [INTRINSIC_IS_SYMBOL] = {"symbol?", core_is_symbol, 1, false},
     [INTRINSIC_IS_FUNCTION] = {"fn?", core_is_function, 1, false},
+    [INTRINSIC_FUNCTION_NAME] = {"fn-name", core_function_name, 1, false},
     [INTRINSIC_IS_NULL] = {"null?", core_is_null, 1, false},
     [INTRINSIC_MAKE_CONS] = {"cons", core_make_cons, 2, false},
     [INTRINSIC_IS_CONS] = {"cons?", core_is_cons, 1, false},

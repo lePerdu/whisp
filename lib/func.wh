@@ -21,6 +21,10 @@
     x
     (apply* pipe ((car funcs) x) (cdr funcs))))
 
+(defmacro! (fn-named name args body)
+  `(let ((~name (fn ~args ~body)))
+    ~name))
+
 ; TODO Move these somewhere else?
 
 (defn! (time f . args)
