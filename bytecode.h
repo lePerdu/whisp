@@ -137,11 +137,15 @@ enum bytecode_op {
   OP_BRANCH_IF_FALSE,
 
   /**
-   * Set exception handler to a location in the bytecode.
-   *
-   * Offset is relative, just like branch instructions.
+   * Push an exception handler function (top of the stack) to the handler stack.
    */
-  OP_SET_EX_HANDLER,
+  OP_PUSH_EX_HANDLER,
+
+  /**
+   * Pop an exception handler from the handler stack and call it (as in
+   * `OP_CALL`), passing a single argument.
+   */
+  OP_CALL_EX_HANDLER,
 
   /**
    * Push the current frame index onto the stack.

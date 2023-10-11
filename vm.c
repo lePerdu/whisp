@@ -144,14 +144,18 @@ void vm_stack_frame_skip_delete(struct lisp_vm *vm, unsigned skip_n,
 void vm_create_stack_frame(struct lisp_vm *vm, struct lisp_closure *func,
                            unsigned arg_count) {
   assert(arg_count <= active_frame_size(vm));
+  struct stack_frame *cur_frame = vm_current_frame(vm);
   unsigned new_fp = vm->stack.size - arg_count;
 
-  call_stack_push(&vm->call_frames, (struct stack_frame){
-                                        .frame_pointer = new_fp,
-                                        .func = func,
-                                        .instr_pointer = 0,
-                                        .exception_handler_ip = -1,
-                                    });
+  call_stack_push(
+      &vm->call_frames,
+      (struct stack_frame){
+          .frame_pointer = new_fp,
+          .func = func,
+          .instr_pointer = 0,
+          .ex_handler_chain =
+              cur_frame != NULL ? cur_frame->ex_handler_chain : LISP_VAL_NIL,
+      });
 }
 
 void vm_replace_stack_frame(struct lisp_vm *vm, struct lisp_closure *func) {
@@ -159,8 +163,8 @@ void vm_replace_stack_frame(struct lisp_vm *vm, struct lisp_closure *func) {
   // Don't need to replace the frame pointer as it is unchanged
   frame->func = func;
   frame->instr_pointer = 0;
-  // Reset this in case it was set
-  frame->exception_handler_ip = -1;
+  // TODO Also reset the exception handler chain? For now the exception handler
+  // chain is only managed by internal intrisincs, so this isn't necessary.
 }
 
 void vm_stack_frame_return(struct lisp_vm *vm) {
@@ -183,29 +187,25 @@ void vm_stack_frame_return_from(struct lisp_vm *vm, unsigned frame_index) {
   vm_stack_push(vm, return_val);
 }
 
-void vm_set_exception_handler(struct lisp_vm *vm, unsigned handler_ip) {
-  struct stack_frame *frame = call_stack_top(&vm->call_frames);
-  frame->exception_handler_ip = handler_ip;
+void vm_push_ex_handler(struct lisp_vm *vm, struct lisp_closure *handler) {
+  struct stack_frame *frame = vm_current_frame(vm);
+  frame->ex_handler_chain = lisp_val_from_obj(
+      lisp_cons_create(lisp_val_from_obj(handler), frame->ex_handler_chain));
 }
 
-bool vm_has_exception_handler(struct lisp_vm *vm) {
-  if (vm->call_frames.size == 0) {
-    return false;
+/**
+ * Pop and return the exception handler for the current frame. Return `NULL` if
+ * there is none.
+ */
+struct lisp_closure *vm_pop_ex_handler(struct lisp_vm *vm) {
+  struct stack_frame *frame = vm_current_frame(vm);
+  if (lisp_val_is_nil(frame->ex_handler_chain)) {
+    return NULL;
+  } else {
+    struct lisp_cons *chain = lisp_val_as_obj(frame->ex_handler_chain);
+    frame->ex_handler_chain = chain->cdr;
+    return lisp_val_as_obj(chain->car);
   }
-  struct stack_frame *frame = call_stack_top(&vm->call_frames);
-  return frame->exception_handler_ip >= 0;
-}
-
-void vm_run_exception_handler(struct lisp_vm *vm) {
-  struct stack_frame *frame = call_stack_top(&vm->call_frames);
-  assert(frame->exception_handler_ip >= 0);
-  frame->instr_pointer = frame->exception_handler_ip;
-  // Clear it since it has been used
-  frame->exception_handler_ip = -1;
-
-  // TODO Restore stack state from point of registering the exception handler?
-  vm_stack_push(vm, vm->current_exception);
-  vm_clear_exception(vm);
 }
 
 void vm_stack_frame_unwind(struct lisp_vm *vm) {

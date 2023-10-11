@@ -94,7 +94,6 @@ enum intrinsic_id {
   INTRINSIC_FLUSH,
   INTRINSIC_SLURP,
   INTRINSIC_LOAD_FILE,
-  INTRINSIC_RAISE,
   INTRINSIC_BACKTRACE,
   INTRINSIC_RUNTIME,
   INTRINSIC_TIME_MS,
@@ -114,7 +113,14 @@ enum intrinsic_id {
 
 static_assert(INTRINSIC_INVALID <= UINT8_MAX, "too many intrinsics");
 
+/**
+ * Some builtin functions are accessed outside of the normal environment, so
+ * have to be allocated (and marked as GC roots) globally.
+ */
+void init_global_builtins(void);
+
 enum eval_status call_intrinsic(uint8_t index, struct lisp_vm *vm);
 void define_builtins(struct lisp_env *global_env);
+struct lisp_closure *get_builtin_raise(void);
 
 #endif

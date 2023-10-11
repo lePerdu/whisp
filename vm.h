@@ -16,11 +16,12 @@ struct stack_frame {
   /** Offset into the bytecode array of the function. */
   unsigned instr_pointer;
   /**
-   * Offset into the bytecode array to return to when catching an exception.
+   * Current exception handler chain for the stack frame.
    *
-   * Negative if there is no exception handler.
+   * By default, this is the same as the parent stack frame, but is modified
+   * with `OP_PUSH_EX_HANDLER` and `OP_POP_EX_HANDLER`.
    */
-  int exception_handler_ip;
+  struct lisp_val ex_handler_chain;
 };
 
 struct call_stack {
@@ -55,6 +56,7 @@ static inline bool vm_has_exception(const struct lisp_vm *vm) {
 }
 
 static inline struct lisp_val vm_current_exception(const struct lisp_vm *vm) {
+  assert(vm->has_exception);
   return vm->current_exception;
 }
 
@@ -129,8 +131,13 @@ void vm_stack_frame_return_from(struct lisp_vm *vm, unsigned frame_index);
 /**
  * Register exception handler point in the current function.
  */
-void vm_set_exception_handler(struct lisp_vm *vm, unsigned handler_ip);
-bool vm_has_exception_handler(struct lisp_vm *vm);
+void vm_push_ex_handler(struct lisp_vm *vm, struct lisp_closure *handler);
+
+/**
+ * Pop and return the exception handler for the current frame. Return `NULL` if
+ * there is none.
+ */
+struct lisp_closure *vm_pop_ex_handler(struct lisp_vm *vm);
 
 /**
  * Jump to a set exception handler and setup for running it:

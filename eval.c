@@ -270,16 +270,23 @@ LOOP:
       }
       goto LOOP;
     }
-    case OP_SET_EX_HANDLER: {
-      int16_t offset = chunk_read_short(code, ip);
-      int handler_ip = *ip + offset - 2;
-      if (handler_ip < 0 || code->bytecode.size <= (unsigned)handler_ip) {
-        vm_raise_format_exception(vm, "branch target out of bounds: %d",
-                                  handler_ip);
+    case OP_PUSH_EX_HANDLER: {
+      struct lisp_closure *handler = check_call(vm, vm_stack_pop(vm), 1);
+      if (handler == NULL) {
         goto HANDLE_FATAL_ERROR;
       }
-      vm_set_exception_handler(vm, handler_ip);
+      vm_push_ex_handler(vm, handler);
       goto LOOP;
+    }
+    case OP_CALL_EX_HANDLER: {
+      struct lisp_closure *handler = vm_pop_ex_handler(vm);
+      if (handler == NULL) {
+        // No more handlers, so forward the error
+        vm_raise_exception(vm, vm_stack_pop(vm));
+        goto HANDLE_FATAL_ERROR;
+      }
+      vm_create_stack_frame(vm, handler, 1);
+      goto LOOP_NEW_FRAME;
     }
     case OP_GET_CURRENT_FRAME:
       vm_stack_push(vm, lisp_val_from_int(vm_current_frame_index(vm)));
@@ -323,18 +330,10 @@ HANDLE_FATAL_ERROR:
   return EV_EXCEPTION;
 
 HANDLE_EXCEPTION : {
-  while (vm_current_frame_index(vm) >= initial_frame &&
-         !vm_has_exception_handler(vm)) {
-    vm_stack_frame_unwind(vm);
-  }
-
-  if (vm_has_exception_handler(vm)) {
-    vm_run_exception_handler(vm);
-    // Then continue on executing
-  } else {
-    // No exception handler (at least for the current execution sequence)
-    return EV_EXCEPTION;
-  }
+  // Manual call to the same `raise` function exposed to user code
+  vm_stack_push(vm, vm_current_exception(vm));
+  vm_clear_exception(vm);
+  vm_create_stack_frame(vm, get_builtin_raise(), 1);
   goto LOOP_NEW_FRAME;
 }
 }
