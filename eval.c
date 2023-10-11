@@ -122,11 +122,12 @@ LOOP:
       if (!lisp_is_env_binding(const_val)) {
         vm_raise_format_exception(
             vm, "argument to get-global must be an environment binding");
-        goto HANDLE_EXCEPTION;
+        goto HANDLE_FATAL_ERROR;
       }
       struct lisp_env_binding *binding = lisp_val_as_obj(const_val);
       struct lisp_val value = lisp_env_binding_value(binding);
       if (lisp_is_uninitialized(value)) {
+        // This is one of the few non-fatal errors in the evaluator
         vm_raise_format_exception(
             vm, "symbol not bound: %s",
             lisp_symbol_name(lisp_env_binding_name(binding)));
@@ -142,7 +143,7 @@ LOOP:
       if (!lisp_is_env_binding(const_val)) {
         vm_raise_format_exception(
             vm, "argument to set-global must be an environment binding");
-        goto HANDLE_EXCEPTION;
+        goto HANDLE_FATAL_ERROR;
       }
       struct lisp_env_binding *binding = lisp_val_as_obj(const_val);
       lisp_env_binding_set_value(binding, vm_stack_pop(vm));
@@ -194,7 +195,7 @@ LOOP:
         vm_raise_format_exception(vm,
                                   "cannot make closure with code of type: %s",
                                   lisp_val_type_name(code_val));
-        goto HANDLE_EXCEPTION;
+        goto HANDLE_FATAL_ERROR;
       }
 
       struct lisp_closure *cl =
@@ -212,7 +213,7 @@ LOOP:
         vm_raise_format_exception(
             vm, "cannot initialize object of type %s as closure",
             lisp_val_type_name(after_captures));
-        goto HANDLE_EXCEPTION;
+        goto HANDLE_FATAL_ERROR;
       }
 
       if (closure->n_captures != n_captures) {
@@ -220,7 +221,7 @@ LOOP:
                                   "tried to initialize closure with wrong "
                                   "number of captures. Expected %u, got %u",
                                   closure->n_captures, n_captures);
-        goto HANDLE_EXCEPTION;
+        goto HANDLE_FATAL_ERROR;
       }
 
       for (int i = n_captures - 1; i >= 0; i--) {
@@ -233,7 +234,7 @@ LOOP:
       uint8_t start_fp = chunk_read_byte(code, ip);
       enum eval_status res = build_rest_args(vm, start_fp);
       if (res == EV_EXCEPTION) {
-        goto HANDLE_EXCEPTION;
+        goto HANDLE_FATAL_ERROR;
       }
       goto LOOP;
     }
@@ -243,7 +244,7 @@ LOOP:
       if (new_ip < 0 || code->bytecode.size <= (unsigned)new_ip) {
         vm_raise_format_exception(vm, "branch target out of bounds: %d",
                                   new_ip);
-        goto HANDLE_EXCEPTION;
+        goto HANDLE_FATAL_ERROR;
       }
       *ip = new_ip;
       goto LOOP;
@@ -255,7 +256,7 @@ LOOP:
         if (new_ip < 0 || code->bytecode.size <= (unsigned)new_ip) {
           vm_raise_format_exception(vm, "branch target out of bounds: %d",
                                     new_ip);
-          goto HANDLE_EXCEPTION;
+          goto HANDLE_FATAL_ERROR;
         }
         *ip = new_ip;
       }
@@ -275,7 +276,7 @@ LOOP:
       if (handler_ip < 0 || code->bytecode.size <= (unsigned)handler_ip) {
         vm_raise_format_exception(vm, "branch target out of bounds: %d",
                                   handler_ip);
-        goto HANDLE_EXCEPTION;
+        goto HANDLE_FATAL_ERROR;
       }
       vm_set_exception_handler(vm, handler_ip);
       goto LOOP;
@@ -311,6 +312,15 @@ LOOP:
   // loop)
   vm_raise_format_exception(vm, "unknown opcode: %d", op);
   // And then handle the error...
+
+HANDLE_FATAL_ERROR:
+  // Many errors in the evaluator can only happen due to compiler bugs, so they
+  // cause immediate exit.
+  // Unwind the stack, but ignore exception handlers
+  while (vm_current_frame_index(vm) >= initial_frame) {
+    vm_stack_frame_unwind(vm);
+  }
+  return EV_EXCEPTION;
 
 HANDLE_EXCEPTION : {
   while (vm_current_frame_index(vm) >= initial_frame &&
