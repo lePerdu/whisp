@@ -41,8 +41,17 @@
 (defn! (filter p l)
   (if (null? l)
     nil
-    (let ((first (car l)) (rest-filtered (filter p (cdr l))))
-      (if (p first) (cons first rest-filtered) rest-filtered))))
+    (let-cons ((first . rest) l)
+      (if (p first)
+        (cons first (filter p rest))
+        (filter p rest)))))
+
+(defn! (filter-map f l)
+  (let-if-cons ((first . rest) l)
+    (let ((mapped (f first)))
+      (if mapped
+        (cons mapped (filter-map f rest))
+        (filter-map f rest)))))
 
 (defn! (find p l)
   (if (null? l)
