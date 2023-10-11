@@ -561,6 +561,28 @@ DEF_BUILTIN(core_raise) {
   return EV_EXCEPTION;
 }
 
+/**
+ * Build a list representing the stack trace of the current execution.
+ *
+ * The head of the list is the most recent (current) stack frame. Each element
+ * of the list is the function object which is executing in that frame.
+ *
+ * TODO Flip order?
+ * TODO Return array instead of a list?
+ * TODO Include more info in each stack frame.
+ */
+DEF_BUILTIN(core_backtrace) {
+  struct list_builder builder;
+  list_builder_init(&builder);
+
+  for (unsigned i = 0; i < vm->call_frames.size; i++) {
+    list_builder_append(&builder,
+                        lisp_val_from_obj(vm->call_frames.data[i].func));
+  }
+
+  BUILTIN_RETURN(list_build(&builder));
+}
+
 /*
 DEF_BUILTIN(core_with_exception_handler) {
   DEF_ARG(handler, 0);
@@ -795,6 +817,7 @@ static const struct builtin_config builtins[] = {
     [INTRINSIC_SLURP] = {"slurp", core_slurp, 1, false},
     [INTRINSIC_LOAD_FILE] = {"load-file", core_load_file, 1, false},
     [INTRINSIC_RAISE] = {"raise", core_raise, 1, false},
+    [INTRINSIC_BACKTRACE] = {"backtrace", core_backtrace, 0, false},
     [INTRINSIC_RUNTIME] = {"runtime", core_runtime, 0, false},
     [INTRINSIC_TIME_MS] = {"time-ms", core_time_ms, 0, false},
     [INTRINSIC_SLEEP] = {"sleep", core_sleep, 1, false},
