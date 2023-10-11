@@ -43,11 +43,13 @@ static enum eval_status check_call_args(struct lisp_vm *vm,
                                         unsigned arg_count) {
   unsigned req_args = func->code->req_arg_count;
   if (arg_count < req_args) {
-    vm_raise_format_exception(vm, "not enough arguments");
+    vm_raise_format_exception(vm, "%s: not enough arguments",
+                              lisp_closure_name_cstr(func));
     return EV_EXCEPTION;
   }
   if (arg_count > req_args && !func->code->is_variadic) {
-    vm_raise_format_exception(vm, "too many arguments");
+    vm_raise_format_exception(vm, "%s: too many arguments",
+                              lisp_closure_name_cstr(func));
     return EV_EXCEPTION;
   }
 
