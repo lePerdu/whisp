@@ -9,13 +9,14 @@
 
 (defmacro! (deftest! name . body)
   (let ((label (->string name)))
-    `(swap! *all-tests*
-      (fn (all-tests)
-        (cons
-          (make-test-entry
-            (string-concat *test-group-prefix* ~label)
-            (fn () ~(cons 'do body)))
-          all-tests)))))
+    `(let ((test-fn (fn-named ~name () ~(cons 'do body))))
+      (swap! *all-tests*
+        (fn (all-tests)
+          (cons
+            (make-test-entry
+              (string-concat *test-group-prefix* ~label)
+              test-fn)
+            all-tests))))))
 
 (defmacro! (defgroup! name . body)
   (let ((label (->string name)))
