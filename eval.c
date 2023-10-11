@@ -280,6 +280,31 @@ LOOP:
       vm_set_exception_handler(vm, handler_ip);
       goto LOOP;
     }
+    case OP_GET_CURRENT_FRAME:
+      vm_stack_push(vm, lisp_val_from_int(vm_current_frame_index(vm)));
+      goto LOOP;
+    case OP_ESCAPE_FRAME: {
+      struct lisp_val frame_val = vm_stack_pop(vm);
+      if (lisp_val_type(frame_val) != LISP_INT) {
+        vm_raise_format_exception(vm, "escape frame must be of type int");
+        goto HANDLE_FATAL_ERROR;
+      }
+      long frame_index = lisp_val_as_int(frame_val);
+      if (frame_index < initial_frame ||
+          vm_current_frame_index(vm) < frame_index) {
+        vm_raise_format_exception(vm, "escape frame is out of bounds: %d",
+                                  frame_index);
+        goto HANDLE_FATAL_ERROR;
+      }
+
+      vm_stack_frame_return_from(vm, frame_index);
+      if (vm_current_frame_index(vm) < initial_frame) {
+        // Nothing left to evaluate
+        return EV_SUCCESS;
+      } else {
+        goto LOOP_NEW_FRAME;
+      }
+    }
   }
 
   // Unhandled opcode (other instructions should continue to the top of the

@@ -166,3 +166,11 @@
     (if (= expanded ast)
       expanded
       (macroexpand expanded))))
+
+; Easier-to-use versions of call-with-escape-continuation
+
+(def! call/ec call-with-escape-continuation)
+
+(defmacro! (let/ec esc-cont-name body)
+  `(call-with-escape-continuation
+    (fn (~esc-cont-name) ~body)))

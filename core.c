@@ -920,6 +920,42 @@ static struct lisp_closure *make_builtin_with_exception_handler() {
   return lisp_closure_create(chunk, 0);
 }
 
+static struct lisp_closure *make_builtin_with_escape_continuation() {
+  struct code_chunk *esc_chunk = chunk_create();
+  esc_chunk->req_arg_count = 1;
+  gc_push_root_obj(esc_chunk);
+
+  chunk_append_byte(esc_chunk, OP_GET_UPVALUE);
+  chunk_append_byte(esc_chunk, 0);
+  chunk_append_byte(esc_chunk, OP_ESCAPE_FRAME);
+
+  struct code_chunk *chunk = chunk_create();
+  chunk_append_byte(chunk, OP_ALLOC_CLOSURE);
+  chunk_append_byte(chunk,
+                    chunk_add_const(chunk, lisp_val_from_obj(esc_chunk)));
+  chunk_append_byte(chunk, 1);  // 1 capture: the frame ID
+  chunk_append_byte(chunk, OP_GET_CURRENT_FRAME);
+  chunk_append_byte(chunk, OP_INIT_CLOSURE);
+  chunk_append_byte(chunk, 1);  // 1 capture
+
+  chunk_append_byte(chunk, OP_GET_FP);
+  chunk_append_byte(chunk, 0);  // thunk argument
+  chunk_append_byte(chunk, OP_SKIP_DELETE);
+  chunk_append_byte(chunk, 2);  // thunk, escape closure
+  chunk_append_byte(chunk, 1);  // thunk argument
+  chunk_append_byte(chunk, OP_TAIL_CALL);
+
+  gc_pop_root_expect_obj(esc_chunk);
+
+  gc_push_root_obj(chunk);
+  chunk->name = lisp_symbol_create_cstr("call-with-escape-continuation");
+  gc_pop_root_expect_obj(chunk);
+
+  chunk->req_arg_count = 1;
+
+  return lisp_closure_create(chunk, 0);
+}
+
 enum eval_status call_intrinsic(uint8_t index, struct lisp_vm *vm) {
   assert(index < BUILTIN_COUNT);
   return builtins[index].c_func(vm);
@@ -949,6 +985,7 @@ void define_builtins(struct lisp_env *global_env) {
   define_cl(global_env, make_builtin_apply());
   define_cl(global_env, make_builtin_eval());
   define_cl(global_env, make_builtin_with_exception_handler());
+  define_cl(global_env, make_builtin_with_escape_continuation());
 
   // TODO Make these constants or part of the reader?
   define_const(global_env, "true", lisp_true());

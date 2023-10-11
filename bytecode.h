@@ -142,6 +142,17 @@ enum bytecode_op {
    * Offset is relative, just like branch instructions.
    */
   OP_SET_EX_HANDLER,
+
+  /**
+   * Push the current frame index onto the stack.
+   */
+  OP_GET_CURRENT_FRAME,
+
+  /**
+   * Pop a frame index off the stack, and act as if a `OP_RETURN` was executed
+   * from that stack frame.
+   */
+  OP_ESCAPE_FRAME,
 };
 
 struct bytecode_array {

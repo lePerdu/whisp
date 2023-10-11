@@ -256,6 +256,12 @@ static int disassemble_instr(const struct code_chunk *chunk, unsigned offset) {
     case OP_SET_EX_HANDLER:
       return disassemble_branch(chunk, OP_SET_EX_HANDLER, "set-ex-handler",
                                 offset);
+    case OP_GET_CURRENT_FRAME:
+      printf("(get-current-frame)\n");
+      return 1;
+    case OP_ESCAPE_FRAME:
+      printf("(escape-frame)\n");
+      return 1;
   }
 
   printf("\ninvalid opcode at offset %04u: %u\n", offset, opcode);

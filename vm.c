@@ -164,13 +164,23 @@ void vm_replace_stack_frame(struct lisp_vm *vm, struct lisp_closure *func) {
 }
 
 void vm_stack_frame_return(struct lisp_vm *vm) {
+  vm_stack_frame_return_from(vm, vm_current_frame_index(vm));
+}
+
+void vm_stack_frame_return_from(struct lisp_vm *vm, unsigned frame_index) {
+  // Can't return from the initial stack state
+  assert(frame_index > 0);
+
   // Return value is the top of the frame stack
   struct lisp_val return_val = vm_stack_pop(vm);
-  unsigned old_fp = active_frame_pointer(vm);
-  // Pop the frame off the stack
-  call_stack_pop(&vm->call_frames);
-  vm->stack.size = old_fp;
-  val_array_push(&vm->stack, return_val);
+
+  // TODO Optimize to directly switch to new frame? (might have to walk the
+  // stack anyway for some kind of finalizers)
+  while (vm_current_frame_index(vm) >= frame_index) {
+    vm_stack_frame_unwind(vm);
+  }
+
+  vm_stack_push(vm, return_val);
 }
 
 void vm_set_exception_handler(struct lisp_vm *vm, unsigned handler_ip) {

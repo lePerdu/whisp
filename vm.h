@@ -122,6 +122,11 @@ void vm_replace_stack_frame(struct lisp_vm *vm, struct lisp_closure *func);
 void vm_stack_frame_return(struct lisp_vm *vm);
 
 /**
+ * Return from a specified frame.
+ */
+void vm_stack_frame_return_from(struct lisp_vm *vm, unsigned frame_index);
+
+/**
  * Register exception handler point in the current function.
  */
 void vm_set_exception_handler(struct lisp_vm *vm, unsigned handler_ip);

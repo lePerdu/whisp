@@ -11,5 +11,6 @@
 (load-file "test/error.wh")
 (load-file "test/array.wh")
 (load-file "test/vector.wh")
+(load-file "test/continuation.wh")
 
 (run-all-tests)

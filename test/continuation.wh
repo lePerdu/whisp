@@ -1,0 +1,37 @@
+(defgroup! call-with-escape-continuation
+  (deftest! full-syntax
+    (assert= 5 (call-with-escape-continuation (fn (k) (k 5)))))
+  (deftest! call/ec-syntax
+    (assert= 5 (call/ec (fn (k) (k 5)))))
+  (deftest! let/ec-syntax
+    (assert= 5 (let/ec k (k 5))))
+
+  (deftest! return-like-normal-if-unused
+    (assert= 5 (call/ec (fn (k) 5))))
+  (deftest! escape-at-outer-level
+    (assert= 4 (call/ec (fn (k) (k 4)))))
+  (deftest! escape-inside-conditional
+    (assert= 2 (call/ec (fn (k)
+      (if (= 1 2)
+        1
+        (k 2))))))
+  (deftest! escape-from-nested-function-call
+    (defn! (use-escape k) (k (+ 1 2)))
+    (assert= 3 (call/ec (fn (k) (use-escape k)))))
+  (deftest! escape-from-inner-call/ec
+    (assert= 3
+      (let/ec k1
+        (+ 1
+          (let/ec k2 (k2 2))))))
+  (deftest! escape-from-outer-call/ec
+    (assert= 2
+      (let/ec k1
+        (+ 1
+          (let/ec k2 (k1 2))))))
+  (deftest! escape-from-map
+    (assert= 2
+      (let/ec k
+        (map
+          (fn (elem)
+            (if (= elem 2) (k 2) (+ elem 1)))
+          (list 0 1 2 3 4 5))))))
