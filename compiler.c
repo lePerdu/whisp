@@ -1199,8 +1199,11 @@ static enum compile_res compile_let_bindings(struct compiler_ctx *ctx,
       return COMP_FAILED;
     }
 
-    if (compile_non_tail(ctx, bind_expr) == COMP_FAILED) {
-      return COMP_FAILED;
+    ctx->binding_name = bind_sym;
+    enum compile_res res = compile_non_tail(ctx, bind_expr);
+    ctx->binding_name = NULL;
+    if (res == COMP_FAILED) {
+      return res;
     }
 
     rest_bindings = bindings_cons->cdr;
