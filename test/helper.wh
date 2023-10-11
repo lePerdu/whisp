@@ -1,11 +1,11 @@
 (def! *all-tests* (atom nil))
 (def! *test-group-prefix* "")
 
-(defn! (make-test-entry name func)
-  (cons name func))
-
-(def! test-entry-name car)
-(def! test-entry-func cdr)
+(defrecord! <test-entry>
+  make-test-entry
+  test-entry?
+  (name test-entry-name)
+  (func test-entry-func))
 
 (defmacro! (deftest! name . body)
   (let ((label (->string name)))
@@ -25,6 +25,13 @@
         (string-concat *test-group-prefix* ~label " > ")))
       ~(cons 'do body))))
 
+(defrecord! <test-failure>
+  make-test-failure
+  test-failure?
+  (entry test-failure-entry)
+  (error test-failure-error)
+  (backtrace test-failure-backtrace))
+
 ;; Run a test, returning any error encountered, or nil on success
 (defn! (run-test test)
   (do
@@ -32,7 +39,10 @@
     (print " ... ")
     (flush)
     (guard
-      (err (do (println "FAIL") (cons err (backtrace))))
+      (err
+        (do
+          (println "FAIL")
+          (make-test-failure test err (backtrace))))
       (do
         ((test-entry-func test))
         (println "PASS")
@@ -55,11 +65,8 @@
 (defn! (run-all-tests)
   (let*
     ((tests-in-order (reverse @*all-tests*))
-     (tests-with-results
-      (map (fn (t) (cons t (run-test t))) tests-in-order))
-     (failing-tests-with-results
-      (filter (fn (res) (not (null? (cdr res)))) tests-with-results))
-     (total-count (count tests-with-results))
+     (failing-tests-with-results (filter-map run-test tests-in-order))
+     (total-count (count @*all-tests*))
      (fail-count (count failing-tests-with-results))
      (pass-count (- total-count fail-count)))
     (do
@@ -73,13 +80,12 @@
         (do
           (println "FAILING TESTS:")
           (for-each
-            (fn (failed-tests)
-              (let-cons ((test . err+bt) failed-tests)
-                (do
-                  (println (test-entry-name test) ":")
-                  (println (car err+bt))
-                  (print-backtrace (cdr err+bt))
-                  (println))))
+            (fn (failed)
+              (do
+                (println (test-entry-name (test-failure-entry failed)) ":")
+                (println (test-failure-error failed))
+                (print-backtrace (test-failure-backtrace failed))
+                (println)))
             failing-tests-with-results)
           (error 'test-suite-failed))))))
 
