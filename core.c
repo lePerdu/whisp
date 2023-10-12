@@ -29,8 +29,8 @@ MAKE_INT_BINARY(sub, -);
 MAKE_INT_BINARY(mul, *);
 
 DEF_BUILTIN(core_int_div) {
-  DEF_INT_ARG(dividend, 0);
-  DEF_INT_ARG(divisor, 1);
+  POP_INT_ARG(divisor);
+  POP_INT_ARG(dividend);
   if (divisor == 0) {
     vm_raise_func_exception(vm, "cannot divide by 0");
     return EV_EXCEPTION;
@@ -43,8 +43,8 @@ MAKE_INT_BINARY(bitor, |);
 MAKE_INT_BINARY(bitxor, ^);
 
 static enum eval_status core_int_bitshift(struct lisp_vm *vm) {
-  DEF_INT_ARG(x, 0);
-  DEF_INT_ARG(shift, 1);
+  POP_INT_ARG(shift);
+  POP_INT_ARG(x);
 
   BUILTIN_RETURN(lisp_val_from_int(
       shift >= 0 ? (unsigned long)(x << shift)
@@ -66,18 +66,18 @@ MAKE_REAL_BINARY(mul, *);
 MAKE_REAL_BINARY(div, /);
 
 DEF_BUILTIN(core_real_exp) {
-  DEF_REAL_ARG(x, 0);
+  POP_REAL_ARG(x);
   BUILTIN_RETURN(lisp_val_from_real(exp(x)));
 }
 
 DEF_BUILTIN(core_real_log) {
-  DEF_REAL_ARG(x, 0);
+  POP_REAL_ARG(x);
   BUILTIN_RETURN(lisp_val_from_real(log(x)));
 };
 
 DEF_BUILTIN(core_real_pow) {
-  DEF_REAL_ARG(b, 0);
-  DEF_REAL_ARG(x, 1);
+  POP_REAL_ARG(x);
+  POP_REAL_ARG(b);
   BUILTIN_RETURN(lisp_val_from_real(pow(b, x)));
 }
 
@@ -88,10 +88,9 @@ MAKE_REAL_COMPARE(gte, >=);
 MAKE_REAL_COMPARE(eq, ==);
 
 DEF_BUILTIN(core_identical) {
-  DEF_ARG(a, 0);
-  DEF_ARG(b, 1);
-
-  BUILTIN_RETURN(lisp_val_identical(a, b) ? lisp_true() : lisp_false());
+  POP_ARG(b);
+  POP_ARG(a);
+  BUILTIN_RETURN(lisp_val_from_bool(lisp_val_identical(a, b)));
 }
 
 static enum eval_status make_cons(struct lisp_val first, struct lisp_val second,
@@ -103,15 +102,19 @@ static enum eval_status make_cons(struct lisp_val first, struct lisp_val second,
 DEF_BUILTIN(core_make_cons) { return binary_func(vm, __func__, make_cons); }
 
 DEF_BUILTIN(core_car) {
-  DEF_OBJ_ARG(struct lisp_cons, arg, lisp_val_is_cons, 0);
+  POP_OBJ_ARG(struct lisp_cons, arg, lisp_val_is_cons);
   BUILTIN_RETURN(arg->car);
 }
 
 DEF_BUILTIN(core_cdr) {
-  DEF_OBJ_ARG(struct lisp_cons, arg, lisp_val_is_cons, 0);
+  POP_OBJ_ARG(struct lisp_cons, arg, lisp_val_is_cons);
   BUILTIN_RETURN(arg->cdr);
 }
 
+/**
+ * Unlike other intrinsics, this takes the entire stack as its argument list.
+ * That makes it basically only useful wrapped in a builtin function.
+ */
 DEF_BUILTIN(core_string_concat) {
   struct str_builder builder;
   str_builder_init(&builder);
@@ -140,13 +143,13 @@ enum eval_status string_count(struct lisp_val arg, struct lisp_val *result) {
 }
 
 DEF_BUILTIN(core_string_count) {
-  DEF_OBJ_ARG(struct lisp_string, str, lisp_val_is_string, 0);
+  POP_OBJ_ARG(struct lisp_string, str, lisp_val_is_string);
   BUILTIN_RETURN(lisp_val_from_int(str->length));
 }
 
 DEF_BUILTIN(core_string_get) {
-  DEF_OBJ_ARG(struct lisp_string, str, lisp_val_is_string, 0);
-  DEF_INT_ARG(index, 1);
+  POP_INT_ARG(index);
+  POP_OBJ_ARG(struct lisp_string, str, lisp_val_is_string);
 
   if (index < 0 || (long)str->length <= index) {
     vm_raise_func_exception(vm, "string index out of bounds: %ld", index);
@@ -167,7 +170,7 @@ DEF_BUILTIN(core_is_integer) {
 DEF_BUILTIN(core_is_real) { return unary_pred(vm, __func__, lisp_val_is_real); }
 
 DEF_BUILTIN(core_to_real) {
-  DEF_ARG(arg, 0);
+  POP_ARG(arg);
 
   if (lisp_val_is_int(arg)) {
     BUILTIN_RETURN(lisp_val_from_real((double)lisp_val_as_int(arg)));
@@ -180,7 +183,7 @@ DEF_BUILTIN(core_to_real) {
 }
 
 DEF_BUILTIN(core_to_int) {
-  DEF_ARG(arg, 0);
+  POP_ARG(arg);
 
   if (lisp_val_is_int(arg)) {
     BUILTIN_RETURN(arg);
@@ -193,11 +196,13 @@ DEF_BUILTIN(core_to_int) {
 }
 
 DEF_BUILTIN(core_string_to_symbol) {
-  DEF_OBJ_ARG(struct lisp_string, str, lisp_val_is_string, 0);
+  REF_OBJ_ARG(struct lisp_string, str, lisp_val_is_string, 0);
 
   const char *name = lisp_string_as_cstr(str);
   if (is_valid_symbol(name)) {
-    BUILTIN_RETURN(lisp_val_from_obj(lisp_symbol_create(name, str->length)));
+    struct lisp_symbol *sym = lisp_symbol_create(name, str->length);
+    CLEAR_ARGS(1);
+    BUILTIN_RETURN(lisp_val_from_obj(sym));
   } else {
     vm_raise_func_exception(vm, "invalid symbol name: '%s'", name);
     return EV_EXCEPTION;
@@ -217,12 +222,12 @@ MAKE_CHAR_COMPARE(gte, >=);
 MAKE_CHAR_COMPARE(eq, ==);
 
 DEF_BUILTIN(core_char_to_int) {
-  DEF_CHAR_ARG(c, 0);
+  POP_CHAR_ARG(c);
   BUILTIN_RETURN(lisp_val_from_int(c));
 }
 
 DEF_BUILTIN(core_int_to_char) {
-  DEF_INT_ARG(int_val, 0);
+  POP_INT_ARG(int_val);
 
   // TODO Expand range when better char support is available
   if (LISP_CHAR_MIN <= int_val && int_val <= LISP_CHAR_MAX) {
@@ -238,8 +243,8 @@ DEF_BUILTIN(core_is_string) {
 }
 
 DEF_BUILTIN(core_string_eq) {
-  DEF_OBJ_ARG(struct lisp_string, a, lisp_val_is_string, 0);
-  DEF_OBJ_ARG(struct lisp_string, b, lisp_val_is_string, 1);
+  POP_OBJ_ARG(struct lisp_string, b, lisp_val_is_string);
+  POP_OBJ_ARG(struct lisp_string, a, lisp_val_is_string);
   BUILTIN_RETURN(lisp_val_from_bool(lisp_string_eq(a, b)));
 }
 
@@ -251,7 +256,7 @@ DEF_BUILTIN(core_is_function) {
  * Return the name of a function, or `NIL` if the function is anonymous.
  */
 DEF_BUILTIN(core_function_name) {
-  DEF_OBJ_ARG(struct lisp_closure, func, lisp_val_is_func, 0);
+  POP_OBJ_ARG(struct lisp_closure, func, lisp_val_is_func);
   BUILTIN_RETURN(lisp_val_from_obj(func->code->name));
 }
 
@@ -282,7 +287,7 @@ DEF_BUILTIN(core_is_array) {
 }
 
 DEF_BUILTIN(core_make_array) {
-  DEF_INT_ARG(length, 0);
+  POP_INT_ARG(length);
 
   if (length >= 0) {
     BUILTIN_RETURN(lisp_val_from_obj(lisp_array_create(length)));
@@ -293,14 +298,13 @@ DEF_BUILTIN(core_make_array) {
 }
 
 DEF_BUILTIN(core_array_length) {
-  DEF_OBJ_ARG(struct lisp_array, arr, lisp_val_is_array, 0);
-
+  POP_OBJ_ARG(struct lisp_array, arr, lisp_val_is_array);
   BUILTIN_RETURN(lisp_val_from_int(arr->length));
 }
 
 DEF_BUILTIN(core_array_get) {
-  DEF_OBJ_ARG(struct lisp_array, arr, lisp_val_is_array, 0);
-  DEF_INT_ARG(index, 1);
+  POP_INT_ARG(index);
+  POP_OBJ_ARG(struct lisp_array, arr, lisp_val_is_array);
 
   if (0 <= index && index < (long)arr->length) {
     BUILTIN_RETURN(lisp_array_get(arr, index));
@@ -311,9 +315,9 @@ DEF_BUILTIN(core_array_get) {
 }
 
 DEF_BUILTIN(core_array_set) {
-  DEF_OBJ_ARG(struct lisp_array, arr, lisp_val_is_array, 0);
-  DEF_INT_ARG(index, 1);
-  DEF_ARG(value, 2);
+  POP_ARG(value);
+  POP_INT_ARG(index);
+  POP_OBJ_ARG(struct lisp_array, arr, lisp_val_is_array);
 
   if (0 <= index && index < (long)arr->length) {
     lisp_array_set(arr, index, value);
@@ -383,11 +387,12 @@ DEF_BUILTIN(core_flush) {
 }
 
 DEF_BUILTIN(core_read_str) {
-  DEF_OBJ_ARG(struct lisp_string, arg, lisp_val_is_string, 0);
+  REF_OBJ_ARG(struct lisp_string, arg, lisp_val_is_string, 0);
   struct lisp_val result;
   struct parse_res res =
       read_str("#<unknown>", lisp_string_as_cstr(arg), &result);
   if (res.status == P_SUCCESS) {
+    CLEAR_ARGS(1);
     BUILTIN_RETURN(result);
   } else {
     vm_raise_exception(vm, lisp_val_from_obj(parse_error_format(&res.error)));
@@ -396,7 +401,7 @@ DEF_BUILTIN(core_read_str) {
 }
 
 DEF_BUILTIN(core_slurp) {
-  DEF_OBJ_ARG(struct lisp_string, filename, lisp_val_is_string, 0);
+  REF_OBJ_ARG(struct lisp_string, filename, lisp_val_is_string, 0);
 
   struct lisp_string *contents = read_file(vm, lisp_string_as_cstr(filename));
   if (contents == NULL) {
@@ -404,16 +409,18 @@ DEF_BUILTIN(core_slurp) {
     return EV_EXCEPTION;
   }
 
+  CLEAR_ARGS(1);
   BUILTIN_RETURN(lisp_val_from_obj(contents));
 }
 
 DEF_BUILTIN(core_load_file) {
-  DEF_OBJ_ARG(struct lisp_string, filename, lisp_val_is_string, 0);
+  REF_OBJ_ARG(struct lisp_string, filename, lisp_val_is_string, 0);
 
   enum eval_status res = load_file(vm, lisp_string_as_cstr(filename));
   if (res == EV_EXCEPTION) {
     return res;
   } else {
+    CLEAR_ARGS(1);
     BUILTIN_RETURN(lisp_non_printing());
   }
 }
@@ -453,7 +460,7 @@ DEF_BUILTIN(core_time_ms) {
 }
 
 DEF_BUILTIN(core_sleep) {
-  DEF_INT_ARG(millis, 0);
+  POP_INT_ARG(millis);
 
   long seconds = millis / 1000;
   long nanos = (millis - seconds * 1000) * 1000;
@@ -467,17 +474,16 @@ DEF_BUILTIN(core_sleep) {
 }
 
 DEF_BUILTIN(core_macroexpand_1) {
-  DEF_ARG(ast, 0);
-
+  REF_ARG(ast, 0);
   struct lisp_cons *ast_cons = lisp_val_cast(lisp_val_is_cons, ast);
   if (ast_cons == NULL) {
-    BUILTIN_RETURN(ast);
+    goto RETURN_AST;
   }
 
   struct lisp_symbol *head_sym =
       lisp_val_cast(lisp_val_is_symbol, ast_cons->car);
   if (head_sym == NULL) {
-    BUILTIN_RETURN(ast);
+    goto RETURN_AST;
   }
 
   // TODO This only works at the top level
@@ -486,21 +492,27 @@ DEF_BUILTIN(core_macroexpand_1) {
   const struct lisp_env_binding *binding =
       lisp_env_get(vm->global_env, head_sym);
   if (binding == NULL || !lisp_env_binding_is_macro(binding)) {
-    BUILTIN_RETURN(ast);
+    goto RETURN_AST;
   }
 
+  // eval_apply will manage the memory from here
+  CLEAR_ARGS(1);
   return eval_apply(vm, lisp_env_binding_value(binding), ast_cons->cdr);
+
+RETURN_AST:
+  CLEAR_ARGS(1);
+  BUILTIN_RETURN(ast);
 }
 
 DEF_BUILTIN(core_disassemble) {
-  DEF_OBJ_ARG(struct lisp_closure, func, lisp_val_is_func, 0);
+  REF_OBJ_ARG(struct lisp_closure, func, lisp_val_is_func, 0);
   chunk_disassemble(func->code);
+  CLEAR_ARGS(1);
   BUILTIN_RETURN(lisp_non_printing());
 }
 
 DEF_BUILTIN(core_compile_to_closure) {
-  struct lisp_val ast = vm_stack_pop(vm);
-
+  POP_ARG(ast);
   struct lisp_closure *cl = compile_top_level(vm, ast);
   if (cl == NULL) {
     return EV_EXCEPTION;
@@ -510,8 +522,8 @@ DEF_BUILTIN(core_compile_to_closure) {
 }
 
 DEF_BUILTIN(core_prepare_apply) {
-  struct lisp_val args = vm_stack_pop(vm);
-  struct lisp_val func = vm_stack_pop(vm);
+  POP_ARG(args);
+  POP_ARG(func);
   // TODO Do these need to be GC-preserved? Currently pushing to the stack
   // doesn't trigger GC but that might change in the future
 

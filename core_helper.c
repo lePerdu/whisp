@@ -35,7 +35,7 @@ enum eval_status unary_pred(struct lisp_vm *vm, const char *func_name,
 enum eval_status unary_func(struct lisp_vm *vm, const char *func_name,
                             enum eval_status (*transform)(
                                 struct lisp_val arg, struct lisp_val *result)) {
-  struct lisp_val single_arg = vm_stack_top(vm);
+  REF_ARG(single_arg, 0);
   (void)func_name;
 
   struct lisp_val result;
@@ -43,7 +43,7 @@ enum eval_status unary_func(struct lisp_vm *vm, const char *func_name,
   if (res == EV_EXCEPTION) {
     return res;
   } else {
-    vm_stack_pop(vm);
+    CLEAR_ARGS(1);
     BUILTIN_RETURN(result);
   }
 }
@@ -52,8 +52,8 @@ enum eval_status binary_func(
     struct lisp_vm *vm, const char *func_name,
     enum eval_status (*transform)(struct lisp_val a, struct lisp_val b,
                                   struct lisp_val *result)) {
-  struct lisp_val first = vm_from_stack_pointer(vm, 1);
-  struct lisp_val second = vm_stack_top(vm);
+  REF_ARG(second, 0);
+  REF_ARG(first, 1);
   (void)func_name;
 
   struct lisp_val result;
