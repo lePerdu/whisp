@@ -63,7 +63,6 @@ static void vm_destroy(struct lisp_val v) {
 }
 
 static const struct lisp_vtable VM_VTABLE = {
-    .type = LISP_INVALID,
     .name = "vm",
     .is_gc_managed = true,
     .visit_children = vm_visit_children,

@@ -157,7 +157,6 @@ static void compiler_ctx_visit(struct lisp_val v, visit_callback cb,
 static void compiler_ctx_destroy(struct lisp_val v) { (void)v; }
 
 static const struct lisp_vtable COMPILER_VTABLE = {
-    .type = LISP_OPAQUE,
     .is_gc_managed = true,
     .name = "compiler-context",
     .visit_children = compiler_ctx_visit,
@@ -799,7 +798,7 @@ static enum compile_res compile_do(struct compiler_ctx *ctx,
   ctx->tail_pos = false;
 
   struct lisp_cons *exprs_cons;
-  while ((exprs_cons = lisp_val_cast(LISP_CONS, exprs)) != NULL &&
+  while ((exprs_cons = lisp_val_cast(lisp_val_is_cons, exprs)) != NULL &&
          !lisp_val_is_nil(exprs_cons->cdr)) {
     enum compile_res res = compile(ctx, exprs_cons->car);
     if (res == COMP_FAILED) {
@@ -820,14 +819,14 @@ static enum compile_res compile_do(struct compiler_ctx *ctx,
 
 static enum compile_res compile_if(struct compiler_ctx *ctx,
                                    struct lisp_val args) {
-  struct lisp_cons *args_cons = lisp_val_cast(LISP_CONS, args);
+  struct lisp_cons *args_cons = lisp_val_cast(lisp_val_is_cons, args);
   if (args_cons == NULL) {
     vm_raise_format_exception(ctx->vm, "if: not enough args");
     return COMP_FAILED;
   }
   struct lisp_val cond_expr = args_cons->car;
 
-  args_cons = lisp_val_cast(LISP_CONS, args_cons->cdr);
+  args_cons = lisp_val_cast(lisp_val_is_cons, args_cons->cdr);
   if (args_cons == NULL) {
     vm_raise_format_exception(ctx->vm, "if: not enough args");
     return COMP_FAILED;
@@ -835,7 +834,7 @@ static enum compile_res compile_if(struct compiler_ctx *ctx,
   struct lisp_val true_expr = args_cons->car;
 
   struct lisp_val false_expr;
-  args_cons = lisp_val_cast(LISP_CONS, args_cons->cdr);
+  args_cons = lisp_val_cast(lisp_val_is_cons, args_cons->cdr);
   if (args_cons == NULL) {
     false_expr = LISP_VAL_NIL;
   } else {
@@ -893,19 +892,19 @@ static enum compile_res parse_def(const char *label, struct compiler_ctx *ctx,
                                   struct lisp_val args,
                                   struct lisp_symbol **sym,
                                   struct lisp_val *value_expr) {
-  struct lisp_cons *args_cons = lisp_val_cast(LISP_CONS, args);
+  struct lisp_cons *args_cons = lisp_val_cast(lisp_val_is_cons, args);
   if (args_cons == NULL) {
     vm_raise_format_exception(ctx->vm, "%s: not enough args", label);
     return COMP_FAILED;
   }
-  *sym = lisp_val_cast(LISP_SYMBOL, args_cons->car);
+  *sym = lisp_val_cast(lisp_val_is_symbol, args_cons->car);
   if (*sym == NULL) {
-    vm_raise_format_exception(ctx->vm, "%s: first arg must be of type: %s",
-                              label, lisp_type_name(LISP_SYMBOL));
+    vm_raise_format_exception(ctx->vm, "%s: first arg must be of type symbol",
+                              label);
     return COMP_FAILED;
   }
 
-  args_cons = lisp_val_cast(LISP_CONS, args_cons->cdr);
+  args_cons = lisp_val_cast(lisp_val_is_cons, args_cons->cdr);
   if (args_cons == NULL) {
     vm_raise_format_exception(ctx->vm, "%s: not enough args", label);
     return COMP_FAILED;
@@ -1055,11 +1054,12 @@ static enum compile_res compile_fn_params(struct compiler_ctx *ctx,
 
   // TODO Process in reverse order to avoid copying values
   // TODO Leave arguments on the stack and do some sort of upvalue management
-  while (lisp_val_type(raw_params) == LISP_CONS) {
+  while (lisp_val_is_cons(raw_params)) {
     struct lisp_cons *cons_cell = lisp_val_as_obj(raw_params);
     struct lisp_val param_name = cons_cell->car;
 
-    struct lisp_symbol *sym_name = lisp_val_cast(LISP_SYMBOL, param_name);
+    struct lisp_symbol *sym_name =
+        lisp_val_cast(lisp_val_is_symbol, param_name);
     if (sym_name == NULL) {
       vm_raise_format_exception(ctx->vm,
                                 "fn: parameter names must be of type symbol");
@@ -1079,7 +1079,8 @@ static enum compile_res compile_fn_params(struct compiler_ctx *ctx,
   if (!lisp_val_is_nil(raw_params)) {
     ctx->chunk->is_variadic = true;
 
-    struct lisp_symbol *rest_param = lisp_val_cast(LISP_SYMBOL, raw_params);
+    struct lisp_symbol *rest_param =
+        lisp_val_cast(lisp_val_is_symbol, raw_params);
     if (rest_param == NULL) {
       vm_raise_format_exception(ctx->vm,
                                 "fn: parameter names must be of type symbol");
@@ -1101,14 +1102,14 @@ static enum compile_res compile_fn_params(struct compiler_ctx *ctx,
 
 static enum compile_res compile_fn(struct compiler_ctx *ctx,
                                    struct lisp_val args) {
-  struct lisp_cons *args_cons = lisp_val_cast(LISP_CONS, args);
+  struct lisp_cons *args_cons = lisp_val_cast(lisp_val_is_cons, args);
   if (args_cons == NULL) {
     vm_raise_format_exception(ctx->vm, "fn: not enough args");
     return COMP_FAILED;
   }
   struct lisp_val params = args_cons->car;
 
-  args_cons = lisp_val_cast(LISP_CONS, args_cons->cdr);
+  args_cons = lisp_val_cast(lisp_val_is_cons, args_cons->cdr);
   if (args_cons == NULL) {
     vm_raise_format_exception(ctx->vm, "fn: not enough args");
     return COMP_FAILED;
@@ -1171,21 +1172,24 @@ static enum compile_res compile_let_bindings(struct compiler_ctx *ctx,
 
   struct lisp_cons *bindings_cons;
   struct lisp_val rest_bindings = bindings;
-  while ((bindings_cons = lisp_val_cast(LISP_CONS, rest_bindings)) != NULL) {
-    struct lisp_cons *bind_cons = lisp_val_cast(LISP_CONS, bindings_cons->car);
+  while ((bindings_cons = lisp_val_cast(lisp_val_is_cons, rest_bindings)) !=
+         NULL) {
+    struct lisp_cons *bind_cons =
+        lisp_val_cast(lisp_val_is_cons, bindings_cons->car);
     if (bind_cons == NULL) {
       vm_raise_format_exception(
           ctx->vm, "let: each binding must be a proper list of 2 elements");
       return COMP_FAILED;
     }
-    struct lisp_symbol *bind_sym = lisp_val_cast(LISP_SYMBOL, bind_cons->car);
+    struct lisp_symbol *bind_sym =
+        lisp_val_cast(lisp_val_is_symbol, bind_cons->car);
     if (bind_sym == NULL) {
       vm_raise_format_exception(
           ctx->vm, "let: first element of each binding must be a symbol");
       return COMP_FAILED;
     }
 
-    bind_cons = lisp_val_cast(LISP_CONS, bind_cons->cdr);
+    bind_cons = lisp_val_cast(lisp_val_is_cons, bind_cons->cdr);
     if (bind_cons == NULL) {
       vm_raise_format_exception(
           ctx->vm, "let: each binding must be a proper list of 2 elements");
@@ -1219,11 +1223,13 @@ static enum compile_res compile_let_bindings(struct compiler_ctx *ctx,
   rest_bindings = bindings;
   for (int i = 0; i < bind_count; i++) {
     // Type checks already happened above
-    bindings_cons = lisp_val_cast(LISP_CONS, rest_bindings);
+    bindings_cons = lisp_val_cast(lisp_val_is_cons, rest_bindings);
     assert(bindings_cons != NULL);
-    struct lisp_cons *bind_cons = lisp_val_cast(LISP_CONS, bindings_cons->car);
+    struct lisp_cons *bind_cons =
+        lisp_val_cast(lisp_val_is_cons, bindings_cons->car);
     assert(bind_cons != NULL);
-    struct lisp_symbol *bind_sym = lisp_val_cast(LISP_SYMBOL, bind_cons->car);
+    struct lisp_symbol *bind_sym =
+        lisp_val_cast(lisp_val_is_symbol, bind_cons->car);
     assert(bind_sym != NULL);
 
     if (compiler_lookup_local_after(ctx, bind_sym, starting_local_index) !=
@@ -1246,14 +1252,14 @@ static enum compile_res compile_let_bindings(struct compiler_ctx *ctx,
 
 static enum compile_res compile_let(struct compiler_ctx *ctx,
                                     struct lisp_val args) {
-  struct lisp_cons *args_cons = lisp_val_cast(LISP_CONS, args);
+  struct lisp_cons *args_cons = lisp_val_cast(lisp_val_is_cons, args);
   if (args_cons == NULL) {
     vm_raise_format_exception(ctx->vm, "let: not enough args");
     return COMP_FAILED;
   }
 
   struct lisp_val bindings = args_cons->car;
-  args_cons = lisp_val_cast(LISP_CONS, args_cons->cdr);
+  args_cons = lisp_val_cast(lisp_val_is_cons, args_cons->cdr);
   if (args_cons == NULL) {
     vm_raise_format_exception(ctx->vm, "let: not enough args");
     return COMP_FAILED;
@@ -1294,7 +1300,7 @@ static enum compile_res compile_let(struct compiler_ctx *ctx,
 
 static enum compile_res compile_quote(struct compiler_ctx *ctx,
                                       struct lisp_val args) {
-  struct lisp_cons *args_cons = lisp_val_cast(LISP_CONS, args);
+  struct lisp_cons *args_cons = lisp_val_cast(lisp_val_is_cons, args);
   if (args_cons == NULL) {
     vm_raise_format_exception(ctx->vm, "quote: not enough args");
     return COMP_FAILED;
@@ -1356,7 +1362,7 @@ static enum compile_res compile_call_or_special(struct compiler_ctx *ctx,
     return COMP_FAILED;
   }
 
-  struct lisp_symbol *head_sym = lisp_val_cast(LISP_SYMBOL, head);
+  struct lisp_symbol *head_sym = lisp_val_cast(lisp_val_is_symbol, head);
   if (head_sym != NULL) {
     struct resolved_sym head_resolved;
     if (resolve_symbol(ctx, head_sym, &head_resolved) == COMP_FAILED) {
@@ -1428,34 +1434,15 @@ static enum compile_res compile(struct compiler_ctx *ctx, struct lisp_val ast) {
   gc_push_root(ast);
 
   enum compile_res res;
-  switch (lisp_val_type(ast)) {
-    case LISP_NIL:
-    case LISP_INT:
-    case LISP_REAL:
-    case LISP_CHAR:
-    case LISP_STRING:
-    case LISP_ATOM:
-    case LISP_CLOSURE:
-    case LISP_OPAQUE:
-      compile_prepare_non_def(ctx);
-      res = compile_constant(ctx, ast);
-      emit_return_if_tail_pos(ctx);
-      break;
-
-    case LISP_SYMBOL:
-      compile_prepare_non_def(ctx);
-      res = compile_symbol_ref(ctx, lisp_val_as_obj(ast));
-      break;
-
-    case LISP_CONS:
-      res = compile_call_or_special(ctx, lisp_val_as_obj(ast));
-      break;
-
-    default:
-      vm_raise_format_exception(ctx->vm, "Cannot compile AST of type: %s",
-                                lisp_val_type_name(ast));
-      res = COMP_FAILED;
-      break;
+  if (lisp_val_is_cons(ast)) {
+    res = compile_call_or_special(ctx, lisp_val_as_obj(ast));
+  } else if (lisp_val_is_symbol(ast)) {
+    compile_prepare_non_def(ctx);
+    res = compile_symbol_ref(ctx, lisp_val_as_obj(ast));
+  } else {
+    compile_prepare_non_def(ctx);
+    res = compile_constant(ctx, ast);
+    emit_return_if_tail_pos(ctx);
   }
 
   gc_pop_root_expect(ast);

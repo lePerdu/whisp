@@ -61,7 +61,7 @@ static enum eval_status eval_print_many(struct lisp_vm *vm,
 
   enum eval_status res = EV_SUCCESS;
   while (!lisp_val_is_nil(exprs)) {
-    struct lisp_cons *cell = lisp_val_cast(LISP_CONS, exprs);
+    struct lisp_cons *cell = lisp_val_cast(lisp_val_is_cons, exprs);
     assert(cell != NULL);
     exprs = cell->cdr;
 

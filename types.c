@@ -32,7 +32,6 @@ static void visit_none(struct lisp_val object, visit_callback cb, void *ctx) {
 static void destroy_none(struct lisp_val object) { (void)object; }
 
 static const struct lisp_vtable INT_VTABLE = {
-    .type = LISP_INT,
     .is_gc_managed = false,
     .name = "int",
     .visit_children = visit_none,
@@ -40,16 +39,11 @@ static const struct lisp_vtable INT_VTABLE = {
 };
 
 static const struct lisp_vtable NIL_VTABLE = {
-    .type = LISP_NIL,
     .is_gc_managed = false,
     .name = "nil",
     .visit_children = visit_none,
     .destroy = destroy_none,
 };
-
-// There's redundant structure here, but otherwise there are redundant checks.
-// The solution is probably relying more on vtables rather than types or
-// vice-versa.
 
 const struct lisp_vtable *lisp_val_vtable(struct lisp_val v) {
   if ((v.tagged_ptr & TAG_MASK) == TAG_INT) {
@@ -61,30 +55,8 @@ const struct lisp_vtable *lisp_val_vtable(struct lisp_val v) {
   }
 }
 
-enum lisp_type lisp_val_type(struct lisp_val v) {
-  if ((v.tagged_ptr & TAG_MASK) == TAG_INT) {
-    return LISP_INT;
-  } else if (v.tagged_ptr == LISP_VAL_NIL.tagged_ptr) {
-    return LISP_NIL;
-  } else {
-    enum lisp_type t = LISP_VAL_AS(struct lisp_obj, v)->vt->type;
-    assert(LISP_TYPE_MIN <= t && t < LISP_TYPE_MAX);
-    return t;
-  }
-}
-
 const char *lisp_val_type_name(struct lisp_val v) {
   return lisp_val_vtable(v)->name;
-}
-
-void *lisp_val_cast(enum lisp_type type, struct lisp_val v) {
-  assert(type != LISP_NIL);
-  assert(type != LISP_INT);
-
-  if (lisp_val_type(v) != type) {
-    return NULL;
-  }
-  return lisp_val_as_obj(v);
 }
 
 // TODO Make a pointer to an actual object? Would have to fix
@@ -93,7 +65,6 @@ void *lisp_val_cast(enum lisp_type type, struct lisp_val v) {
 const struct lisp_val LISP_VAL_NIL = {TAG_OBJ};
 
 static const struct lisp_vtable NON_PRINTING_VTABLE = {
-    .type = LISP_OPAQUE,
     .is_gc_managed = false,
     .name = "non-printing",
     .visit_children = visit_none,
@@ -113,7 +84,6 @@ bool lisp_is_non_printing(struct lisp_val v) {
 }
 
 static const struct lisp_vtable UNINIT_VTABLE = {
-    .type = LISP_OPAQUE,
     .is_gc_managed = false,
     .name = "uninitialized",
     .visit_children = visit_none,
@@ -145,30 +115,12 @@ struct lisp_val lisp_true(void) {
 
 struct lisp_val lisp_false(void) { return LISP_VAL_NIL; }
 
-bool lisp_val_is_number(struct lisp_val v) {
-  enum lisp_type type = lisp_val_type(v);
-  return type == LISP_INT || type == LISP_REAL;
-}
-
-bool lisp_val_is_list(struct lisp_val v) {
-  while (lisp_val_type(v) == LISP_CONS) {
-    v = LISP_VAL_AS(struct lisp_cons, v)->cdr;
-  }
-  return lisp_val_type(v) == LISP_NIL;
-}
-
-bool lisp_val_is_func(struct lisp_val v) {
-  enum lisp_type type = lisp_val_type(v);
-  return type == LISP_CLOSURE;
-}
-
 struct lisp_real {
   struct lisp_obj header;
   double value;
 };
 
 static const struct lisp_vtable REAL_VTABLE = {
-    .type = LISP_REAL,
     .is_gc_managed = true,
     .name = "real",
     .visit_children = visit_none,
@@ -181,9 +133,17 @@ struct lisp_val lisp_val_from_real(double d) {
   return lisp_val_from_obj(v);
 }
 
+bool lisp_val_is_real(struct lisp_val v) {
+  return lisp_val_vtable(v) == &REAL_VTABLE;
+}
+
 double lisp_val_as_real(struct lisp_val v) {
-  assert(lisp_val_type(v) == LISP_REAL);
+  assert(lisp_val_is_real(v));
   return LISP_VAL_AS(struct lisp_real, v)->value;
+}
+
+bool lisp_val_is_number(struct lisp_val v) {
+  return lisp_val_is_int(v) || lisp_val_is_real(v);
 }
 
 struct lisp_char {
@@ -192,7 +152,6 @@ struct lisp_char {
 };
 
 static const struct lisp_vtable CHAR_VTABLE = {
-    .type = LISP_CHAR,
     // TODO Figure out a way to avoid heap allocating these?
     // For strictly 8-bit characters, they could be statically allocated, but
     // not when e.g. UTF-8 chars are supported
@@ -208,8 +167,12 @@ struct lisp_val lisp_val_from_char(lisp_char_t c) {
   return lisp_val_from_obj(v);
 }
 
+bool lisp_val_is_char(struct lisp_val v) {
+  return lisp_val_vtable(v) == &CHAR_VTABLE;
+}
+
 lisp_char_t lisp_val_as_char(struct lisp_val v) {
-  assert(lisp_val_type(v) == LISP_CHAR);
+  assert(lisp_val_is_char(v));
   return LISP_VAL_AS(struct lisp_char, v)->value;
 }
 
@@ -222,7 +185,6 @@ static void lisp_atom_visit(struct lisp_val a, visit_callback cb, void *ctx) {
 }
 
 static const struct lisp_vtable ATOM_VTABLE = {
-    .type = LISP_ATOM,
     .is_gc_managed = true,
     .name = "atom",
     .visit_children = lisp_atom_visit,
@@ -237,6 +199,10 @@ struct lisp_atom *lisp_atom_create(struct lisp_val v) {
   return atom;
 }
 
+bool lisp_val_is_atom(struct lisp_val v) {
+  return lisp_val_vtable(v) == &ATOM_VTABLE;
+}
+
 static void lisp_array_visit(struct lisp_val v, visit_callback cb, void *ctx) {
   struct lisp_array *arr = lisp_val_as_obj(v);
   for (size_t i = 0; i < arr->length; i++) {
@@ -245,7 +211,6 @@ static void lisp_array_visit(struct lisp_val v, visit_callback cb, void *ctx) {
 }
 
 static const struct lisp_vtable ARRAY_VTABLE = {
-    .type = LISP_ARRAY,
     .is_gc_managed = true,
     .name = "array",
     .visit_children = lisp_array_visit,
@@ -263,8 +228,11 @@ struct lisp_array *lisp_array_create(size_t length) {
   return arr;
 }
 
+bool lisp_val_is_array(struct lisp_val v) {
+  return lisp_val_vtable(v) == &ARRAY_VTABLE;
+}
+
 static const struct lisp_vtable STRING_VTABLE = {
-    .type = LISP_STRING,
     .is_gc_managed = true,
     .name = "string",
     .visit_children = visit_none,
@@ -289,6 +257,10 @@ struct lisp_string *lisp_string_create(const char *s, size_t len) {
 
 struct lisp_string *lisp_string_create_cstr(const char *s) {
   return lisp_string_create(s, strlen(s));
+}
+
+bool lisp_val_is_string(struct lisp_val v) {
+  return lisp_val_vtable(v) == &STRING_VTABLE;
 }
 
 struct lisp_string *lisp_string_vformat(const char *format, va_list ap) {
@@ -466,7 +438,6 @@ static hash_t str_hash(const char *str, size_t length) {
 }
 
 static const struct lisp_vtable SYMBOL_VTABLE = {
-    .type = LISP_SYMBOL,
     // TODO Mark as non-GC managed since they really aren't?
     .is_gc_managed = true,
     .name = "symbol",
@@ -493,6 +464,10 @@ struct lisp_symbol *lisp_symbol_create_cstr(const char *s) {
   return lisp_symbol_create(s, strlen(s));
 }
 
+bool lisp_val_is_symbol(struct lisp_val v) {
+  return lisp_val_vtable(v) == &SYMBOL_VTABLE;
+}
+
 inline bool lisp_symbol_eq(const struct lisp_symbol *a,
                            const struct lisp_symbol *b) {
 #ifdef NDEBUG
@@ -514,7 +489,6 @@ static void lisp_cons_visit(struct lisp_val v, visit_callback cb, void *ctx) {
 }
 
 static const struct lisp_vtable CONS_VTABLE = {
-    .type = LISP_CONS,
     .is_gc_managed = true,
     .name = "cons",
     .visit_children = lisp_cons_visit,
@@ -532,13 +506,24 @@ struct lisp_cons *lisp_cons_create(struct lisp_val car, struct lisp_val cdr) {
   return cons;
 }
 
+bool lisp_val_is_cons(struct lisp_val v) {
+  return lisp_val_vtable(v) == &CONS_VTABLE;
+}
+
+bool lisp_val_is_list(struct lisp_val v) {
+  while (lisp_val_is_cons(v)) {
+    v = LISP_VAL_AS(struct lisp_cons, v)->cdr;
+  }
+  return lisp_val_is_nil(v);
+}
+
 unsigned lisp_list_count(struct lisp_val list) {
   unsigned count = 0;
-  while (lisp_val_type(list) == LISP_CONS) {
+  while (lisp_val_is_cons(list)) {
     list = LISP_VAL_AS(struct lisp_cons, list)->cdr;
     count++;
   }
-  assert(lisp_val_type(list) == LISP_NIL);
+  assert(lisp_val_is_nil(list));
   return count;
 }
 
@@ -577,8 +562,7 @@ struct lisp_val list_build(struct list_builder *b) {
 
 void list_mapper_init(struct list_mapper *m, struct lisp_val original) {
   m->original = original;
-  enum lisp_type original_type = lisp_val_type(original);
-  m->cursor = original_type == LISP_CONS ? lisp_val_as_obj(original) : NULL;
+  m->cursor = lisp_val_is_cons(original) ? lisp_val_as_obj(original) : NULL;
   m->copied = false;
   m->at_end_pair = false;
   gc_push_root(original);
@@ -593,7 +577,7 @@ struct lisp_val list_mapper_get_next(struct list_mapper *m) {
 static void list_mapper_do_copy(struct list_mapper *m) {
   m->copied = true;
   struct lisp_val orig = m->original;
-  while (lisp_val_type(orig) == LISP_CONS) {
+  while (lisp_val_is_cons(orig)) {
     struct lisp_cons *cell = lisp_val_as_obj(orig);
     if (cell == m->cursor) {
       break;
@@ -627,7 +611,7 @@ void list_mapper_append_next(struct list_mapper *m, struct lisp_val next) {
   // Always advance
   if (m->at_end_pair) {
     m->cursor = NULL;
-  } else if (lisp_val_type(m->cursor->cdr) == LISP_CONS) {
+  } else if (lisp_val_is_cons(m->cursor->cdr)) {
     m->cursor = lisp_val_as_obj(m->cursor->cdr);
   } else if (lisp_val_is_nil(m->cursor->cdr)) {
     m->cursor = NULL;
@@ -660,7 +644,6 @@ static void lisp_hash_table_entry_visit(struct lisp_val v, visit_callback cb,
 }
 
 static const struct lisp_vtable HASH_TABLE_ENTRY_VTABLE = {
-    .type = LISP_INVALID,
     .is_gc_managed = true,
     .name = "hash-table-entry",
     .visit_children = lisp_hash_table_entry_visit,
@@ -699,7 +682,6 @@ static void lisp_symbol_table_visit(struct lisp_val v, visit_callback cb,
 }
 
 static const struct lisp_vtable SYMBOL_TABLE_VTABLE = {
-    .type = LISP_INVALID,
     .is_gc_managed = true,
     .name = "symbol_table",
     .visit_children = lisp_symbol_table_visit,
@@ -888,7 +870,6 @@ static void lisp_env_visit(struct lisp_val v, visit_callback cb, void *ctx) {
 }
 
 static const struct lisp_vtable ENV_VTABLE = {
-    .type = LISP_INVALID,
     .is_gc_managed = true,
     .name = "environment",
     .visit_children = lisp_env_visit,
@@ -908,8 +889,11 @@ static void lisp_env_binding_visit(struct lisp_val v, visit_callback cb,
   cb(ctx, e->value);
 }
 
+bool lisp_val_is_env(struct lisp_val v) {
+  return lisp_val_vtable(v) == &ENV_VTABLE;
+}
+
 static const struct lisp_vtable ENV_TABLE_ENTRY_VTABLE = {
-    .type = LISP_INVALID,
     .is_gc_managed = true,
     .name = "environment-entry",
     .visit_children = lisp_env_binding_visit,
@@ -977,7 +961,7 @@ struct lisp_env_binding *lisp_env_set_macro(struct lisp_env *env,
   return lisp_env_set_or_insert(env, sym, val, true);
 }
 
-bool lisp_is_env_binding(struct lisp_val v) {
+bool lisp_val_is_env_binding(struct lisp_val v) {
   return lisp_val_vtable(v) == &ENV_TABLE_ENTRY_VTABLE;
 }
 
@@ -1009,7 +993,6 @@ static void lisp_closure_visit(struct lisp_val v, visit_callback cb,
 }
 
 static const struct lisp_vtable CLOSURE_VTABLE = {
-    .type = LISP_CLOSURE,
     .is_gc_managed = true,
     .name = "closure",
     .visit_children = lisp_closure_visit,
@@ -1033,27 +1016,10 @@ struct lisp_closure *lisp_closure_create(struct code_chunk *bytecode,
   return cl;
 }
 
-const char *lisp_closure_name_cstr(const struct lisp_closure *c) {
-  return chunk_get_name(c->code);
+bool lisp_val_is_func(struct lisp_val v) {
+  return lisp_val_vtable(v) == &CLOSURE_VTABLE;
 }
 
-static const struct lisp_vtable *const TYPE_TO_VTABLE[] = {
-    [LISP_NIL] = &NIL_VTABLE,       [LISP_INT] = &INT_VTABLE,
-    [LISP_REAL] = &REAL_VTABLE,     [LISP_CHAR] = &CHAR_VTABLE,
-    [LISP_STRING] = &STRING_VTABLE, [LISP_SYMBOL] = &SYMBOL_VTABLE,
-    [LISP_CONS] = &CONS_VTABLE,     [LISP_CLOSURE] = &CLOSURE_VTABLE,
-    [LISP_ATOM] = &ATOM_VTABLE,     [LISP_ARRAY] = &ARRAY_VTABLE,
-};
-
-static_assert(sizeof(TYPE_TO_VTABLE) / sizeof(void *) == LISP_TYPE_MAX - 1,
-              "missing vtable entry");
-
-const char *lisp_type_name(enum lisp_type t) {
-  if (t == LISP_OPAQUE) {
-    return "opaque";
-  } else if (LISP_TYPE_MIN <= t && t < LISP_TYPE_MAX) {
-    return TYPE_TO_VTABLE[t]->name;
-  } else {
-    return "unknown";
-  }
+const char *lisp_closure_name_cstr(const struct lisp_closure *c) {
+  return chunk_get_name(c->code);
 }

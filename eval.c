@@ -64,7 +64,7 @@ static enum eval_status check_call_args(struct lisp_vm *vm,
 static struct lisp_closure *check_call(struct lisp_vm *vm,
                                        struct lisp_val func_obj,
                                        unsigned arg_count) {
-  struct lisp_closure *new_func = lisp_val_cast(LISP_CLOSURE, func_obj);
+  struct lisp_closure *new_func = lisp_val_cast(lisp_val_is_func, func_obj);
   if (new_func == NULL) {
     vm_raise_format_exception(vm, "cannot call value of type: %s",
                               lisp_val_type_name(func_obj));
@@ -121,7 +121,7 @@ LOOP:
       uint8_t const_idx = chunk_read_byte(code, ip);
       assert(const_idx < code->const_table.size);
       struct lisp_val const_val = code->const_table.data[const_idx];
-      if (!lisp_is_env_binding(const_val)) {
+      if (!lisp_val_is_env_binding(const_val)) {
         vm_raise_format_exception(
             vm, "argument to get-global must be an environment binding");
         goto HANDLE_FATAL_ERROR;
@@ -142,7 +142,7 @@ LOOP:
       uint8_t const_idx = chunk_read_byte(code, ip);
       assert(const_idx < code->const_table.size);
       struct lisp_val const_val = code->const_table.data[const_idx];
-      if (!lisp_is_env_binding(const_val)) {
+      if (!lisp_val_is_env_binding(const_val)) {
         vm_raise_format_exception(
             vm, "argument to set-global must be an environment binding");
         goto HANDLE_FATAL_ERROR;
@@ -210,7 +210,7 @@ LOOP:
       assert(vm_stack_size(vm) >= (unsigned)(n_captures + 1));
       struct lisp_val after_captures = vm_from_stack_pointer(vm, n_captures);
       struct lisp_closure *closure =
-          lisp_val_cast(LISP_CLOSURE, after_captures);
+          lisp_val_cast(lisp_val_is_func, after_captures);
       if (closure == NULL) {
         vm_raise_format_exception(
             vm, "cannot initialize object of type %s as closure",
@@ -295,7 +295,7 @@ LOOP:
       goto LOOP;
     case OP_ESCAPE_FRAME: {
       struct lisp_val frame_val = vm_stack_pop(vm);
-      if (lisp_val_type(frame_val) != LISP_INT) {
+      if (!lisp_val_is_int(frame_val)) {
         vm_raise_format_exception(vm, "escape frame must be of type int");
         goto HANDLE_FATAL_ERROR;
       }
@@ -354,7 +354,7 @@ enum eval_status eval_apply(struct lisp_vm *vm, struct lisp_val func_val,
                             struct lisp_val args) {
   unsigned arg_count = 0;
   while (!lisp_val_is_nil(args)) {
-    struct lisp_cons *args_cons = lisp_val_cast(LISP_CONS, args);
+    struct lisp_cons *args_cons = lisp_val_cast(lisp_val_is_cons, args);
     if (args_cons == NULL) {
       vm_raise_format_exception(vm, "cannot apply improper list");
       return EV_EXCEPTION;

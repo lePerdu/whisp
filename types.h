@@ -9,63 +9,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// TODO Get rid of type enum in favor of vtables?
-enum lisp_type {
-  /** Singleton nil type. */
-  LISP_NIL,
-  /** Fixed-sized integer. */
-  LISP_INT,
-  /** Double-precision floating point number. */
-  LISP_REAL,
-  /** Single character (only supports 8-bit for now) */
-  LISP_CHAR,
-  /**
-   * Symbol used for all identifiers.
-   * These are always interned so that comparison is just a pointer comparison.
-   */
-  LISP_SYMBOL,
-  /** Immutable array of characters. */
-  LISP_STRING,
-  /** Pair of items. Used to represent lists as well. */
-  LISP_CONS,
-  /**
-   * Mutable cell for storing a single value.
-   *
-   * TODO Implement atom in lisp since it's basically just an array of length 1?
-   */
-  LISP_ATOM,
-  /**
-   * Fixed-sized, mutable array of lisp values.
-   *
-   * This isn't intended to be used directly very often except as an
-   * optimization. It is intended to be wrapped in safer structures such as
-   * records or persistent vectors.
-   */
-  LISP_ARRAY,
-
-  /** Lisp-defined function. */
-  LISP_CLOSURE,
-
-  /**
-   * Opaque, bulitin object.
-   *
-   * This exists as a well-defined alternative to LISP_INVALID when an object is
-   * intended to be available to LISP code.
-   *
-   * TODO Better name?
-   * TODO Merge with INVALID?
-   */
-  LISP_OPAQUE,
-
-  /**
-   * Type to mark objects internal to the runtime, not accessible from LISP.
-   */
-  LISP_INVALID,
-};
-
-#define LISP_TYPE_MIN LISP_NIL
-#define LISP_TYPE_MAX LISP_INVALID
-
 struct lisp_val {
   uintptr_t tagged_ptr;
 };
@@ -79,20 +22,13 @@ enum ptr_tag {
 #define TAG_MASK ((uintptr_t)1)
 #define VALUE_MASK (~TAG_MASK)
 
-enum lisp_type lisp_val_type(struct lisp_val v);
-
-// TODO Remove one of these
 const char *lisp_val_type_name(struct lisp_val v);
-const char *lisp_type_name(enum lisp_type t);
 
 bool lisp_val_identical(struct lisp_val a, struct lisp_val b);
 
 typedef void (*visit_callback)(void *ctx, struct lisp_val v);
 
-extern const struct lisp_val LISP_VAL_NIL;
-
 struct lisp_vtable {
-  enum lisp_type type;
   const char *name;
 
   // TODO Should this be an object field instead? (Probably not worth adding an
@@ -128,6 +64,8 @@ void *lisp_obj_alloc(const struct lisp_vtable *vt, size_t size);
  */
 const struct lisp_vtable *lisp_val_vtable(struct lisp_val v);
 
+typedef bool (*lisp_predicate)(struct lisp_val arg);
+
 // Since the object tag is 0, pointer conversions can be a no-op
 static_assert(TAG_OBJ == 0, "Object tag is non-0");
 
@@ -146,23 +84,25 @@ static inline struct lisp_val lisp_val_from_obj(void *obj) {
  * Check the type of a lisp_val and convert to an object pointer.
  * If the type does not match, returns NULL.
  */
-void *lisp_val_cast(enum lisp_type type, struct lisp_val v);
+static inline void *lisp_val_cast(lisp_predicate pred, struct lisp_val v) {
+  return pred(v) ? lisp_val_as_obj(v) : NULL;
+}
 
 #define LISP_VAL_AS(t, v) ((t *)lisp_val_as_obj(v))
 
 // clang-format doesn't handle _Generic macros well
 // clang-format off
-#define LISP_CONVERT_C_TYPE(t) \
-  _Generic((t *)NULL, \
-    long *: LISP_INT, \
-    lisp_char_t *: LISP_CHAR, \
-    double *: LISP_REAL, \
-    struct lisp_symbol *: LISP_SYMBOL, \
-    struct lisp_string *: LISP_STRING, \
-    struct lisp_cons *: LISP_CONS, \
-    struct lisp_atom *: LISP_ATOM, \
-    struct lisp_array *: LISP_ARRAY, \
-    struct lisp_closure *: LISP_CLOSURE, \
+#define LISP_TYPE_NAME(t) \
+  _Generic((t)(uintptr_t)NULL, \
+    long: "int", \
+    lisp_char_t: "char", \
+    double: "real", \
+    struct lisp_symbol *: "symbol", \
+    struct lisp_string *: "string", \
+    struct lisp_cons *: "cons", \
+    struct lisp_atom *: "atom", \
+    struct lisp_array *: "array", \
+    struct lisp_closure *: "function" \
   )
 // clang-format on
 
@@ -173,8 +113,11 @@ void *lisp_val_cast(enum lisp_type type, struct lisp_val v);
 #define LISP_CAST(t, v) ((t *)lisp_val_cast(LISP_CONVERT_C_TYPE(t), v))
 */
 
+/** Singleton nil object. */
+extern const struct lisp_val LISP_VAL_NIL;
+
 static inline bool lisp_val_is_nil(struct lisp_val v) {
-  return lisp_val_type(v) == LISP_NIL;
+  return v.tagged_ptr == LISP_VAL_NIL.tagged_ptr;
 }
 
 // Cannonical true and false values
@@ -187,6 +130,10 @@ static inline bool lisp_val_is_false(struct lisp_val v) {
 
 static inline bool lisp_val_is_true(struct lisp_val v) {
   return !lisp_val_is_false(v);
+}
+
+static inline struct lisp_val lisp_val_from_bool(bool x) {
+  return x ? lisp_true() : lisp_false();
 }
 
 /**
@@ -204,17 +151,10 @@ bool lisp_is_non_printing(struct lisp_val v);
 struct lisp_val lisp_uninitialized(void);
 bool lisp_is_uninitialized(struct lisp_val v);
 
-bool lisp_val_is_number(struct lisp_val v);
-/**
- * Returns whether a value is a "proper" list. I.e. nil or a series of cons
- * cells which end in nil.
- */
-bool lisp_val_is_list(struct lisp_val v);
-bool lisp_val_is_func(struct lisp_val v);
-
 #define LISP_INT_MIN (LONG_MIN >> 2)
 #define LISP_INT_MAX (LONG_MAX >> 2)
 
+/** Fixed-sized integer. */
 static inline struct lisp_val lisp_val_from_int(long n) {
   // Having the assertions aborts the program on integer overflow.
   // TODO Make a runtime error? Just ignore overflow?
@@ -223,24 +163,36 @@ static inline struct lisp_val lisp_val_from_int(long n) {
   return (struct lisp_val){(uintptr_t)(n << TAG_SHIFT) | TAG_INT};
 }
 
+static inline bool lisp_val_is_int(struct lisp_val v) {
+  return (v.tagged_ptr & TAG_MASK) == TAG_INT;
+}
+
 static inline long lisp_val_as_int(struct lisp_val v) {
-  assert((v.tagged_ptr & TAG_MASK) == TAG_INT);
+  assert(lisp_val_is_int(v));
   return ((long)v.tagged_ptr) >> TAG_SHIFT;
 }
 
+/** Double-precision floating point number. */
 struct lisp_val lisp_val_from_real(double d);
+bool lisp_val_is_real(struct lisp_val v);
 double lisp_val_as_real(struct lisp_val v);
+
+bool lisp_val_is_number(struct lisp_val v);
 
 typedef unsigned char lisp_char_t;
 
 #define LISP_CHAR_MIN 0
 #define LISP_CHAR_MAX UINT8_MAX
 
+/** Single character (only supports 8-bit for now) */
 struct lisp_val lisp_val_from_char(lisp_char_t c);
+bool lisp_val_is_char(struct lisp_val v);
 lisp_char_t lisp_val_as_char(struct lisp_val v);
 
 /**
- * Mutable cell which can contain any value.
+ * Mutable cell for storing a single value.
+ *
+ * TODO Implement atom in lisp since it's basically just an array of length 1?
  */
 struct lisp_atom {
   struct lisp_obj header;
@@ -248,6 +200,7 @@ struct lisp_atom {
 };
 
 struct lisp_atom *lisp_atom_create(struct lisp_val v);
+bool lisp_val_is_atom(struct lisp_val v);
 
 static inline struct lisp_val lisp_atom_deref(const struct lisp_atom *a) {
   return a->value;
@@ -256,6 +209,13 @@ static inline void lisp_atom_reset(struct lisp_atom *a, struct lisp_val v) {
   a->value = v;
 }
 
+/**
+ * Fixed-sized, mutable array of lisp values.
+ *
+ * This isn't intended to be used directly very often except as an
+ * optimization. It is intended to be wrapped in safer structures such as
+ * records or persistent vectors.
+ */
 struct lisp_array {
   struct lisp_obj header;
   size_t length;
@@ -266,6 +226,7 @@ struct lisp_array {
  * Create a new array filled with nil values.
  */
 struct lisp_array *lisp_array_create(size_t length);
+bool lisp_val_is_array(struct lisp_val v);
 
 size_t lisp_array_length(const struct lisp_array *arr);
 
@@ -283,6 +244,10 @@ static inline void lisp_array_set(struct lisp_array *arr, size_t index,
 
 typedef unsigned hash_t;
 
+/**
+ * Symbol used for all identifiers.
+ * These are always interned so that comparison is just a pointer comparison.
+ */
 struct lisp_symbol {
   struct lisp_obj header;
   // Hash code is computed at initialization since symbols are mainly used as
@@ -293,6 +258,7 @@ struct lisp_symbol {
 };
 
 struct lisp_symbol *lisp_symbol_create(const char *s, size_t len);
+bool lisp_val_is_symbol(struct lisp_val v);
 /**
  * Create symbol from null-terminated string.
  *
@@ -313,6 +279,7 @@ extern struct lisp_symbol_table *symbol_intern_table;
 void lisp_symbol_table_delete_if(struct lisp_symbol_table *map,
                                  bool (*pred)(struct lisp_symbol *sym));
 
+/** Immutable array of characters. */
 struct lisp_string {
   struct lisp_obj header;
   size_t length;
@@ -321,6 +288,7 @@ struct lisp_string {
 
 struct lisp_string *lisp_string_create(const char *s, size_t len);
 struct lisp_string *lisp_string_create_cstr(const char *s);
+bool lisp_val_is_string(struct lisp_val v);
 
 /**
  * Create a lisp_string using a printf-compatible format string.
@@ -363,6 +331,7 @@ int str_builder_vformat(struct str_builder *b, const char *format, va_list ap);
 
 struct lisp_string *str_build(struct str_builder *b);
 
+/** Pair of items. Used to represent lists as well. */
 struct lisp_cons {
   struct lisp_obj header;
   struct lisp_val car;
@@ -370,7 +339,12 @@ struct lisp_cons {
 };
 
 struct lisp_cons *lisp_cons_create(struct lisp_val car, struct lisp_val cdr);
-bool lisp_cons_eq(const struct lisp_cons *a, const struct lisp_cons *b);
+bool lisp_val_is_cons(struct lisp_val v);
+/**
+ * Returns whether a value is a "proper" list. I.e. nil or a series of cons
+ * cells which end in nil.
+ */
+bool lisp_val_is_list(struct lisp_val v);
 
 unsigned lisp_list_count(struct lisp_val list);
 
@@ -437,6 +411,7 @@ struct lisp_env;
 struct lisp_env_binding;
 
 struct lisp_env *lisp_env_create(void);
+bool lisp_val_is_env(struct lisp_val v);
 
 /**
  * Lookup a value in the environment. Returns NULL (not LISP_VAL_NIL) if the
@@ -452,7 +427,7 @@ struct lisp_env_binding *lisp_env_set_macro(struct lisp_env *env,
                                             struct lisp_symbol *sym,
                                             struct lisp_val val);
 
-bool lisp_is_env_binding(struct lisp_val v);
+bool lisp_val_is_env_binding(struct lisp_val v);
 const struct lisp_symbol *lisp_env_binding_name(
     const struct lisp_env_binding *b);
 struct lisp_val lisp_env_binding_value(const struct lisp_env_binding *b);
@@ -462,6 +437,7 @@ bool lisp_env_binding_is_macro(const struct lisp_env_binding *b);
 
 struct code_chunk;
 
+/** Lisp-defined function. */
 struct lisp_closure {
   struct lisp_obj header;
   struct code_chunk *code;
@@ -471,6 +447,7 @@ struct lisp_closure {
 
 struct lisp_closure *lisp_closure_create(struct code_chunk *bytecode,
                                          size_t n_captures);
+bool lisp_val_is_func(struct lisp_val v);
 
 struct lisp_symbol *lisp_closure_name(const struct lisp_closure *c);
 const char *lisp_closure_name_cstr(const struct lisp_closure *c);

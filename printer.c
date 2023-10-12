@@ -15,14 +15,13 @@ static void print_cons(struct str_builder *b, struct lisp_cons *cons,
 
   print_str_into(b, cons->car, readble);
 
-  enum lisp_type cdr_type;
-  while ((cdr_type = lisp_val_type(cons->cdr)) == LISP_CONS) {
+  while (lisp_val_is_cons(cons->cdr)) {
     cons = lisp_val_as_obj(cons->cdr);
     str_builder_append(b, ' ');
     print_str_into(b, cons->car, readble);
   }
 
-  if (cdr_type != LISP_NIL) {
+  if (!lisp_val_is_nil(cons->cdr)) {
     str_builder_concat_cstr(b, " . ");
     print_str_into(b, cons->cdr, readble);
   }
@@ -148,66 +147,51 @@ static void print_function(struct str_builder *b, const char *name,
 }
 
 void print_str_into(struct str_builder *b, struct lisp_val v, bool readable) {
-  switch (lisp_val_type(v)) {
-    case LISP_NIL:
-      str_builder_concat_cstr(b, "nil");
-      break;
-    case LISP_INT:
-      str_builder_format(b, "%ld", lisp_val_as_int(v));
-      break;
-    case LISP_REAL:
-      print_real(b, lisp_val_as_real(v));
-      break;
-    case LISP_CHAR: {
-      char c = lisp_val_as_char(v);
-      if (readable) {
-        print_char_literal(b, c);
-      } else {
-        str_builder_append(b, c);
-      }
-      break;
+  if (lisp_val_is_nil(v)) {
+    str_builder_concat_cstr(b, "nil");
+  } else if (lisp_val_is_int(v)) {
+    str_builder_format(b, "%ld", lisp_val_as_int(v));
+  } else if (lisp_val_is_real(v)) {
+    print_real(b, lisp_val_as_real(v));
+  } else if (lisp_val_is_char(v)) {
+    char c = lisp_val_as_char(v);
+    if (readable) {
+      print_char_literal(b, c);
+    } else {
+      str_builder_append(b, c);
     }
-    case LISP_SYMBOL:
-      // TODO Utilize the known string length
-      str_builder_concat_cstr(b, lisp_symbol_name(lisp_val_as_obj(v)));
-      break;
-    case LISP_STRING: {
-      struct lisp_string *s = lisp_val_as_obj(v);
-      if (readable) {
-        print_escaped(b, s);
-      } else {
-        str_builder_concat(b, s);
-      }
-      break;
+  } else if (lisp_val_is_symbol(v)) {
+    // TODO Utilize the known string length
+    str_builder_concat_cstr(b, lisp_symbol_name(lisp_val_as_obj(v)));
+  } else if (lisp_val_is_string(v)) {
+    struct lisp_string *s = lisp_val_as_obj(v);
+    if (readable) {
+      print_escaped(b, s);
+    } else {
+      str_builder_concat(b, s);
     }
-    case LISP_CONS:
-      print_cons(b, lisp_val_as_obj(v), readable);
-      break;
-    case LISP_CLOSURE: {
+  } else if (lisp_val_is_cons(v)) {
+    print_cons(b, lisp_val_as_obj(v), readable);
+  } else if (lisp_val_is_func(v)) {
+    {
       struct lisp_closure *closure = lisp_val_as_obj(v);
       const char *name = lisp_closure_name_cstr(closure);
       print_function(b, name, closure->code->req_arg_count,
                      closure->code->is_variadic);
-      break;
     }
-    case LISP_ATOM: {
+  } else if (lisp_val_is_atom(v)) {
+    {
       const struct lisp_atom *atom = lisp_val_as_obj(v);
       str_builder_concat_cstr(b, "#<atom ");
       print_str_into(b, lisp_atom_deref(atom), readable);
       str_builder_append(b, '>');
-      break;
     }
-    case LISP_ARRAY:
-      print_array(b, lisp_val_as_obj(v), readable);
-      break;
-    case LISP_OPAQUE:
-      str_builder_concat_cstr(b, "#<");
-      str_builder_concat_cstr(b, lisp_val_vtable(v)->name);
-      str_builder_append(b, '>');
-      break;
-    default:
-      str_builder_concat_cstr(b, "#<unknown>");
-      break;
+  } else if (lisp_val_is_array(v)) {
+    print_array(b, lisp_val_as_obj(v), readable);
+  } else {
+    str_builder_concat_cstr(b, "#<");
+    str_builder_concat_cstr(b, lisp_val_vtable(v)->name);
+    str_builder_append(b, '>');
   }
 }
 

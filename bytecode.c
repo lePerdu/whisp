@@ -50,7 +50,6 @@ static void code_chunk_destroy(struct lisp_val v) {
 }
 
 static const struct lisp_vtable CODE_CHUNK_VTABLE = {
-    .type = LISP_OPAQUE,
     .name = "code-chunk",
     .is_gc_managed = true,
     .visit_children = code_chunk_visit,
@@ -163,7 +162,7 @@ static int disassemble_instr(const struct code_chunk *chunk, unsigned offset) {
         printf("\ninvalid constant index: %u\n", const_index);
         return -1;
       }
-      if (!lisp_is_env_binding(chunk->const_table.data[const_index])) {
+      if (!lisp_val_is_env_binding(chunk->const_table.data[const_index])) {
         printf("\nget-global argument must be an environment binding");
         return -1;
       }
@@ -180,7 +179,7 @@ static int disassemble_instr(const struct code_chunk *chunk, unsigned offset) {
         printf("\ninvalid constant index: %u\n", const_index);
         return -1;
       }
-      if (!lisp_is_env_binding(chunk->const_table.data[const_index])) {
+      if (!lisp_val_is_env_binding(chunk->const_table.data[const_index])) {
         printf("\nset-global argument must be an environment binding");
         return -1;
       }

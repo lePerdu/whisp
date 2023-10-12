@@ -10,28 +10,39 @@
 #define DEF_ARG(arg, index) \
   struct lisp_val arg = vm_from_frame_pointer(vm, (index));
 
-#define DEF_PRIM_ARG(decl_type, arg, lisp_type, cast_name, index)           \
+#define DEF_PRIM_ARG(decl_type, arg, pred, conv, index)                     \
   DEF_ARG(_raw_arg_##arg, index)                                            \
-  if (lisp_val_type(_raw_arg_##arg) != (lisp_type)) {                       \
-    vm_raise_func_exception(vm, ERROR_ARG_TYPE, lisp_type_name(lisp_type)); \
+  if (!pred(_raw_arg_##arg)) {                                              \
+    vm_raise_func_exception(vm, ERROR_ARG_TYPE, LISP_TYPE_NAME(decl_type)); \
     return EV_EXCEPTION;                                                    \
   }                                                                         \
-  decl_type arg = lisp_val_as_##cast_name(_raw_arg_##arg);                  \
+  decl_type arg = conv(_raw_arg_##arg);                                     \
   (void)0
 
-#define DEF_INT_ARG(arg, index) DEF_PRIM_ARG(long, arg, LISP_INT, int, index)
+#define DEF_INT_ARG(arg, index) \
+  DEF_PRIM_ARG(long, arg, lisp_val_is_int, lisp_val_as_int, index)
 #define DEF_CHAR_ARG(arg, index) \
-  DEF_PRIM_ARG(lisp_char_t, arg, LISP_CHAR, char, index)
+  DEF_PRIM_ARG(lisp_char_t, arg, lisp_val_is_char, lisp_val_as_char, index)
 #define DEF_REAL_ARG(arg, index) \
-  DEF_PRIM_ARG(double, arg, LISP_REAL, real, index)
+  DEF_PRIM_ARG(double, arg, lisp_val_is_real, lisp_val_as_real, index)
 
-#define DEF_OBJ_ARG(decl_type, arg, lisp_type, index)                       \
-  decl_type *arg =                                                          \
-      lisp_val_cast((lisp_type), vm_from_frame_pointer(vm, (index)));       \
-  if (arg == NULL) {                                                        \
-    vm_raise_func_exception(vm, ERROR_ARG_TYPE, lisp_type_name(lisp_type)); \
-    return EV_EXCEPTION;                                                    \
-  }                                                                         \
+#define DEF_OBJ_ARG(decl_type, arg, pred, index)                              \
+  DEF_ARG(_raw_arg_##arg, index);                                             \
+  if (!pred(_raw_arg_##arg)) {                                                \
+    vm_raise_func_exception(vm, ERROR_ARG_TYPE, LISP_TYPE_NAME(decl_type *)); \
+    return EV_EXCEPTION;                                                      \
+  }                                                                           \
+  decl_type *arg = lisp_val_as_obj(_raw_arg_##arg);                           \
+  (void)0
+
+#define POP_ARG(arg) struct lisp_val arg = vm_stack_pop(vm)
+
+#define POP_OBJ_ARG(decl_type, arg, pred)                                     \
+  decl_type *arg = lisp_val_cast(pred, vm_stack_pop(vm));                     \
+  if (arg == NULL) {                                                          \
+    vm_raise_func_exception(vm, ERROR_ARG_TYPE, LISP_TYPE_NAME(decl_type *)); \
+    return EV_EXCEPTION;                                                      \
+  }                                                                           \
   (void)0
 
 #define BUILTIN_RETURN(val) \
@@ -54,38 +65,28 @@
   vm_raise_format_exception(vm, "%s: " message, \
                             func_name __VA_OPT__(, ) __VA_ARGS__)
 
-#define MAKE_NUM_BINARY(prefix, lisp_type, name, op)                   \
-  static enum eval_status do_##prefix##_##name(                        \
-      struct lisp_val x, struct lisp_val y, struct lisp_val *result) { \
-    *result = lisp_val_from_##prefix(lisp_val_as_##prefix(x)           \
-                                         op lisp_val_as_##prefix(y));  \
-    return EV_SUCCESS;                                                 \
-  }                                                                    \
-  DEF_BUILTIN(core_##prefix##_##name) {                                \
-    return binary_func_with_types(vm, __func__, lisp_type, lisp_type,  \
-                                  do_##prefix##_##name);               \
+#define MAKE_NUM_BINARY(prefix, name, decl_type, op)                           \
+  DEF_BUILTIN(core_##prefix##_##name) {                                        \
+    DEF_PRIM_ARG(decl_type, x, lisp_val_is_##prefix, lisp_val_as_##prefix, 0); \
+    DEF_PRIM_ARG(decl_type, y, lisp_val_is_##prefix, lisp_val_as_##prefix, 1); \
+    BUILTIN_RETURN(lisp_val_from_##prefix(x op y));                            \
   }
 
-#define MAKE_NUM_COMPARE(prefix, lisp_type, name, op)                  \
-  static enum eval_status do_##prefix##_##name(                        \
-      struct lisp_val x, struct lisp_val y, struct lisp_val *result) { \
-    *result = lisp_val_as_##prefix(x) op lisp_val_as_##prefix(y)       \
-                  ? lisp_true()                                        \
-                  : lisp_false();                                      \
-    return EV_SUCCESS;                                                 \
-  }                                                                    \
-  DEF_BUILTIN(core_##prefix##_##name) {                                \
-    return binary_func_with_types(vm, __func__, lisp_type, lisp_type,  \
-                                  do_##prefix##_##name);               \
+#define MAKE_NUM_COMPARE(prefix, name, decl_type, op)                          \
+  DEF_BUILTIN(core_##prefix##_##name) {                                        \
+    DEF_PRIM_ARG(decl_type, x, lisp_val_is_##prefix, lisp_val_as_##prefix, 0); \
+    DEF_PRIM_ARG(decl_type, y, lisp_val_is_##prefix, lisp_val_as_##prefix, 1); \
+    BUILTIN_RETURN((x op y) ? lisp_true() : lisp_false());                     \
   }
 
-#define MAKE_INT_BINARY(name, op) MAKE_NUM_BINARY(int, LISP_INT, name, op)
-#define MAKE_INT_COMPARE(name, op) MAKE_NUM_COMPARE(int, LISP_INT, name, op)
+#define MAKE_INT_BINARY(name, op) MAKE_NUM_BINARY(int, name, long, op)
+#define MAKE_INT_COMPARE(name, op) MAKE_NUM_COMPARE(int, name, long, op)
 
-#define MAKE_REAL_BINARY(name, op) MAKE_NUM_BINARY(real, LISP_REAL, name, op)
-#define MAKE_REAL_COMPARE(name, op) MAKE_NUM_COMPARE(real, LISP_REAL, name, op)
+#define MAKE_REAL_BINARY(name, op) MAKE_NUM_BINARY(real, name, double, op)
+#define MAKE_REAL_COMPARE(name, op) MAKE_NUM_COMPARE(real, name, double, op)
 
-#define MAKE_CHAR_COMPARE(name, op) MAKE_NUM_COMPARE(char, LISP_CHAR, name, op)
+#define MAKE_CHAR_COMPARE(name, op) \
+  MAKE_NUM_COMPARE(char, name, lisp_char_t, op)
 
 struct lisp_val generic_arith(long (*int_op)(long x, long y),
                               double (*real_op)(double x, double y),
@@ -93,25 +94,14 @@ struct lisp_val generic_arith(long (*int_op)(long x, long y),
 enum eval_status arith_compare(struct lisp_vm *vm, const char *func_name,
                                bool (*compare)(long a, long b));
 
-enum eval_status type_pred(struct lisp_vm *vm, const char *func_name,
-                           enum lisp_type type);
 enum eval_status unary_pred(struct lisp_vm *vm, const char *func_name,
-                            bool (*pred)(struct lisp_val arg));
+                            lisp_predicate pred);
 
 enum eval_status unary_func(struct lisp_vm *vm, const char *func_name,
                             enum eval_status (*transform)(
                                 struct lisp_val arg, struct lisp_val *result));
-enum eval_status unary_func_with_type(
-    struct lisp_vm *vm, const char *func_name, enum lisp_type required_type,
-    enum eval_status (*transform)(struct lisp_val arg,
-                                  struct lisp_val *result));
 enum eval_status binary_func(
     struct lisp_vm *vm, const char *func_name,
-    enum eval_status (*transform)(struct lisp_val a, struct lisp_val b,
-                                  struct lisp_val *result));
-enum eval_status binary_func_with_types(
-    struct lisp_vm *vm, const char *func_name, enum lisp_type a_type,
-    enum lisp_type b_type,
     enum eval_status (*transform)(struct lisp_val a, struct lisp_val b,
                                   struct lisp_val *result));
 
