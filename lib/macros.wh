@@ -149,30 +149,22 @@
 
 ; TODO Move these?
 
-; Light syntax over call/ec and with-exception-handler
-(defmacro! (guard binding body)
-  ; TODO Check structure
-  (let ((escape-sym (gensym)))
-    `(let/ec ~escape-sym
-      (with-exception-handler
-        (fn (~(car binding)) (~escape-sym ~(cadr binding)))
-        (fn () ~body)))))
-
-; Combination of guard and cond to easily match on an error
-; TODO Make this the only guard (like in scheme)
-(defmacro! (guard-cond conditions body)
+; Combination of guard, cond, and call/ec to easily match on an error
+; NOTE By design in scheme, this does not continue to errors raised with
+; `raise-continuable`. Maybe that could change here?
+(defmacro! (guard conditions body)
   (let-cons ((binding . branches) conditions)
-    (let*
-      ((escape-sym (gensym))
-       (wrap-with-escape (fn (cond-branch)
-        `(~(car cond-branch) (~escape-sym ~(cadr cond-branch))))))
+    (let
+      ((escape-sym (gensym)))
       `(let/ec ~escape-sym
         (with-exception-handler
           (fn (~binding)
-            (cond
-              ~@(map wrap-with-escape branches)
-              ; Returning from the handler triggers the next handler
-              (else nil)))
+            (~escape-sym
+              (cond
+                ~@branches
+                ; Always raise a new error so that the original
+                ; `raise-continuable` is not returned to.
+                (else (raise-continuable ~binding)))))
           (fn () ~body))))))
 
 (defn! (macroexpand ast)

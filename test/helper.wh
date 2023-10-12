@@ -40,9 +40,10 @@
     (flush)
     (guard
       (err
-        (do
-          (println "FAIL")
-          (make-test-failure test err (backtrace))))
+        (else
+          (do
+            (println "FAIL")
+            (make-test-failure test err (backtrace)))))
       (do
         ((test-entry-func test))
         (println "PASS")
@@ -117,5 +118,5 @@
   `(assert (equal? ~expected ~actual) 'expected ~expected 'got ~actual))
 
 (defmacro! (assert-error expr)
-  `(if (guard (err false) (do ~expr true))
+  `(if (guard (err (else false)) (do ~expr true))
     (assert-make-error '~expr (list 'expected-error))))

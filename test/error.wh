@@ -1,41 +1,71 @@
 (defgroup! error
+  (defgroup! with-exception-handler
+    (deftest! no-op-for-no-error
+      (assert= 2
+        (with-exception-handler
+          (fn (err) (raise "caught error"))
+          (fn () 2))))
+
+    (deftest! handler-return-does-not-stop-raise
+      (def! a (atom 0))
+      (assert-error
+        (with-exception-handler
+          (fn (err)
+            (do (swap! a inc) "ignored"))
+          (fn () (raise "base error"))))
+      ; Make sure the handler ran
+      (assert= 1 @a))
+
+    (deftest! handler-return-continues-raise-continuable
+      (assert= 3
+        (with-exception-handler
+          (fn (err) 2)
+          (fn () (+ 1 (raise-continuable "base error"))))))
+
+    (deftest! handler-escape-ignores-erro
+      (assert= 2
+        (let/ec escape
+          (with-exception-handler
+            (fn (err) (escape 2))
+            (fn () (raise "base error")))))))
+
   (defgroup! guard
     (deftest! no-op-for-no-error
       (assert= 2
-        (guard (err (raise "caught error")) 2)))
-
-    (deftest! catches-error
-      (assert= 2
-        (guard (err 2) (raise "exception"))))
-
-    (deftest! raise-error-in-handler
-      (assert-equal "error from handler"
-        (guard
-          (err err)
-          (guard
-            (err (raise "error from handler"))
-            (raise "error from body"))))))
-
-  (defgroup! guard-cond
-    (deftest! no-op-for-no-error
-      (assert= 2
-        (guard-cond (err (else (raise "caught error"))) 2)))
+        (guard (err (else (raise "caught error"))) 2)))
 
     (deftest! catches-matching error
       (assert= 2
-        (guard-cond (err ((string? err) 2)) (raise "exception"))))
+        (guard (err ((string? err) 2)) (raise "exception"))))
 
     (deftest! does-not-catch-non-matching-error
       (assert-error
-        (guard-cond (err ((string? err) 2)) (raise 4.0))))
+        (guard (err ((string? err) 2)) (raise 4.0))))
 
-    (deftest! raise-error-from-matching-branch
+    (deftest! raise-new-error-from-matching-branch
       ; TODO Add/adjust assert-error to allow filtering the error
       (assert-equal "error from handler"
         (guard
-          (err err)
-          (guard-cond
+          (err (else err))
+          (guard
             (err
               ((string? err) 2)
               ((number? err) (raise "error from handler")))
-            (raise 4)))))))
+            (raise 4)))))
+
+    (deftest! does-not-continue-exception
+      ; TODO Add/adjust assert-error to allow filtering the error
+      (assert= 2
+        (guard
+          (err (else 2))
+          (+ 1 (raise-continuable 4)))))
+
+    (deftest! does-not-continue-exception-if-does-not-match
+      (assert= 2
+        (with-exception-handler
+          ; Even though the root exception is continuable, this should be
+          ; returned directly
+          (fn (err) 2)
+          (fn ()
+            (guard (err (false false))
+              (+ 1 (raise-continuable 4)))))))))
