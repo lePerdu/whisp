@@ -937,6 +937,7 @@ static struct lisp_closure *make_builtin_raise(void) {
   struct code_chunk *chunk = chunk_create();
   chunk->req_arg_count = 1;  // Exception
   unsigned start_pos = chunk_append_byte(chunk, OP_GET_FP);
+  // Copy the exception so it can be passed to the next handler if necessary
   chunk_append_byte(chunk, 0);  // Exception
   chunk_append_byte(chunk, OP_CALL_EX_HANDLER);
   chunk_append_byte(chunk, OP_POP);  // Ignore return
@@ -948,6 +949,19 @@ static struct lisp_closure *make_builtin_raise(void) {
 
   gc_push_root_obj(chunk);
   chunk->name = lisp_symbol_create_cstr("raise");
+  gc_pop_root_expect_obj(chunk);
+  return lisp_closure_create(chunk, 0);
+}
+
+static struct lisp_closure *make_builtin_raise_continuable(void) {
+  struct code_chunk *chunk = chunk_create();
+  chunk->req_arg_count = 1;  // Exception
+  // Exception is already in proper position for the call
+  chunk_append_byte(chunk, OP_CALL_EX_HANDLER);
+  chunk_append_byte(chunk, OP_RETURN);
+
+  gc_push_root_obj(chunk);
+  chunk->name = lisp_symbol_create_cstr("raise-continuable");
   gc_pop_root_expect_obj(chunk);
   return lisp_closure_create(chunk, 0);
 }
@@ -993,6 +1007,7 @@ void define_builtins(struct lisp_env *global_env) {
   define_cl(global_env, make_builtin_apply());
   define_cl(global_env, make_builtin_eval());
   define_cl(global_env, BUILTIN_RAISE);
+  define_cl(global_env, make_builtin_raise_continuable());
   define_cl(global_env, make_builtin_with_exception_handler());
   define_cl(global_env, make_builtin_with_escape_continuation());
 
