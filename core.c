@@ -93,13 +93,11 @@ DEF_BUILTIN(core_identical) {
   BUILTIN_RETURN(lisp_val_from_bool(lisp_val_identical(a, b)));
 }
 
-static enum eval_status make_cons(struct lisp_val first, struct lisp_val second,
-                                  struct lisp_val *result) {
-  *result = lisp_val_from_obj(lisp_cons_create(first, second));
-  return EV_SUCCESS;
+DEF_BUILTIN(core_make_cons) {
+  POP_ARG(cdr);
+  POP_ARG(car);
+  BUILTIN_RETURN(lisp_val_from_obj(lisp_cons_create(car, cdr)));
 }
-
-DEF_BUILTIN(core_make_cons) { return binary_func(vm, __func__, make_cons); }
 
 DEF_BUILTIN(core_car) {
   POP_OBJ_ARG(struct lisp_cons, arg, lisp_val_is_cons);
@@ -159,15 +157,10 @@ DEF_BUILTIN(core_string_get) {
   BUILTIN_RETURN(lisp_val_from_char(lisp_string_get(str, index)));
 }
 
-DEF_BUILTIN(core_is_cons) { return unary_pred(vm, __func__, lisp_val_is_cons); }
-
-DEF_BUILTIN(core_is_null) { return unary_pred(vm, __func__, lisp_val_is_nil); }
-
-DEF_BUILTIN(core_is_integer) {
-  return unary_pred(vm, __func__, lisp_val_is_int);
-}
-
-DEF_BUILTIN(core_is_real) { return unary_pred(vm, __func__, lisp_val_is_real); }
+DEF_BUILTIN_PRED(core_is_cons, lisp_val_is_cons);
+DEF_BUILTIN_PRED(core_is_null, lisp_val_is_nil);
+DEF_BUILTIN_PRED(core_is_integer, lisp_val_is_int);
+DEF_BUILTIN_PRED(core_is_real, lisp_val_is_real);
 
 DEF_BUILTIN(core_to_real) {
   POP_ARG(arg);
@@ -209,11 +202,9 @@ DEF_BUILTIN(core_string_to_symbol) {
   }
 }
 
-DEF_BUILTIN(core_is_symbol) {
-  return unary_pred(vm, __func__, lisp_val_is_symbol);
-}
-
-DEF_BUILTIN(core_is_char) { return unary_pred(vm, __func__, lisp_val_is_char); }
+DEF_BUILTIN_PRED(core_is_symbol, lisp_val_is_symbol);
+DEF_BUILTIN_PRED(core_is_char, lisp_val_is_char);
+DEF_BUILTIN_PRED(core_is_string, lisp_val_is_string);
 
 MAKE_CHAR_COMPARE(lt, <);
 MAKE_CHAR_COMPARE(lte, <=);
@@ -238,19 +229,13 @@ DEF_BUILTIN(core_int_to_char) {
   }
 }
 
-DEF_BUILTIN(core_is_string) {
-  return unary_pred(vm, __func__, lisp_val_is_string);
-}
-
 DEF_BUILTIN(core_string_eq) {
   POP_OBJ_ARG(struct lisp_string, b, lisp_val_is_string);
   POP_OBJ_ARG(struct lisp_string, a, lisp_val_is_string);
   BUILTIN_RETURN(lisp_val_from_bool(lisp_string_eq(a, b)));
 }
 
-DEF_BUILTIN(core_is_function) {
-  return unary_pred(vm, __func__, lisp_val_is_func);
-}
+DEF_BUILTIN_PRED(core_is_function, lisp_val_is_func);
 
 /**
  * Return the name of a function, or `NIL` if the function is anonymous.
@@ -260,15 +245,12 @@ DEF_BUILTIN(core_function_name) {
   BUILTIN_RETURN(lisp_val_from_obj(func->code->name));
 }
 
-DEF_BUILTIN(core_is_atom) { return unary_pred(vm, __func__, lisp_val_is_atom); }
+DEF_BUILTIN_PRED(core_is_atom, lisp_val_is_atom);
 
-static enum eval_status make_atom(struct lisp_val arg,
-                                  struct lisp_val *result) {
-  *result = lisp_val_from_obj(lisp_atom_create(arg));
-  return EV_SUCCESS;
+DEF_BUILTIN(core_make_atom) {
+  POP_ARG(value);
+  BUILTIN_RETURN(lisp_val_from_obj(lisp_atom_create(value)));
 }
-
-DEF_BUILTIN(core_make_atom) { return unary_func(vm, __func__, make_atom); }
 
 DEF_BUILTIN(core_deref) {
   POP_OBJ_ARG(struct lisp_atom, atom, lisp_val_is_atom);
@@ -282,9 +264,7 @@ DEF_BUILTIN(core_reset) {
   BUILTIN_RETURN(new_value);
 }
 
-DEF_BUILTIN(core_is_array) {
-  return unary_pred(vm, __func__, lisp_val_is_array);
-}
+DEF_BUILTIN_PRED(core_is_array, lisp_val_is_array);
 
 DEF_BUILTIN(core_make_array) {
   POP_INT_ARG(length);
@@ -328,38 +308,35 @@ DEF_BUILTIN(core_array_set) {
   }
 }
 
-static enum eval_status do_to_string(struct lisp_val arg,
-                                     struct lisp_val *result) {
-  *result = lisp_val_from_obj(print_str(arg, false));
-  return EV_SUCCESS;
-}
-
 /**
  * Convert value to a string.
  */
-DEF_BUILTIN(core_to_string) { return unary_func(vm, __func__, do_to_string); }
-
-static enum eval_status do_write_str(struct lisp_val arg,
-                                     struct lisp_val *result) {
-  *result = lisp_val_from_obj(print_str(arg, true));
-  return EV_SUCCESS;
+DEF_BUILTIN(core_to_string) {
+  REF_ARG(arg, 0);
+  struct lisp_string *str = print_str(arg, false);
+  CLEAR_ARGS(1);
+  BUILTIN_RETURN(lisp_val_from_obj(str));
 }
 
 /**
  * Convert value to an AST string.
  */
-DEF_BUILTIN(core_write_str) { return unary_func(vm, __func__, do_write_str); }
-
-static enum eval_status do_write(struct lisp_val arg, struct lisp_val *result) {
-  display_str(print_str(arg, true));
-  *result = lisp_non_printing();
-  return EV_SUCCESS;
+DEF_BUILTIN(core_write_str) {
+  REF_ARG(arg, 0);
+  struct lisp_string *str = print_str(arg, true);
+  CLEAR_ARGS(1);
+  BUILTIN_RETURN(lisp_val_from_obj(str));
 }
 
 /**
  * Print AST.
  */
-DEF_BUILTIN(core_write) { return unary_func(vm, __func__, do_write); }
+DEF_BUILTIN(core_write) {
+  REF_ARG(arg, 0);
+  display_str(print_str(arg, true));
+  CLEAR_ARGS(1);
+  BUILTIN_RETURN(lisp_non_printing());
+}
 
 /**
  * Print values with ' ' separator.
@@ -369,17 +346,15 @@ DEF_BUILTIN(core_newline) {
   BUILTIN_RETURN(lisp_non_printing());
 }
 
-static enum eval_status do_display(struct lisp_val arg,
-                                   struct lisp_val *result) {
-  display_str(print_str(arg, false));
-  *result = lisp_non_printing();
-  return EV_SUCCESS;
-}
-
 /**
  * Print value in non-readable format
  */
-DEF_BUILTIN(core_display) { return unary_func(vm, __func__, do_display); }
+DEF_BUILTIN(core_display) {
+  REF_ARG(arg, 0);
+  display_str(print_str(arg, false));
+  CLEAR_ARGS(1);
+  BUILTIN_RETURN(lisp_non_printing());
+}
 
 DEF_BUILTIN(core_flush) {
   fflush(stdout);

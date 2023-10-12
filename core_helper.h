@@ -62,6 +62,11 @@
   return EV_SUCCESS;        \
   (void)0
 
+#define DEF_BUILTIN_PRED(name, pred)                            \
+  DEF_BUILTIN(name) {                                           \
+    BUILTIN_RETURN(lisp_val_from_bool(pred(vm_stack_pop(vm)))); \
+  }
+
 #define ERROR_INT_ARGS "arguments must be of type int"
 #define ERROR_REAL_ARGS "arguments must be of type real"
 #define ERROR_NUMBER_ARG "argument must be of type number"
@@ -99,22 +104,5 @@
 
 #define MAKE_CHAR_COMPARE(name, op) \
   MAKE_NUM_COMPARE(char, name, lisp_char_t, op)
-
-struct lisp_val generic_arith(long (*int_op)(long x, long y),
-                              double (*real_op)(double x, double y),
-                              struct lisp_val x, struct lisp_val y);
-enum eval_status arith_compare(struct lisp_vm *vm, const char *func_name,
-                               bool (*compare)(long a, long b));
-
-enum eval_status unary_pred(struct lisp_vm *vm, const char *func_name,
-                            lisp_predicate pred);
-
-enum eval_status unary_func(struct lisp_vm *vm, const char *func_name,
-                            enum eval_status (*transform)(
-                                struct lisp_val arg, struct lisp_val *result));
-enum eval_status binary_func(
-    struct lisp_vm *vm, const char *func_name,
-    enum eval_status (*transform)(struct lisp_val a, struct lisp_val b,
-                                  struct lisp_val *result));
 
 #endif
