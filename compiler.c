@@ -8,6 +8,7 @@
 #include "core.h"
 #include "eval.h"
 #include "memory.h"
+#include "reader.h"
 #include "types.h"
 #include "vm.h"
 
@@ -1450,7 +1451,9 @@ static enum compile_res compile(struct compiler_ctx *ctx, struct lisp_val ast) {
 }
 
 struct lisp_closure *compile_top_level(struct lisp_vm *vm,
+                                       struct parse_output *metadata,
                                        struct lisp_val ast) {
+  (void)metadata;
   struct compiler_ctx *ctx = compiler_ctx_create_top_level(vm);
 
   enum compile_res res = compile(ctx, ast);
@@ -1462,8 +1465,9 @@ struct lisp_closure *compile_top_level(struct lisp_vm *vm,
   return compile_chunk_to_closure(func);
 }
 
-enum eval_status compile_eval(struct lisp_vm *vm, struct lisp_val ast) {
-  struct lisp_closure *code = compile_top_level(vm, ast);
+enum eval_status compile_eval(struct lisp_vm *vm, struct parse_output *metadata,
+                              struct lisp_val ast) {
+  struct lisp_closure *code = compile_top_level(vm, metadata, ast);
   if (code == NULL) {
     return EV_EXCEPTION;
   }

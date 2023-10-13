@@ -50,8 +50,11 @@ struct lisp_string *read_file(struct lisp_vm *vm, const char *filename) {
   return error ? NULL : result;
 }
 
-static enum eval_status eval_many(struct lisp_vm *vm, struct lisp_val exprs) {
-  gc_push_root(exprs);
+static enum eval_status eval_many(struct lisp_vm *vm,
+                                  struct parse_output *parsed) {
+  gc_push_root_obj(parsed);
+
+  struct lisp_val exprs = parsed->datum;
 
   enum eval_status res = EV_SUCCESS;
   while (!lisp_val_is_nil(exprs)) {
@@ -59,7 +62,7 @@ static enum eval_status eval_many(struct lisp_vm *vm, struct lisp_val exprs) {
     assert(cell != NULL);
     exprs = cell->cdr;
 
-    res = compile_eval(vm, cell->car);
+    res = compile_eval(vm, parsed, cell->car);
     if (res == EV_SUCCESS) {
       (void)vm_stack_pop(vm);
     } else {
@@ -68,7 +71,7 @@ static enum eval_status eval_many(struct lisp_vm *vm, struct lisp_val exprs) {
     }
   }
 
-  gc_pop_root();
+  gc_pop_root_expect_obj(parsed);
   return res;
 }
 
@@ -79,17 +82,15 @@ enum eval_status load_file(struct lisp_vm *vm, const char *filename) {
     return EV_EXCEPTION;
   } else {
     gc_push_root_obj(contents);
-    struct lisp_val ast;
-    struct parse_res read_res =
-        read_str_many(filename, lisp_string_as_cstr(contents), &ast);
+    struct parse_output *output =
+        read_str_many(filename, lisp_string_as_cstr(contents));
     gc_pop_root_expect_obj(contents);
 
-    if (read_res.status == P_SUCCESS) {
+    if (output->status == P_SUCCESS) {
       // Eval but don't print
-      return eval_many(vm, ast);
+      return eval_many(vm, output);
     } else {
-      vm_raise_exception(
-          vm, lisp_val_from_obj(parse_error_format(&read_res.error)));
+      vm_raise_exception(vm, lisp_val_from_obj(parse_error_format(output)));
       return EV_EXCEPTION;
     }
   }

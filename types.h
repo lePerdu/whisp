@@ -50,6 +50,11 @@ struct lisp_vtable {
 };
 
 /**
+ * No-op destroy callback.
+ */
+void lisp_destroy_none(struct lisp_val v);
+
+/**
  * Metadata stored for every object.
  */
 struct lisp_obj {

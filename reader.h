@@ -16,30 +16,39 @@ struct source_pos {
   unsigned col;
 };
 
-struct parse_error {
-  const char *filename;
-  const char *message;
-  struct source_pos error_pos;
-};
-
-struct parse_res {
+/**
+ * Bundle of all parser output:
+ * - Parsed datum
+ * - Source location metadata
+ * - Errors (if any)
+ */
+struct parse_output {
+  struct lisp_obj header;
   enum parse_status status;
-  struct parse_error error;
+  struct lisp_string *filename;
+
+  struct lisp_val datum;
+
+  struct {
+    struct lisp_string *message;
+    struct source_pos pos;
+  } error;
 };
 
-struct lisp_string *parse_error_format(const struct parse_error *error);
+struct parse_output *parse_output_create_simple(const char *filename,
+                                                struct lisp_val ast);
+
+struct lisp_string *parse_error_format(struct parse_output *error);
 
 /**
  * Parse input into a single AST.
  */
-struct parse_res read_str(const char *filename, const char *input,
-                          struct lisp_val *output);
+struct parse_output *read_str(const char *filename, const char *input);
 
 /**
  * Like read_str, but read multiple top-level ASTs into a list.
  */
-struct parse_res read_str_many(const char *filename, const char *input,
-                               struct lisp_val *output);
+struct parse_output *read_str_many(const char *filename, const char *input);
 
 bool is_valid_symbol(const char *name);
 

@@ -81,8 +81,48 @@ struct reader {
   /** Human-readable source location. */
   struct source_pos source_pos;
   struct token token;
-  struct parse_error error;
+
+  struct parse_output *output;
 };
+
+static void parse_output_visit(struct lisp_val v, visit_callback cb,
+                               void *ctx) {
+  struct parse_output *p = lisp_val_as_obj(v);
+  cb(ctx, lisp_val_from_obj(p->filename));
+  cb(ctx, p->datum);
+  cb(ctx, lisp_val_from_obj(p->error.message));
+}
+
+static const struct lisp_vtable PARSE_OUTPUT_VTABLE = {
+    .name = "parse-output",
+    .is_gc_managed = true,
+    .visit_children = parse_output_visit,
+    .destroy = lisp_destroy_none,
+};
+
+static struct parse_output *parse_output_create(const char *filename) {
+  struct lisp_string *filename_str = lisp_string_create_cstr(filename);
+  gc_push_root_obj(filename_str);
+
+  struct parse_output *p = lisp_obj_alloc(&PARSE_OUTPUT_VTABLE, sizeof(*p));
+  p->status = P_EMPTY;
+  p->filename = filename_str;
+  p->datum = LISP_VAL_NIL;
+  p->error.message = NULL;
+  p->error.pos = (struct source_pos){.line = 0, .col = 0};
+  gc_pop_root_expect_obj(filename_str);
+  return p;
+}
+
+struct parse_output *parse_output_create_simple(const char *filename,
+                                                struct lisp_val ast) {
+  gc_push_root(ast);
+  struct parse_output *p = parse_output_create(filename);
+  p->status = P_SUCCESS;
+  p->datum = ast;
+  gc_pop_root_expect(ast);
+  return p;
+}
 
 static void reader_init(struct reader *r, const char *filename,
                         const char *input) {
@@ -93,9 +133,17 @@ static void reader_init(struct reader *r, const char *filename,
   r->token.type = TOK_INVALID;
   r->token.start_pos = r->source_pos;
 
-  r->error.message = NULL;
-  r->error.error_pos = r->source_pos;
-  r->error.filename = filename;
+  r->output = parse_output_create(filename);
+  // Preserve file parsing
+  gc_push_root_obj(r->output);
+}
+
+static struct parse_output *reader_return(enum parse_status status,
+                                          struct reader *r) {
+  r->output->status = status;
+  // From initial reader_init
+  gc_pop_root_expect_obj(r->output);
+  return r->output;
 }
 
 static char reader_peek(const struct reader *r) { return r->input[r->pos]; }
@@ -117,8 +165,8 @@ static void reader_advance(struct reader *r) {
 
 static void reader_error_at(struct reader *r, const char *message,
                             struct source_pos pos) {
-  r->error.message = message;
-  r->error.error_pos = pos;
+  r->output->error.message = lisp_string_create_cstr(message);
+  r->output->error.pos = pos;
 }
 
 static void reader_error_cur_char(struct reader *r, const char *message) {
@@ -564,21 +612,7 @@ static enum parse_status read_form(struct reader *r, struct lisp_val *output) {
   }
 }
 
-static inline struct parse_res make_error_res(const struct reader *r) {
-  return (struct parse_res){
-      .status = P_ERROR,
-      .error = r->error,
-  };
-}
-
-static inline struct parse_res make_status_res(enum parse_status status) {
-  return (struct parse_res){
-      .status = status,
-  };
-}
-
-struct parse_res read_str(const char *filename, const char *input,
-                          struct lisp_val *output) {
+struct parse_output *read_str(const char *filename, const char *input) {
   struct reader r;
   reader_init(&r, filename, input);
 
@@ -586,27 +620,29 @@ struct parse_res read_str(const char *filename, const char *input,
 
   status = reader_next(&r);
   if (status == P_ERROR) {
-    return make_error_res(&r);
+    goto RETURN;
   }
 
   if (r.token.type == TOK_EOF) {
-    return make_status_res(P_EMPTY);
+    status = P_EMPTY;
+    goto RETURN;
   }
 
-  status = read_form(&r, output);
+  status = read_form(&r, &r.output->datum);
   if (status == P_ERROR) {
-    return make_error_res(&r);
+    goto RETURN;
   }
 
   status = reader_expect(&r, TOK_EOF);
   if (status == P_ERROR) {
-    return make_error_res(&r);
+    goto RETURN;
   }
-  return make_status_res(P_SUCCESS);
+
+RETURN:
+  return reader_return(status, &r);
 }
 
-struct parse_res read_str_many(const char *filename, const char *input,
-                               struct lisp_val *output) {
+struct parse_output *read_str_many(const char *filename, const char *input) {
   struct reader r;
   reader_init(&r, filename, input);
 
@@ -633,12 +669,8 @@ struct parse_res read_str_many(const char *filename, const char *input,
     list_builder_append(&builder, next);
   }
 
-  *output = list_build(&builder);
-  if (res == P_SUCCESS) {
-    return make_status_res(res);
-  } else {
-    return make_error_res(&r);
-  }
+  r.output->datum = list_build(&builder);
+  return reader_return(res, &r);
 }
 
 /**
@@ -649,19 +681,28 @@ bool is_valid_symbol(const char *name) {
   struct reader r;
   reader_init(&r, "", name);
 
+  bool valid = false;
   enum token_status res = read_next_atom(&r);
   if (res != T_SUCCESS) {
-    return false;
+    goto RETURN;
   }
   if (r.token.type != TOK_SYMBOL) {
-    return false;
+    goto RETURN;
   }
 
-  return reader_at_eof(&r);
+  valid = reader_at_eof(&r);
+RETURN:
+  reader_return(P_EMPTY, &r);
+  return valid;
 }
 
-struct lisp_string *parse_error_format(const struct parse_error *error) {
-  return lisp_string_format("parse error: %s:%u:%u: %s", error->filename,
-                            error->error_pos.line + 1, error->error_pos.col + 1,
-                            error->message);
+struct lisp_string *parse_error_format(struct parse_output *error) {
+  assert(error->status == P_ERROR);
+  gc_push_root_obj(error);
+  struct lisp_string *result = lisp_string_format(
+      "parse error: %s:%u:%u: %s", lisp_string_as_cstr(error->filename),
+      error->error.pos.line + 1, error->error.pos.col + 1,
+      lisp_string_as_cstr(error->error.message));
+  gc_pop_root_expect_obj(error);
+  return result;
 }

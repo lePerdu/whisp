@@ -363,14 +363,13 @@ DEF_BUILTIN(core_flush) {
 
 DEF_BUILTIN(core_read_str) {
   REF_OBJ_ARG(struct lisp_string, arg, lisp_val_is_string, 0);
-  struct lisp_val result;
-  struct parse_res res =
-      read_str("#<unknown>", lisp_string_as_cstr(arg), &result);
-  if (res.status == P_SUCCESS) {
+  struct parse_output *parsed =
+      read_str("#<unknown>", lisp_string_as_cstr(arg));
+  if (parsed->status == P_SUCCESS) {
     CLEAR_ARGS(1);
-    BUILTIN_RETURN(result);
+    BUILTIN_RETURN(parsed->datum);
   } else {
-    vm_raise_exception(vm, lisp_val_from_obj(parse_error_format(&res.error)));
+    vm_raise_exception(vm, lisp_val_from_obj(parse_error_format(parsed)));
     return EV_EXCEPTION;
   }
 }
@@ -487,12 +486,14 @@ DEF_BUILTIN(core_disassemble) {
 }
 
 DEF_BUILTIN(core_compile_to_closure) {
-  POP_ARG(ast);
-  struct lisp_closure *cl = compile_top_level(vm, ast);
+  REF_ARG(ast, 0);
+  struct lisp_closure *cl =
+      compile_top_level(vm, parse_output_create_simple("#<unknown>", ast), ast);
+  CLEAR_ARGS(1);
+
   if (cl == NULL) {
     return EV_EXCEPTION;
   }
-
   BUILTIN_RETURN(lisp_val_from_obj(cl));
 }
 

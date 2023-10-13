@@ -56,8 +56,9 @@ static char *read_prompt(void) {
 }
 
 static enum eval_status eval_print_many(struct lisp_vm *vm,
-                                        struct lisp_val exprs) {
-  gc_push_root(exprs);
+                                        struct parse_output *parsed) {
+  gc_push_root_obj(parsed);
+  struct lisp_val exprs = parsed->datum;
 
   enum eval_status res = EV_SUCCESS;
   while (!lisp_val_is_nil(exprs)) {
@@ -65,7 +66,7 @@ static enum eval_status eval_print_many(struct lisp_vm *vm,
     assert(cell != NULL);
     exprs = cell->cdr;
 
-    res = compile_eval(vm, cell->car);
+    res = compile_eval(vm, parsed, cell->car);
     if (res == EV_SUCCESS) {
       // Keep on the stack while printing so it is't GC'd
       struct lisp_val res_val = vm_stack_top(vm);
@@ -87,7 +88,7 @@ static enum eval_status eval_print_many(struct lisp_vm *vm,
     }
   }
 
-  gc_pop_root();
+  gc_pop_root_expect_obj(parsed);
   return res;
 }
 
@@ -138,16 +139,15 @@ static void run_file(struct lisp_vm *vm, const char *filename) {
 static void load_prelude(struct lisp_vm *vm) { run_file(vm, PRELUDE_FILENAME); }
 
 static void rep(struct lisp_vm *vm, const char *input) {
-  struct lisp_val ast;
-  struct parse_res read_res = read_str_many("stdin", input, &ast);
-  switch (read_res.status) {
+  struct parse_output *parsed = read_str_many("stdin", input);
+  switch (parsed->status) {
     case P_EMPTY:
       return;
     case P_SUCCESS:
-      eval_print_many(vm, ast);
+      eval_print_many(vm, parsed);
       return;
     case P_ERROR: {
-      struct lisp_string *err_str = parse_error_format(&read_res.error);
+      struct lisp_string *err_str = parse_error_format(parsed);
       fprintf(stderr, "Read error: %s\n", lisp_string_as_cstr(err_str));
       return;
     }
