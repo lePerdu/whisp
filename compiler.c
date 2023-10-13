@@ -49,6 +49,11 @@ struct compiler_ctx {
   struct lisp_vm *vm;
 
   /**
+   * Source metadata from parser.
+   */
+  struct parse_output *source_metadata;
+
+  /**
    * Containing compilation context.
    */
   struct compiler_ctx *outer;
@@ -164,12 +169,17 @@ static const struct lisp_vtable COMPILER_VTABLE = {
     .destroy = compiler_ctx_destroy,
 };
 
-static struct compiler_ctx *compiler_ctx_create_top_level(struct lisp_vm *vm) {
+static struct compiler_ctx *compiler_ctx_create_top_level(
+    struct lisp_vm *vm, struct parse_output *metadata) {
+  gc_push_root_obj(metadata);
+
   struct code_chunk *new_chunk = chunk_create();
+  new_chunk->filename = metadata->filename;
   gc_push_root_obj(new_chunk);
 
   struct compiler_ctx *ctx = lisp_obj_alloc(&COMPILER_VTABLE, sizeof(*ctx));
   ctx->vm = vm;
+  ctx->source_metadata = metadata;
   ctx->outer = NULL;
   ctx->local_count = 0;
   ctx->current_stack_size = 0;
@@ -183,6 +193,7 @@ static struct compiler_ctx *compiler_ctx_create_top_level(struct lisp_vm *vm) {
   ctx->binding_name = NULL;
   ctx->chunk = new_chunk;
   gc_pop_root_expect_obj(new_chunk);
+  gc_pop_root_expect_obj(metadata);
 
   // Keep the value pushed until an explicit "complete"
   gc_push_root_obj(ctx);
@@ -191,7 +202,8 @@ static struct compiler_ctx *compiler_ctx_create_top_level(struct lisp_vm *vm) {
 
 static struct compiler_ctx *compiler_ctx_create_inner(
     struct compiler_ctx *outer) {
-  struct compiler_ctx *ctx = compiler_ctx_create_top_level(outer->vm);
+  struct compiler_ctx *ctx =
+      compiler_ctx_create_top_level(outer->vm, outer->source_metadata);
   ctx->begin_pos = true;
   ctx->outer = outer;
   ctx->top_level = false;
@@ -1453,8 +1465,7 @@ static enum compile_res compile(struct compiler_ctx *ctx, struct lisp_val ast) {
 struct lisp_closure *compile_top_level(struct lisp_vm *vm,
                                        struct parse_output *metadata,
                                        struct lisp_val ast) {
-  (void)metadata;
-  struct compiler_ctx *ctx = compiler_ctx_create_top_level(vm);
+  struct compiler_ctx *ctx = compiler_ctx_create_top_level(vm, metadata);
 
   enum compile_res res = compile(ctx, ast);
   struct code_chunk *func = compiler_ctx_complete(ctx);

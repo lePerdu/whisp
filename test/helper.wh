@@ -60,7 +60,10 @@
           (do
             (if (> rep-count 1)
               (println #\tab "..." #\tab rep-count "times"))
-            (println #\tab index #\tab next)
+            (println #\tab index #\tab next "@"
+              (if (fn-source-info next)
+                (fn-source-info next)
+                "unknown"))
             (pbt-loop (inc index) rest next 1)))))))
 
 (defn! (run-all-tests)

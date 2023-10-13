@@ -40,6 +40,9 @@ static void code_chunk_visit(struct lisp_val v, visit_callback cb, void *ctx) {
   if (chunk->name != NULL) {
     cb(ctx, lisp_val_from_obj(chunk->name));
   }
+  if (chunk->filename != NULL) {
+    cb(ctx, lisp_val_from_obj(chunk->filename));
+  }
   val_array_visit(&chunk->const_table, cb, ctx);
 }
 
@@ -60,6 +63,7 @@ struct code_chunk *chunk_create(void) {
   struct code_chunk *chunk = lisp_obj_alloc(&CODE_CHUNK_VTABLE, sizeof(*chunk));
   // TODO Set the function metadata at construction time?
   chunk->name = NULL;
+  chunk->filename = NULL;
   chunk->req_arg_count = 0;
   chunk->is_variadic = false;
 

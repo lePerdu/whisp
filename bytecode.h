@@ -174,6 +174,9 @@ struct code_chunk {
   /** Function name (if known) for debugging. */
   struct lisp_symbol *name;
 
+  /** File where the function was defined (if known) for debugging. */
+  struct lisp_string *filename;
+
   unsigned req_arg_count;
   bool is_variadic;
 

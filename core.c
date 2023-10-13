@@ -245,6 +245,11 @@ DEF_BUILTIN(core_function_name) {
   BUILTIN_RETURN(lisp_val_from_obj(func->code->name));
 }
 
+DEF_BUILTIN(core_function_source_info) {
+  POP_OBJ_ARG(struct lisp_closure, func, lisp_val_is_func);
+  BUILTIN_RETURN(lisp_val_from_obj(func->code->filename));
+}
+
 DEF_BUILTIN_PRED(core_is_atom, lisp_val_is_atom);
 
 DEF_BUILTIN(core_make_atom) {
@@ -581,6 +586,8 @@ static const struct builtin_config builtins[] = {
     [INTRINSIC_IS_SYMBOL] = {"symbol?", core_is_symbol, 1, false},
     [INTRINSIC_IS_FUNCTION] = {"fn?", core_is_function, 1, false},
     [INTRINSIC_FUNCTION_NAME] = {"fn-name", core_function_name, 1, false},
+    [INTRINSIC_FUNCTION_SOURCE_INFO] = {"fn-source-info",
+                                        core_function_source_info, 1, false},
     [INTRINSIC_IS_NULL] = {"null?", core_is_null, 1, false},
     [INTRINSIC_MAKE_CONS] = {"cons", core_make_cons, 2, false},
     [INTRINSIC_IS_CONS] = {"cons?", core_is_cons, 1, false},
@@ -641,6 +648,13 @@ static const struct builtin_config builtins[] = {
 // Not a 100% test, but as good as possible without some macro magic
 static_assert(BUILTIN_COUNT == INTRINSIC_INVALID, "missing builtins");
 
+static void set_builtin_name(struct code_chunk *chunk, const char *name) {
+  gc_push_root_obj(chunk);
+  chunk->name = lisp_symbol_create_cstr(name);
+  chunk->filename = lisp_string_create_cstr("#<builtins>");
+  gc_pop_root_expect_obj(chunk);
+}
+
 static struct lisp_closure *make_builtin(const char *name, uint8_t index,
                                          unsigned req_arg_count,
                                          bool is_variadic) {
@@ -649,9 +663,7 @@ static struct lisp_closure *make_builtin(const char *name, uint8_t index,
   chunk_append_byte(chunk, index);
   chunk_append_byte(chunk, OP_RETURN);
 
-  gc_push_root_obj(chunk);
-  chunk->name = lisp_symbol_create_cstr(name);
-  gc_pop_root_expect_obj(chunk);
+  set_builtin_name(chunk, name);
 
   chunk->req_arg_count = req_arg_count;
   chunk->is_variadic = is_variadic;
@@ -681,9 +693,7 @@ static struct lisp_closure *make_builtin_eval(void) {
   chunk_append_byte(chunk, INTRINSIC_COMPILE_TO_CLOSURE);
   chunk_append_byte(chunk, OP_TAIL_CALL);
 
-  gc_push_root_obj(chunk);
-  chunk->name = lisp_symbol_create_cstr("eval");
-  gc_pop_root_expect_obj(chunk);
+  set_builtin_name(chunk, "eval");
 
   chunk->req_arg_count = 1;
 
@@ -703,9 +713,7 @@ static struct lisp_closure *make_builtin_with_exception_handler(void) {
   chunk_append_byte(chunk, 0);  // no args
   chunk_append_byte(chunk, OP_RETURN);
 
-  gc_push_root_obj(chunk);
-  chunk->name = lisp_symbol_create_cstr("with-exception-handler");
-  gc_pop_root_expect_obj(chunk);
+  set_builtin_name(chunk, "with-exception-handler");
 
   return lisp_closure_create(chunk, 0);
 }
@@ -737,9 +745,7 @@ static struct lisp_closure *make_builtin_with_escape_continuation(void) {
 
   gc_pop_root_expect_obj(esc_chunk);
 
-  gc_push_root_obj(chunk);
-  chunk->name = lisp_symbol_create_cstr("call-with-escape-continuation");
-  gc_pop_root_expect_obj(chunk);
+  set_builtin_name(chunk, "call-with-escape-continuation");
 
   chunk->req_arg_count = 1;
 
@@ -760,9 +766,7 @@ static struct lisp_closure *make_builtin_raise(void) {
   int16_t branch_offset = (int16_t)start_pos - (int16_t)branch_pos;
   chunk_append_short(chunk, branch_offset);
 
-  gc_push_root_obj(chunk);
-  chunk->name = lisp_symbol_create_cstr("raise");
-  gc_pop_root_expect_obj(chunk);
+  set_builtin_name(chunk, "raise");
   return lisp_closure_create(chunk, 0);
 }
 
@@ -773,9 +777,7 @@ static struct lisp_closure *make_builtin_raise_continuable(void) {
   chunk_append_byte(chunk, OP_CALL_EX_HANDLER);
   chunk_append_byte(chunk, OP_RETURN);
 
-  gc_push_root_obj(chunk);
-  chunk->name = lisp_symbol_create_cstr("raise-continuable");
-  gc_pop_root_expect_obj(chunk);
+  set_builtin_name(chunk, "raise-continuable");
   return lisp_closure_create(chunk, 0);
 }
 
