@@ -219,6 +219,12 @@ static bool compiler_ctx_is_top_level(const struct compiler_ctx *ctx) {
   return ctx->top_level;
 }
 
+#define COMPILER_RAISE(message, ...)                                     \
+  vm_raise_format_exception(                                             \
+      ctx->vm, "compile: %s: " message,                                  \
+      lisp_string_as_cstr(ctx->source_metadata->filename) __VA_OPT__(, ) \
+          __VA_ARGS__)
+
 static enum compile_res compile(struct compiler_ctx *ctx, struct lisp_val ast);
 
 static enum compile_res compile_non_tail(struct compiler_ctx *ctx,
@@ -261,8 +267,7 @@ static enum compile_res emit_const(struct compiler_ctx *ctx,
   // TODO Check for existing constant
   unsigned const_idx = chunk_add_const(ctx->chunk, constant);
   if (const_idx > UINT8_MAX) {
-    vm_raise_format_exception(ctx->vm,
-                              "too many constants in the current function");
+    COMPILER_RAISE("too many constants in the current function");
     return COMP_FAILED;
   }
 
@@ -338,8 +343,7 @@ static enum compile_res emit_get_global(struct compiler_ctx *ctx,
   // TODO Check for existing constant
   unsigned const_idx = chunk_add_const(ctx->chunk, lisp_val_from_obj(binding));
   if (const_idx > UINT8_MAX) {
-    vm_raise_format_exception(ctx->vm,
-                              "too many constants in the current function");
+    COMPILER_RAISE("too many constants in the current function");
     return COMP_FAILED;
   }
 
@@ -355,8 +359,7 @@ static enum compile_res emit_set_global(struct compiler_ctx *ctx,
   // TODO Check for existing constant
   unsigned const_idx = chunk_add_const(ctx->chunk, lisp_val_from_obj(binding));
   if (const_idx > UINT8_MAX) {
-    vm_raise_format_exception(ctx->vm,
-                              "too many constants in the current function");
+    COMPILER_RAISE("too many constants in the current function");
     return COMP_FAILED;
   }
 
@@ -381,8 +384,7 @@ static enum compile_res emit_alloc_closure(struct compiler_ctx *ctx,
   unsigned const_idx =
       chunk_add_const(ctx->chunk, lisp_val_from_obj(closure_code));
   if (const_idx > UINT8_MAX) {
-    vm_raise_format_exception(ctx->vm,
-                              "too many constants in the current function");
+    COMPILER_RAISE("too many constants in the current function");
     return COMP_FAILED;
   }
 
@@ -402,8 +404,7 @@ static void emit_init_closure(struct compiler_ctx *ctx, uint8_t n_captures) {
 static enum compile_res emit_skip_delete(struct compiler_ctx *ctx,
                                          uint8_t skip_n, uint8_t delete_n) {
   if (skip_n + delete_n > ctx->current_stack_size) {
-    vm_raise_format_exception(ctx->vm,
-                              "tried to delete too many stack elements");
+    COMPILER_RAISE("tried to delete too many stack elements");
     return COMP_FAILED;
   }
   emit_instr(ctx, OP_SKIP_DELETE);
@@ -416,7 +417,7 @@ static enum compile_res emit_skip_delete(struct compiler_ctx *ctx,
 static enum compile_res emit_call(struct compiler_ctx *ctx,
                                   unsigned arg_count) {
   if (arg_count > UINT8_MAX) {
-    vm_raise_format_exception(ctx->vm, "too many arguments");
+    COMPILER_RAISE("too many arguments");
     return COMP_FAILED;
   }
 
@@ -433,7 +434,7 @@ static enum compile_res emit_tail_call(struct compiler_ctx *ctx,
   // Clear out the stack frame except for the arguments and the function
   unsigned remaining_stack_size = arg_count + 1;
   if (remaining_stack_size > UINT8_MAX) {
-    vm_raise_format_exception(ctx->vm, "too many arguments");
+    COMPILER_RAISE("too many arguments");
     return COMP_FAILED;
   }
 
@@ -465,9 +466,8 @@ static enum compile_res fixup_branch_to_here(struct compiler_ctx *ctx,
   unsigned target = ctx->chunk->bytecode.size;
   int diff = target - branch_code;
   if (diff < INT16_MIN || INT16_MAX < diff) {
-    vm_raise_format_exception(ctx->vm,
-                              "branch target too far away: %d -> %d = %d",
-                              branch_code, target, diff);
+    COMPILER_RAISE("branch target too far away: %d -> %d = %d", branch_code,
+                   target, diff);
     return COMP_FAILED;
   }
   chunk_set_short(ctx->chunk, branch_code, diff);
@@ -493,7 +493,7 @@ static struct local_binding *compiler_lookup_local(struct compiler_ctx *ctx,
 static struct local_binding *compiler_alloc_local(struct compiler_ctx *ctx,
                                                   struct lisp_symbol *sym) {
   if (ctx->local_count == MAX_LOCALS) {
-    vm_raise_format_exception(ctx->vm, "too many local bindings");
+    COMPILER_RAISE("too many local bindings");
     return NULL;
   }
 
@@ -507,8 +507,7 @@ static struct local_binding *compiler_alloc_local(struct compiler_ctx *ctx,
 static enum compile_res compiler_add_param(struct compiler_ctx *ctx,
                                            struct lisp_symbol *sym) {
   if (compiler_lookup_local(ctx, sym) != NULL) {
-    vm_raise_format_exception(ctx->vm, "duplicate parameter binding: %s",
-                              lisp_symbol_name(sym));
+    COMPILER_RAISE("duplicate parameter binding: %s", lisp_symbol_name(sym));
     return COMP_FAILED;
   }
 
@@ -592,7 +591,7 @@ static enum compile_res add_upvalue(struct compiler_ctx *ctx,
   }
 
   if (ctx->capture_count >= MAX_LOCALS) {
-    vm_raise_format_exception(ctx->vm, "too many captured upvalues");
+    COMPILER_RAISE("too many captured upvalues");
     return COMP_FAILED;
   }
 
@@ -762,9 +761,8 @@ static enum compile_res compile_symbol_ref(struct compiler_ctx *ctx,
       }
       break;
     case SYM_MACRO:
-      vm_raise_format_exception(
-          ctx->vm, "cannot resolve macro symbol '%s' in non-macro context",
-          lisp_symbol_name(sym));
+      COMPILER_RAISE("cannot resolve macro symbol '%s' in non-macro context",
+                     lisp_symbol_name(sym));
       return COMP_FAILED;
   }
 
@@ -834,14 +832,14 @@ static enum compile_res compile_if(struct compiler_ctx *ctx,
                                    struct lisp_val args) {
   struct lisp_cons *args_cons = lisp_val_cast(lisp_val_is_cons, args);
   if (args_cons == NULL) {
-    vm_raise_format_exception(ctx->vm, "if: not enough args");
+    COMPILER_RAISE("if: not enough args");
     return COMP_FAILED;
   }
   struct lisp_val cond_expr = args_cons->car;
 
   args_cons = lisp_val_cast(lisp_val_is_cons, args_cons->cdr);
   if (args_cons == NULL) {
-    vm_raise_format_exception(ctx->vm, "if: not enough args");
+    COMPILER_RAISE("if: not enough args");
     return COMP_FAILED;
   }
   struct lisp_val true_expr = args_cons->car;
@@ -854,7 +852,7 @@ static enum compile_res compile_if(struct compiler_ctx *ctx,
     false_expr = args_cons->car;
 
     if (!lisp_val_is_nil(args_cons->cdr)) {
-      vm_raise_format_exception(ctx->vm, "if: too many args");
+      COMPILER_RAISE("if: too many args");
       return COMP_FAILED;
     }
   }
@@ -907,25 +905,24 @@ static enum compile_res parse_def(const char *label, struct compiler_ctx *ctx,
                                   struct lisp_val *value_expr) {
   struct lisp_cons *args_cons = lisp_val_cast(lisp_val_is_cons, args);
   if (args_cons == NULL) {
-    vm_raise_format_exception(ctx->vm, "%s: not enough args", label);
+    COMPILER_RAISE("%s: not enough args", label);
     return COMP_FAILED;
   }
   *sym = lisp_val_cast(lisp_val_is_symbol, args_cons->car);
   if (*sym == NULL) {
-    vm_raise_format_exception(ctx->vm, "%s: first arg must be of type symbol",
-                              label);
+    COMPILER_RAISE("%s: first arg must be of type symbol", label);
     return COMP_FAILED;
   }
 
   args_cons = lisp_val_cast(lisp_val_is_cons, args_cons->cdr);
   if (args_cons == NULL) {
-    vm_raise_format_exception(ctx->vm, "%s: not enough args", label);
+    COMPILER_RAISE("%s: not enough args", label);
     return COMP_FAILED;
   }
   *value_expr = args_cons->car;
 
   if (!lisp_val_is_nil(args_cons->cdr)) {
-    vm_raise_format_exception(ctx->vm, "%s: too many args", label);
+    COMPILER_RAISE("%s: too many args", label);
     return COMP_FAILED;
   }
 
@@ -969,13 +966,12 @@ static enum compile_res compile_local_def(struct compiler_ctx *ctx,
                                           struct lisp_symbol *sym,
                                           struct lisp_val expr) {
   if (!ctx->begin_pos) {
-    vm_raise_format_exception(ctx->vm,
-                              "def!: must occur at beginning of local scope");
+    COMPILER_RAISE("def!: must occur at beginning of local scope");
     return COMP_FAILED;
   }
 
   if (ctx->local_def_count >= MAX_LOCALS) {
-    vm_raise_format_exception(ctx->vm, "def!: too many local definitions");
+    COMPILER_RAISE("def!: too many local definitions");
     return COMP_FAILED;
   }
 
@@ -1037,7 +1033,7 @@ static enum compile_res compile_defsyntax(struct compiler_ctx *ctx,
 
   struct lisp_val macro_fn = vm_stack_pop(ctx->vm);
   if (!lisp_val_is_func(macro_fn)) {
-    vm_raise_format_exception(ctx->vm, "defsyntax!: value must be a function");
+    COMPILER_RAISE("defsyntax!: value must be a function");
     return COMP_FAILED;
   }
 
@@ -1074,8 +1070,7 @@ static enum compile_res compile_fn_params(struct compiler_ctx *ctx,
     struct lisp_symbol *sym_name =
         lisp_val_cast(lisp_val_is_symbol, param_name);
     if (sym_name == NULL) {
-      vm_raise_format_exception(ctx->vm,
-                                "fn: parameter names must be of type symbol");
+      COMPILER_RAISE("fn: parameter names must be of type symbol");
       return COMP_FAILED;
     }
 
@@ -1095,8 +1090,7 @@ static enum compile_res compile_fn_params(struct compiler_ctx *ctx,
     struct lisp_symbol *rest_param =
         lisp_val_cast(lisp_val_is_symbol, raw_params);
     if (rest_param == NULL) {
-      vm_raise_format_exception(ctx->vm,
-                                "fn: parameter names must be of type symbol");
+      COMPILER_RAISE("fn: parameter names must be of type symbol");
       return COMP_FAILED;
     }
 
@@ -1117,20 +1111,20 @@ static enum compile_res compile_fn(struct compiler_ctx *ctx,
                                    struct lisp_val args) {
   struct lisp_cons *args_cons = lisp_val_cast(lisp_val_is_cons, args);
   if (args_cons == NULL) {
-    vm_raise_format_exception(ctx->vm, "fn: not enough args");
+    COMPILER_RAISE("fn: not enough args");
     return COMP_FAILED;
   }
   struct lisp_val params = args_cons->car;
 
   args_cons = lisp_val_cast(lisp_val_is_cons, args_cons->cdr);
   if (args_cons == NULL) {
-    vm_raise_format_exception(ctx->vm, "fn: not enough args");
+    COMPILER_RAISE("fn: not enough args");
     return COMP_FAILED;
   }
   struct lisp_val func_ast = args_cons->car;
 
   if (!lisp_val_is_nil(args_cons->cdr)) {
-    vm_raise_format_exception(ctx->vm, "fn: too many args");
+    COMPILER_RAISE("fn: too many args");
     return COMP_FAILED;
   }
 
@@ -1190,29 +1184,25 @@ static enum compile_res compile_let_bindings(struct compiler_ctx *ctx,
     struct lisp_cons *bind_cons =
         lisp_val_cast(lisp_val_is_cons, bindings_cons->car);
     if (bind_cons == NULL) {
-      vm_raise_format_exception(
-          ctx->vm, "let: each binding must be a proper list of 2 elements");
+      COMPILER_RAISE("let: each binding must be a proper list of 2 elements");
       return COMP_FAILED;
     }
     struct lisp_symbol *bind_sym =
         lisp_val_cast(lisp_val_is_symbol, bind_cons->car);
     if (bind_sym == NULL) {
-      vm_raise_format_exception(
-          ctx->vm, "let: first element of each binding must be a symbol");
+      COMPILER_RAISE("let: first element of each binding must be a symbol");
       return COMP_FAILED;
     }
 
     bind_cons = lisp_val_cast(lisp_val_is_cons, bind_cons->cdr);
     if (bind_cons == NULL) {
-      vm_raise_format_exception(
-          ctx->vm, "let: each binding must be a proper list of 2 elements");
+      COMPILER_RAISE("let: each binding must be a proper list of 2 elements");
       return COMP_FAILED;
     }
     struct lisp_val bind_expr = bind_cons->car;
 
     if (!lisp_val_is_nil(bind_cons->cdr)) {
-      vm_raise_format_exception(
-          ctx->vm, "let: each binding must be a proper list of 2 elements");
+      COMPILER_RAISE("let: each binding must be a proper list of 2 elements");
       return COMP_FAILED;
     }
 
@@ -1228,7 +1218,7 @@ static enum compile_res compile_let_bindings(struct compiler_ctx *ctx,
   }
 
   if (!lisp_val_is_nil(rest_bindings)) {
-    vm_raise_format_exception(ctx->vm, "let: bindings must be a proper list");
+    COMPILER_RAISE("let: bindings must be a proper list");
     return COMP_FAILED;
   }
 
@@ -1247,8 +1237,7 @@ static enum compile_res compile_let_bindings(struct compiler_ctx *ctx,
 
     if (compiler_lookup_local_after(ctx, bind_sym, starting_local_index) !=
         NULL) {
-      vm_raise_format_exception(ctx->vm, "duplicate local binding: %s",
-                                lisp_symbol_name(bind_sym));
+      COMPILER_RAISE("duplicate local binding: %s", lisp_symbol_name(bind_sym));
       return COMP_FAILED;
     }
 
@@ -1267,20 +1256,20 @@ static enum compile_res compile_let(struct compiler_ctx *ctx,
                                     struct lisp_val args) {
   struct lisp_cons *args_cons = lisp_val_cast(lisp_val_is_cons, args);
   if (args_cons == NULL) {
-    vm_raise_format_exception(ctx->vm, "let: not enough args");
+    COMPILER_RAISE("let: not enough args");
     return COMP_FAILED;
   }
 
   struct lisp_val bindings = args_cons->car;
   args_cons = lisp_val_cast(lisp_val_is_cons, args_cons->cdr);
   if (args_cons == NULL) {
-    vm_raise_format_exception(ctx->vm, "let: not enough args");
+    COMPILER_RAISE("let: not enough args");
     return COMP_FAILED;
   }
 
   struct lisp_val ast = args_cons->car;
   if (!lisp_val_is_nil(args_cons->cdr)) {
-    vm_raise_format_exception(ctx->vm, "let: too many args");
+    COMPILER_RAISE("let: too many args");
     return COMP_FAILED;
   }
 
@@ -1315,12 +1304,12 @@ static enum compile_res compile_quote(struct compiler_ctx *ctx,
                                       struct lisp_val args) {
   struct lisp_cons *args_cons = lisp_val_cast(lisp_val_is_cons, args);
   if (args_cons == NULL) {
-    vm_raise_format_exception(ctx->vm, "quote: not enough args");
+    COMPILER_RAISE("quote: not enough args");
     return COMP_FAILED;
   }
 
   if (!lisp_val_is_nil(args_cons->cdr)) {
-    vm_raise_format_exception(ctx->vm, "quote: too many args");
+    COMPILER_RAISE("quote: too many args");
     return COMP_FAILED;
   }
 
@@ -1371,7 +1360,7 @@ static enum compile_res compile_call_or_special(struct compiler_ctx *ctx,
   struct lisp_val args = call_ast->cdr;
 
   if (!lisp_val_is_list(args)) {
-    vm_raise_format_exception(ctx->vm, "cannot compile improper list");
+    COMPILER_RAISE("cannot compile improper list");
     return COMP_FAILED;
   }
 
@@ -1384,8 +1373,8 @@ static enum compile_res compile_call_or_special(struct compiler_ctx *ctx,
 
     switch (head_resolved.type) {
       case SYM_MACRO:
-        return expand_and_compile_macro(ctx, head_resolved.value.macro_fn,
-                                        args);
+        return expand_and_compile_macro(ctx, head_sym,
+                                        head_resolved.value.macro_fn, args);
       case SYM_UNBOUND:
         // Check special forms
         if (head_sym == SYMBOL_FN) {
