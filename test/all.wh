@@ -8,7 +8,7 @@
 (load-file "test/func.wh")
 (load-file "test/atom.wh")
 (load-file "test/string.wh")
-(load-file "test/error.wh")
+(load-file "test/exception.wh")
 (load-file "test/array.wh")
 (load-file "test/vector.wh")
 (load-file "test/continuation.wh")

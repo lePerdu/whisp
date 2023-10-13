@@ -147,26 +147,6 @@
   `(call-with-escape-continuation
     (fn (~esc-cont-name) ~body)))
 
-; TODO Move these?
-
-; Combination of guard, cond, and call/ec to easily match on an error
-; NOTE By design in scheme, this does not continue to errors raised with
-; `raise-continuable`. Maybe that could change here?
-(defmacro! (guard conditions body)
-  (let-cons ((binding . branches) conditions)
-    (let
-      ((escape-sym (gensym)))
-      `(let/ec ~escape-sym
-        (with-exception-handler
-          (fn (~binding)
-            (~escape-sym
-              (cond
-                ~@branches
-                ; Always raise a new error so that the original
-                ; `raise-continuable` is not returned to.
-                (else (raise-continuable ~binding)))))
-          (fn () ~body))))))
-
 (defn! (macroexpand ast)
   (let ((expanded (macroexpand-1 ast)))
     (if (= expanded ast)

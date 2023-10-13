@@ -1,0 +1,33 @@
+; Combination of guard, cond, and call/ec to easily match on an error
+; NOTE By design in scheme, this does not continue to errors raised with
+; `raise-continuable`. Maybe that could change here?
+(defmacro! (guard conditions body)
+  (let-cons ((binding . branches) conditions)
+    (let
+      ((escape-sym (gensym)))
+      `(let/ec ~escape-sym
+        (with-exception-handler
+          (fn (~binding)
+            (~escape-sym
+              (cond
+                ~@branches
+                ; Always raise a new error so that the original
+                ; `raise-continuable` is not returned to.
+                (else (raise-continuable ~binding)))))
+          (fn () ~body))))))
+
+(defn! (print-backtrace bt)
+  (let-named pbt-loop ((index 0) (bt bt) (prev-fn nil) (rep-count 1))
+    (if (null? bt)
+      (println)
+      (let ((next (car bt)) (rest (cdr bt)))
+        (if (= next prev-fn)
+          (pbt-loop (inc index) rest next (inc rep-count))
+          (do
+            (if (> rep-count 1)
+              (println #\tab "..." #\tab rep-count "times"))
+            (println #\tab index #\tab next "@"
+              (if (fn-source-info next)
+                (fn-source-info next)
+                "unknown"))
+            (pbt-loop (inc index) rest next 1)))))))

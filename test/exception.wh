@@ -1,4 +1,4 @@
-(defgroup! error
+(defgroup! exception
   (defgroup! with-exception-handler
     (deftest! no-op-for-no-error
       (assert= 2
