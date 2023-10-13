@@ -8,6 +8,7 @@
 #include "core.h"
 #include "eval.h"
 #include "memory.h"
+#include "printer.h"
 #include "reader.h"
 #include "types.h"
 #include "vm.h"
@@ -784,10 +785,22 @@ static enum compile_res expand_macro(struct compiler_ctx *ctx,
 }
 
 static enum compile_res expand_and_compile_macro(struct compiler_ctx *ctx,
+                                                 struct lisp_symbol *macro_sym,
                                                  struct lisp_val macro_fn,
                                                  struct lisp_val args) {
   struct lisp_val expanded;
   if (expand_macro(ctx, macro_fn, args, &expanded) == COMP_FAILED) {
+    // Prefix the error with source info from the compiler
+    struct str_builder builder;
+    str_builder_init(&builder);
+
+    str_builder_concat_cstr(&builder, "compile: ");
+    str_builder_concat(&builder, ctx->source_metadata->filename);
+    str_builder_format(&builder,
+                       ": expanding %s: ", lisp_symbol_name(macro_sym));
+    print_str_into(&builder, ctx->vm->current_exception, false);
+
+    vm_raise_exception(ctx->vm, lisp_val_from_obj(str_build(&builder)));
     return COMP_FAILED;
   }
   return compile(ctx, expanded);
