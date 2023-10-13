@@ -14,7 +14,6 @@
 #include "core.h"
 #include "eval.h"
 #include "file.h"
-#include "log.h"
 #include "memory.h"
 #include "printer.h"
 #include "reader.h"
@@ -83,7 +82,9 @@ static enum eval_status eval_print_many(struct lisp_vm *vm,
           print_str(vm_current_exception(vm), false);
       vm_clear_exception(vm);
 
-      log("error: %s", lisp_string_as_cstr(printed_exc));
+      printf("error: ");
+      display_str(printed_exc);
+      putchar('\n');
       break;
     }
   }
@@ -132,7 +133,9 @@ static void run_file(struct lisp_vm *vm, const char *filename) {
     struct lisp_string *printed_exc =
         print_str(vm_current_exception(vm), false);
     vm_clear_exception(vm);
-    log("error: %s", lisp_string_as_cstr(printed_exc));
+    printf("error: ");
+    display_str(printed_exc);
+    putchar('\n');
     exit(EXIT_FAILURE);
   }
 }
