@@ -80,7 +80,7 @@ static enum eval_status eval_print_many(struct lisp_vm *vm,
       assert(vm_has_exception(vm));
 
       struct lisp_string *printed_exc =
-          print_str(vm_current_exception(vm), true);
+          print_str(vm_current_exception(vm), false);
       vm_clear_exception(vm);
 
       log("error: %s", lisp_string_as_cstr(printed_exc));
@@ -129,7 +129,8 @@ static struct lisp_vm *setup_vm(int argc, char **argv) {
 static void run_file(struct lisp_vm *vm, const char *filename) {
   enum eval_status res = load_file(vm, filename);
   if (res == EV_EXCEPTION) {
-    struct lisp_string *printed_exc = print_str(vm_current_exception(vm), true);
+    struct lisp_string *printed_exc =
+        print_str(vm_current_exception(vm), false);
     vm_clear_exception(vm);
     log("error: %s", lisp_string_as_cstr(printed_exc));
     exit(EXIT_FAILURE);
