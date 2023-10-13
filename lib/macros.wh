@@ -7,6 +7,8 @@
 ; do block
 (defmacro! (comment . ignore) '(do))
 
+(def! syntax-error error)
+
 ; TODO Proper, native support for this
 (def! gensym
   (let ((counter (atom 0)))
@@ -30,8 +32,8 @@
       (if (cons? args)
         (if (null? (cdr args))
           (car args)
-          (error "unquote: too many arguments"))
-        (error "unquote: not enough arguments")))
+          (syntax-error "unquote: too many arguments"))
+        (syntax-error "unquote: not enough arguments")))
 
     (defn! (is-splice-unquote-form form)
       (if (cons? form)
@@ -39,8 +41,8 @@
           (if (cons? (cdr form))
             (if (null? (cddr form))
               true
-              (error "splice-unquote: too many arguments"))
-            (error "splice-unquote: not enough arguments")))))
+              (syntax-error "splice-unquote: too many arguments"))
+            (syntax-error "splice-unquote: not enough arguments")))))
 
     (def! get-splice-unquote-arg cadr)
 
@@ -80,7 +82,7 @@
        ; Is there a better way to validate in the middle of a let without
        ; nesting lets and adding a bunch of indentation?
        (_ (if (not (= (count branch1) 2))
-        (error "cond: branches must be of the form (condition expr)")))
+        (syntax-error "branches must be of the form (condition expr)")))
        (cond1 (car branch1))
        (expr1 (car (cdr branch1))))
       (if (= cond1 'else)
@@ -113,7 +115,7 @@
       (cond
         ((null? opt-if-nil) nil)
         ((null? (cdr opt-if-nil)) (car opt-if-nil))
-        (else (error "let-if-cons: too many arguments"))))
+        (else (syntax-error "too many arguments"))))
      (bind-pair (car binding))
      (cons-sym (gensym "pair")))
     `(let
