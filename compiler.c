@@ -1019,7 +1019,7 @@ static enum compile_res compile_defsyntax(struct compiler_ctx *ctx,
 
   // New context for compiling the macro definition
   struct compiler_ctx *macro_ctx = compiler_ctx_create_inner(ctx);
-  ctx->binding_name = sym;
+  macro_ctx->binding_name = sym;
 
   res = compile(macro_ctx, value_expr);
   struct code_chunk *func = compiler_ctx_complete(macro_ctx);
