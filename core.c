@@ -16,7 +16,6 @@
 #include "bytecode.h"
 #include "compiler.h"
 #include "core_helper.h"
-#include "eval.h"
 #include "file.h"
 #include "memory.h"
 #include "printer.h"
@@ -452,37 +451,6 @@ DEF_BUILTIN(core_sleep) {
   }
 }
 
-DEF_BUILTIN(core_macroexpand_1) {
-  REF_ARG(ast, 0);
-  struct lisp_cons *ast_cons = lisp_val_cast(lisp_val_is_cons, ast);
-  if (ast_cons == NULL) {
-    goto RETURN_AST;
-  }
-
-  struct lisp_symbol *head_sym =
-      lisp_val_cast(lisp_val_is_symbol, ast_cons->car);
-  if (head_sym == NULL) {
-    goto RETURN_AST;
-  }
-
-  // TODO This only works at the top level
-  // That's probably fine (and I don't know how to fix it), but something to
-  // note
-  const struct lisp_env_binding *binding =
-      lisp_env_get(vm->global_env, head_sym);
-  if (binding == NULL || !lisp_env_binding_is_macro(binding)) {
-    goto RETURN_AST;
-  }
-
-  // eval_apply will manage the memory from here
-  CLEAR_ARGS(1);
-  return eval_apply(vm, lisp_env_binding_value(binding), ast_cons->cdr);
-
-RETURN_AST:
-  CLEAR_ARGS(1);
-  BUILTIN_RETURN(ast);
-}
-
 DEF_BUILTIN(core_disassemble) {
   REF_OBJ_ARG(struct lisp_closure, func, lisp_val_is_func, 0);
   chunk_disassemble(func->code);
@@ -530,6 +498,20 @@ DEF_BUILTIN(core_prepare_apply) {
 
   vm_stack_push(vm, func);
   return EV_SUCCESS;
+}
+
+DEF_BUILTIN(core_get_macro_fn) {
+  POP_OBJ_ARG(struct lisp_symbol, arg, lisp_val_is_symbol);
+
+  // TODO This only works at the top level
+  // That's probably fine (and I don't know how to fix it), but something to
+  // note
+  const struct lisp_env_binding *binding = lisp_env_get(vm->global_env, arg);
+  if (binding == NULL || !lisp_env_binding_is_macro(binding)) {
+    BUILTIN_RETURN(LISP_VAL_NIL);
+  } else {
+    BUILTIN_RETURN(lisp_env_binding_value(binding));
+  }
 }
 
 typedef enum eval_status (*intrinsic_fn)(struct lisp_vm *vm);
@@ -635,8 +617,8 @@ static const struct builtin_config builtins[] = {
     [INTRINSIC_TIME_MS] = {"time-ms", core_time_ms, 0, false},
     [INTRINSIC_SLEEP] = {"sleep", core_sleep, 1, false},
 
-    [INTRINSIC_MACROEXPAND_1] = {"macroexpand-1", core_macroexpand_1, 1, false},
     [INTRINSIC_DISASSEMBLE] = {"disassemble", core_disassemble, 1, false},
+    [INTRINSIC_GET_MACRO_FN] = {"macro-fn", core_get_macro_fn, 1, false},
 
     // These are intrinsics, but not exposed directly as functions
     [INTRINSIC_PERPARE_APPLY] = {NULL, core_prepare_apply, 2, false},

@@ -166,6 +166,17 @@
   `(call-with-escape-continuation
     (fn (~esc-cont-name) ~body)))
 
+(defn! (macroexpand-1 ast)
+  ; Use escape cont to avoid repeating the `false` branch of all the conditions
+  (let/ec return
+    (do
+      (let-if-cons ((head . args) ast)
+        (if (symbol? head)
+          (let-if (resolved (macro-fn head))
+            (if (list? args)
+              (return (apply resolved args))))))
+      ast)))
+
 (defn! (macroexpand ast)
   (let ((expanded (macroexpand-1 ast)))
     (if (= expanded ast)
