@@ -1,6 +1,10 @@
 build/
 bin/
 
+# Clangd
+compile_commands.json
+.cache/
+
 # Backup files
 *~
 
