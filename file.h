@@ -11,8 +11,8 @@
 struct lisp_string *read_file(struct lisp_vm *vm, const char *filename);
 
 /**
- * Read and run a file.
+ * Compile the contents of a file into an executable closure.
  */
-enum eval_status load_file(struct lisp_vm *vm, const char *filename);
+struct lisp_closure *compile_file(struct lisp_vm *vm, const char *filename);
 
 #endif

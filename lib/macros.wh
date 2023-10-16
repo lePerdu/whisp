@@ -7,25 +7,6 @@
 ; do block
 (defmacro! (comment . ignore) '(do))
 
-(def! syntax-error error)
-
-; TODO Proper, native support for this
-(def! gensym
-  (let ((counter (atom 0)))
-    (fn opt-name
-      (let
-        ((name
-          (if (null? opt-name)
-            ""
-            (if (null? (cdr opt-name))
-              (string-concat (car opt-name) "__")
-              (error "gensym: too many arguments")))))
-        (string->symbol
-          (string-concat
-            "__gensym__"
-            name
-            (->string (swap! counter inc))))))))
-
 (defsyntax! quasiquote
   (let () (do
     (defn! (process-unquote-args args)

@@ -9,13 +9,13 @@
 
 #define POP_ARG(arg) struct lisp_val arg = vm_stack_pop(vm)
 
-#define POP_TYPED_ARG(decl_type, arg, pred, conv)                           \
-  POP_ARG(_raw_arg_##arg);                                                  \
-  if (!pred(_raw_arg_##arg)) {                                              \
-    vm_raise_func_exception(vm, ERROR_ARG_TYPE, LISP_TYPE_NAME(decl_type)); \
-    return EV_EXCEPTION;                                                    \
-  }                                                                         \
-  decl_type arg = conv(_raw_arg_##arg);                                     \
+#define POP_TYPED_ARG(decl_type, arg, pred, conv)                             \
+  POP_ARG(_raw_arg_##arg);                                                    \
+  if (!pred(_raw_arg_##arg)) {                                                \
+    vm_raise_format_exception(vm, ERROR_ARG_TYPE, LISP_TYPE_NAME(decl_type)); \
+    return EV_EXCEPTION;                                                      \
+  }                                                                           \
+  decl_type arg = conv(_raw_arg_##arg);                                       \
   (void)0
 
 #define POP_OBJ_ARG(obj_type, arg, pred) \
@@ -31,13 +31,13 @@
 #define REF_ARG(arg, index) \
   struct lisp_val arg = vm_from_stack_pointer(vm, (index))
 
-#define REF_TYPED_ARG(decl_type, arg, pred, conv, index)                    \
-  REF_ARG(_raw_arg_##arg, (index));                                         \
-  if (!(pred)(_raw_arg_##arg)) {                                            \
-    vm_raise_func_exception(vm, ERROR_ARG_TYPE, LISP_TYPE_NAME(decl_type)); \
-    return EV_EXCEPTION;                                                    \
-  }                                                                         \
-  decl_type arg = (conv)(_raw_arg_##arg);                                   \
+#define REF_TYPED_ARG(decl_type, arg, pred, conv, index)                      \
+  REF_ARG(_raw_arg_##arg, (index));                                           \
+  if (!(pred)(_raw_arg_##arg)) {                                              \
+    vm_raise_format_exception(vm, ERROR_ARG_TYPE, LISP_TYPE_NAME(decl_type)); \
+    return EV_EXCEPTION;                                                      \
+  }                                                                           \
+  decl_type arg = (conv)(_raw_arg_##arg);                                     \
   (void)0
 
 #define REF_OBJ_ARG(obj_type, arg, pred, index) \
@@ -77,10 +77,6 @@
 #define ERROR_ARG_TYPE "argument must be of type %s"
 #define ERROR_NOT_ENOUGH_ARGS "not enough arguments"
 #define ERROR_TOO_MANY_ARGS "too many arguments"
-
-#define raise_helper_exception(message, ...)    \
-  vm_raise_format_exception(vm, "%s: " message, \
-                            func_name __VA_OPT__(, ) __VA_ARGS__)
 
 #define MAKE_NUM_BINARY(prefix, name, decl_type, op)                         \
   DEF_BUILTIN(core_##prefix##_##name) {                                      \

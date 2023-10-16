@@ -16,6 +16,7 @@
 #include "bytecode.h"
 #include "compiler.h"
 #include "core_helper.h"
+#include "eval.h"
 #include "file.h"
 #include "memory.h"
 #include "printer.h"
@@ -323,16 +324,6 @@ DEF_BUILTIN(core_to_string) {
 }
 
 /**
- * Convert value to an AST string.
- */
-DEF_BUILTIN(core_write_str) {
-  REF_ARG(arg, 0);
-  struct lisp_string *str = print_str(arg, true);
-  CLEAR_ARGS(1);
-  BUILTIN_RETURN(lisp_val_from_obj(str));
-}
-
-/**
  * Print AST.
  */
 DEF_BUILTIN(core_write) {
@@ -365,42 +356,17 @@ DEF_BUILTIN(core_flush) {
   BUILTIN_RETURN(lisp_non_printing());
 }
 
-DEF_BUILTIN(core_read_str) {
-  REF_OBJ_ARG(struct lisp_string, arg, lisp_val_is_string, 0);
-  struct parse_output *parsed =
-      read_str("#<unknown>", lisp_string_as_cstr(arg));
-  if (parsed->status == P_SUCCESS) {
-    CLEAR_ARGS(1);
-    BUILTIN_RETURN(parsed->datum);
-  } else {
-    vm_raise_exception(vm, lisp_val_from_obj(parse_error_format(parsed)));
-    return EV_EXCEPTION;
-  }
-}
-
-DEF_BUILTIN(core_slurp) {
+DEF_BUILTIN(core_compile_file) {
   REF_OBJ_ARG(struct lisp_string, filename, lisp_val_is_string, 0);
 
-  struct lisp_string *contents = read_file(vm, lisp_string_as_cstr(filename));
-  if (contents == NULL) {
-    // Exception is set by read_file
+  struct lisp_closure *compiled =
+      compile_file(vm, lisp_string_as_cstr(filename));
+  if (compiled == NULL) {
     return EV_EXCEPTION;
   }
 
   CLEAR_ARGS(1);
-  BUILTIN_RETURN(lisp_val_from_obj(contents));
-}
-
-DEF_BUILTIN(core_load_file) {
-  REF_OBJ_ARG(struct lisp_string, filename, lisp_val_is_string, 0);
-
-  enum eval_status res = load_file(vm, lisp_string_as_cstr(filename));
-  if (res == EV_EXCEPTION) {
-    return res;
-  } else {
-    CLEAR_ARGS(1);
-    BUILTIN_RETURN(lisp_non_printing());
-  }
+  BUILTIN_RETURN(lisp_val_from_obj(compiled));
 }
 
 /**
@@ -458,6 +424,20 @@ DEF_BUILTIN(core_disassemble) {
   BUILTIN_RETURN(lisp_non_printing());
 }
 
+DEF_BUILTIN(core_get_macro_fn) {
+  POP_OBJ_ARG(struct lisp_symbol, arg, lisp_val_is_symbol);
+
+  // TODO This only works at the top level
+  // That's probably fine (and I don't know how to fix it), but something to
+  // note
+  const struct lisp_env_binding *binding = lisp_env_get(vm->global_env, arg);
+  if (binding == NULL || !lisp_env_binding_is_macro(binding)) {
+    BUILTIN_RETURN(LISP_VAL_NIL);
+  } else {
+    BUILTIN_RETURN(lisp_env_binding_value(binding));
+  }
+}
+
 DEF_BUILTIN(core_compile_to_closure) {
   REF_ARG(ast, 0);
   struct lisp_closure *cl =
@@ -498,20 +478,6 @@ DEF_BUILTIN(core_prepare_apply) {
 
   vm_stack_push(vm, func);
   return EV_SUCCESS;
-}
-
-DEF_BUILTIN(core_get_macro_fn) {
-  POP_OBJ_ARG(struct lisp_symbol, arg, lisp_val_is_symbol);
-
-  // TODO This only works at the top level
-  // That's probably fine (and I don't know how to fix it), but something to
-  // note
-  const struct lisp_env_binding *binding = lisp_env_get(vm->global_env, arg);
-  if (binding == NULL || !lisp_env_binding_is_macro(binding)) {
-    BUILTIN_RETURN(LISP_VAL_NIL);
-  } else {
-    BUILTIN_RETURN(lisp_env_binding_value(binding));
-  }
 }
 
 typedef enum eval_status (*intrinsic_fn)(struct lisp_vm *vm);
@@ -604,19 +570,16 @@ static const struct builtin_config builtins[] = {
     [INTRINSIC_ARRAY_GET] = {"array-get", core_array_get, 2, false},
     [INTRINSIC_ARRAY_SET] = {"array-set!", core_array_set, 3, false},
 
-    [INTRINSIC_READ_STR] = {"read-str", core_read_str, 1, false},
     [INTRINSIC_WRITE] = {"write", core_write, 1, false},
-    [INTRINSIC_WRITE_STR] = {"write-str", core_write_str, 1, false},
     [INTRINSIC_DISPLAY] = {"display", core_display, 1, false},
     [INTRINSIC_NEWLINE] = {"newline", core_newline, 0, false},
     [INTRINSIC_FLUSH] = {"flush", core_flush, 0, false},
-    [INTRINSIC_SLURP] = {"slurp", core_slurp, 1, false},
-    [INTRINSIC_LOAD_FILE] = {"load-file", core_load_file, 1, false},
     [INTRINSIC_BACKTRACE] = {"backtrace", core_backtrace, 0, false},
     [INTRINSIC_RUNTIME] = {"runtime", core_runtime, 0, false},
     [INTRINSIC_TIME_MS] = {"time-ms", core_time_ms, 0, false},
     [INTRINSIC_SLEEP] = {"sleep", core_sleep, 1, false},
 
+    [INTRINSIC_COMPILE_FILE] = {"compile-file", core_compile_file, 1, false},
     [INTRINSIC_DISASSEMBLE] = {"disassemble", core_disassemble, 1, false},
     [INTRINSIC_GET_MACRO_FN] = {"macro-fn", core_get_macro_fn, 1, false},
 

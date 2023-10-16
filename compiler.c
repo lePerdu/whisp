@@ -106,13 +106,13 @@ struct compiler_ctx {
   struct lisp_symbol *binding_name;
 };
 
-static const struct lisp_symbol *SYMBOL_DO;
-static const struct lisp_symbol *SYMBOL_IF;
-static const struct lisp_symbol *SYMBOL_DEF;
-static const struct lisp_symbol *SYMBOL_DEFSYNTAX;
-static const struct lisp_symbol *SYMBOL_FN;
-static const struct lisp_symbol *SYMBOL_LET;
-static const struct lisp_symbol *SYMBOL_QUOTE;
+struct lisp_symbol *SYMBOL_DO;
+struct lisp_symbol *SYMBOL_IF;
+struct lisp_symbol *SYMBOL_DEF;
+struct lisp_symbol *SYMBOL_DEFSYNTAX;
+struct lisp_symbol *SYMBOL_FN;
+struct lisp_symbol *SYMBOL_LET;
+struct lisp_symbol *SYMBOL_QUOTE;
 
 void init_global_compile_state(void) {
 #define DEF_GLOBAL_SYM(var, name)                            \

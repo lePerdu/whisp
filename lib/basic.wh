@@ -1,13 +1,15 @@
-(def! list (fn args args))
-
 (defsyntax! defmacro!
   (fn (pattern body)
-    (list 'defsyntax! (car pattern)
-      (list 'fn (cdr pattern) body))))
+    (cons 'defsyntax!
+      (cons (car pattern)
+        (cons (cons 'fn (cons (cdr pattern) (cons body nil)))
+          nil)))))
 
 (defmacro! (defn! pattern body)
-  (list 'def! (car pattern)
-    (list 'fn (cdr pattern) body)))
+  (cons 'def!
+    (cons (car pattern)
+      (cons (cons 'fn (cons (cdr pattern) (cons body nil)))
+        nil))))
 
 (defn! (inc x) (int+ x 1))
 (defn! (dec x) (int- x 1))
@@ -18,6 +20,8 @@
 (defn! (caar lst) (car (car lst)))
 (defn! (cddr lst) (cdr (cdr lst)))
 (defn! (caddr lst) (car (cddr lst)))
+
+(defn! (list . args) args)
 
 (defn! (list? l)
   (if (cons? l)
@@ -65,3 +69,23 @@
 
 ; TODO Make error wrap the value somehow
 (def! error raise)
+
+(def! syntax-error error)
+
+; TODO Proper, native support for this
+(def! gensym
+  (let ((counter (atom 0)))
+    (fn opt-name
+      (let
+        ((name
+          (if (null? opt-name)
+            ""
+            (if (null? (cdr opt-name))
+              (string-concat (car opt-name) "__")
+              (error "gensym: too many arguments")))))
+        (string->symbol
+          (string-concat
+            "__gensym__"
+            name
+            (->string (swap! counter inc))))))))
+

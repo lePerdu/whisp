@@ -1,5 +1,8 @@
 ; Define easier ways to define things
 
+(def! load-file (fn (filename)
+  ((compile-file filename))))
+
 (load-file "lib/basic.wh")
 (load-file "lib/macros.wh")
 (load-file "lib/bool.wh")

@@ -25,4 +25,12 @@ struct lisp_closure *compile_top_level(struct lisp_vm *vm,
 enum eval_status compile_eval(struct lisp_vm *vm, struct parse_output *metadata,
                               struct lisp_val ast);
 
+extern struct lisp_symbol *SYMBOL_DO;
+extern struct lisp_symbol *SYMBOL_IF;
+extern struct lisp_symbol *SYMBOL_DEF;
+extern struct lisp_symbol *SYMBOL_DEFSYNTAX;
+extern struct lisp_symbol *SYMBOL_FN;
+extern struct lisp_symbol *SYMBOL_LET;
+extern struct lisp_symbol *SYMBOL_QUOTE;
+
 #endif

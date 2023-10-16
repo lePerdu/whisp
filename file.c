@@ -50,48 +50,32 @@ struct lisp_string *read_file(struct lisp_vm *vm, const char *filename) {
   return error ? NULL : result;
 }
 
-static enum eval_status eval_many(struct lisp_vm *vm,
-                                  struct parse_output *parsed) {
-  gc_push_root_obj(parsed);
-
-  struct lisp_val exprs = parsed->datum;
-
-  enum eval_status res = EV_SUCCESS;
-  while (!lisp_val_is_nil(exprs)) {
-    struct lisp_cons *cell = lisp_val_cast(lisp_val_is_cons, exprs);
-    assert(cell != NULL);
-    exprs = cell->cdr;
-
-    res = compile_eval(vm, parsed, cell->car);
-    if (res == EV_SUCCESS) {
-      (void)vm_stack_pop(vm);
-    } else {
-      // Keep the exception marked in the VM
-      break;
-    }
-  }
-
-  gc_pop_root_expect_obj(parsed);
-  return res;
-}
-
-enum eval_status load_file(struct lisp_vm *vm, const char *filename) {
+struct lisp_closure *compile_file(struct lisp_vm *vm, const char *filename) {
   struct lisp_string *contents = read_file(vm, filename);
   if (contents == NULL) {
-    vm_raise_func_exception(vm, "cannot read file '%s'", filename);
-    return EV_EXCEPTION;
-  } else {
-    gc_push_root_obj(contents);
-    struct parse_output *output =
-        read_str_many(filename, lisp_string_as_cstr(contents));
-    gc_pop_root_expect_obj(contents);
-
-    if (output->status == P_SUCCESS) {
-      // Eval but don't print
-      return eval_many(vm, output);
-    } else {
-      vm_raise_exception(vm, lisp_val_from_obj(parse_error_format(output)));
-      return EV_EXCEPTION;
-    }
+    // Exception is set by read_file
+    return NULL;
   }
+
+  gc_push_root_obj(contents);
+  struct parse_output *parsed =
+      read_str_many(filename, lisp_string_as_cstr(contents));
+  gc_pop_root_expect_obj(contents);
+  if (parsed->status == P_ERROR) {
+    vm_raise_exception(vm, lisp_val_from_obj(parse_error_format(parsed)));
+    return NULL;
+  }
+
+  gc_push_root_obj(parsed);
+  struct lisp_val wrapped_with_do = lisp_val_from_obj(
+      lisp_cons_create(lisp_val_from_obj(SYMBOL_DO), parsed->datum));
+
+  struct lisp_closure *compiled =
+      compile_top_level(vm, parsed, wrapped_with_do);
+  gc_pop_root_expect_obj(parsed);
+  if (compiled == NULL) {
+    return NULL;
+  }
+
+  return compiled;
 }

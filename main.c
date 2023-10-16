@@ -127,6 +127,15 @@ static struct lisp_vm *setup_vm(int argc, char **argv) {
 
 #define PRELUDE_FILENAME "lib/prelude.wh"
 
+static enum eval_status load_file(struct lisp_vm *vm, const char *filename) {
+  struct lisp_closure *compiled = compile_file(vm, filename);
+  if (compiled == NULL) {
+    return EV_EXCEPTION;
+  }
+
+  return eval_closure(vm, compiled);
+}
+
 static void run_file(struct lisp_vm *vm, const char *filename) {
   enum eval_status res = load_file(vm, filename);
   if (res == EV_EXCEPTION) {
