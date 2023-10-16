@@ -226,6 +226,8 @@ static bool compiler_ctx_is_top_level(const struct compiler_ctx *ctx) {
       lisp_string_as_cstr(ctx->source_metadata->filename) __VA_OPT__(, ) \
           __VA_ARGS__)
 
+#define ERROR_TOO_MANY_CONSTS "too many constants in current function"
+
 static enum compile_res compile(struct compiler_ctx *ctx, struct lisp_val ast);
 
 static enum compile_res compile_non_tail(struct compiler_ctx *ctx,
@@ -263,12 +265,23 @@ static void emit_instr(struct compiler_ctx *ctx, enum bytecode_op op) {
   emit_byte(ctx, op);
 }
 
+static unsigned add_or_get_const(struct compiler_ctx *ctx,
+                                 struct lisp_val constant) {
+  for (unsigned i = 0; i < ctx->chunk->const_table.size; i++) {
+    if (lisp_val_identical(ctx->chunk->const_table.data[i], constant)) {
+      return i;
+    }
+  }
+
+  return chunk_add_const(ctx->chunk, constant);
+}
+
 static enum compile_res emit_const(struct compiler_ctx *ctx,
                                    struct lisp_val constant) {
   // TODO Check for existing constant
-  unsigned const_idx = chunk_add_const(ctx->chunk, constant);
+  unsigned const_idx = add_or_get_const(ctx, constant);
   if (const_idx > UINT8_MAX) {
-    COMPILER_RAISE("too many constants in the current function");
+    COMPILER_RAISE(ERROR_TOO_MANY_CONSTS);
     return COMP_FAILED;
   }
 
@@ -342,9 +355,9 @@ static void emit_get_upvalue(struct compiler_ctx *ctx, uint8_t index) {
 static enum compile_res emit_get_global(struct compiler_ctx *ctx,
                                         struct lisp_env_binding *binding) {
   // TODO Check for existing constant
-  unsigned const_idx = chunk_add_const(ctx->chunk, lisp_val_from_obj(binding));
+  unsigned const_idx = add_or_get_const(ctx, lisp_val_from_obj(binding));
   if (const_idx > UINT8_MAX) {
-    COMPILER_RAISE("too many constants in the current function");
+    COMPILER_RAISE(ERROR_TOO_MANY_CONSTS);
     return COMP_FAILED;
   }
 
@@ -358,9 +371,9 @@ static enum compile_res emit_get_global(struct compiler_ctx *ctx,
 static enum compile_res emit_set_global(struct compiler_ctx *ctx,
                                         struct lisp_env_binding *binding) {
   // TODO Check for existing constant
-  unsigned const_idx = chunk_add_const(ctx->chunk, lisp_val_from_obj(binding));
+  unsigned const_idx = add_or_get_const(ctx, lisp_val_from_obj(binding));
   if (const_idx > UINT8_MAX) {
-    COMPILER_RAISE("too many constants in the current function");
+    COMPILER_RAISE(ERROR_TOO_MANY_CONSTS);
     return COMP_FAILED;
   }
 
@@ -382,10 +395,9 @@ static enum compile_res emit_alloc_closure(struct compiler_ctx *ctx,
                                            struct code_chunk *closure_code,
                                            uint8_t n_captures) {
   // TODO Check for existing constant
-  unsigned const_idx =
-      chunk_add_const(ctx->chunk, lisp_val_from_obj(closure_code));
+  unsigned const_idx = add_or_get_const(ctx, lisp_val_from_obj(closure_code));
   if (const_idx > UINT8_MAX) {
-    COMPILER_RAISE("too many constants in the current function");
+    COMPILER_RAISE(ERROR_TOO_MANY_CONSTS);
     return COMP_FAILED;
   }
 
