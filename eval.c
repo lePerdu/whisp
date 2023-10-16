@@ -82,7 +82,7 @@ static struct lisp_closure *check_call(struct lisp_vm *vm,
  * Evaluate bytecode until the call stack is empty.
  */
 static enum eval_status eval_bytecode(struct lisp_vm *vm) {
-  const unsigned initial_frame = vm_current_frame_index(vm);
+  assert(vm_current_frame_index(vm) == 1);
 
   struct stack_frame *frame;
   struct code_chunk *code;
@@ -182,7 +182,7 @@ LOOP:
     }
     case OP_RETURN:
       vm_stack_frame_return(vm);
-      if (vm_current_frame_index(vm) < initial_frame) {
+      if (vm_current_frame_index(vm) == 0) {
         // Nothing left to evaluate
         return EV_SUCCESS;
       } else {
@@ -300,15 +300,14 @@ LOOP:
         goto HANDLE_FATAL_ERROR;
       }
       long frame_index = lisp_val_as_int(frame_val);
-      if (frame_index < initial_frame ||
-          vm_current_frame_index(vm) < frame_index) {
+      if (frame_index <= 0 || vm_current_frame_index(vm) < frame_index) {
         vm_raise_format_exception(vm, "escape frame is out of bounds: %d",
                                   frame_index);
         goto HANDLE_FATAL_ERROR;
       }
 
       vm_stack_frame_return_from(vm, frame_index);
-      if (vm_current_frame_index(vm) < initial_frame) {
+      if (vm_current_frame_index(vm) == 0) {
         // Nothing left to evaluate
         return EV_SUCCESS;
       } else {
@@ -326,7 +325,7 @@ HANDLE_FATAL_ERROR:
   // Many errors in the evaluator can only happen due to compiler bugs, so they
   // cause immediate exit.
   // Unwind the stack, but ignore exception handlers
-  while (vm_current_frame_index(vm) >= initial_frame) {
+  while (vm_current_frame_index(vm) > 0) {
     vm_stack_frame_unwind(vm);
   }
   return EV_EXCEPTION;

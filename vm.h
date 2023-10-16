@@ -42,7 +42,7 @@ struct lisp_vm {
   struct lisp_val current_exception;
 };
 
-struct lisp_vm *vm_create(void);
+struct lisp_vm *vm_create(struct lisp_env *global_env);
 
 /**
  * Return whether there is an active exception.

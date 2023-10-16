@@ -69,9 +69,7 @@ static const struct lisp_vtable VM_VTABLE = {
     .destroy = vm_destroy,
 };
 
-struct lisp_vm *vm_create(void) {
-  // TODO Accept environment as parameter?
-  struct lisp_env *global_env = lisp_env_create();
+struct lisp_vm *vm_create(struct lisp_env *global_env) {
   gc_push_root_obj(global_env);
   struct lisp_vm *vm = lisp_obj_alloc(&VM_VTABLE, sizeof(*vm));
   vm->global_env = global_env;

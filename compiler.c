@@ -1480,11 +1480,24 @@ static enum compile_res compile(struct compiler_ctx *ctx, struct lisp_val ast) {
 struct lisp_closure *compile_top_level(struct lisp_vm *vm,
                                        struct parse_output *metadata,
                                        struct lisp_val ast) {
-  struct compiler_ctx *ctx = compiler_ctx_create_top_level(vm, metadata);
+  // Create a separate VM for macro expansion since `eval_apply` cannot be
+  // called in the parent VM (it is only allowed to be called at the top-level
+  // execution frame).
+  // The new VM shares the global environment, so they are at least partially
+  // synchronized
+  gc_push_root_obj(metadata);
+  gc_push_root(ast);
+  struct lisp_vm *compiler_vm = vm_create(vm->global_env);
+  gc_pop_root_expect(ast);
+  gc_pop_root_expect_obj(metadata);
+  struct compiler_ctx *ctx =
+      compiler_ctx_create_top_level(compiler_vm, metadata);
 
   enum compile_res res = compile(ctx, ast);
   struct code_chunk *func = compiler_ctx_complete(ctx);
   if (res == COMP_FAILED) {
+    // Propagate the error to the original VM
+    vm_raise_exception(vm, ctx->vm->current_exception);
     return NULL;
   }
 

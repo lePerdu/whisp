@@ -14,7 +14,7 @@ enum eval_status {
 };
 
 /**
- * Evaluate a no-argument closure at the top-level
+ * Evaluate a no-argument closure at the top-level.
  */
 enum eval_status eval_closure(struct lisp_vm *vm, struct lisp_closure *code);
 
