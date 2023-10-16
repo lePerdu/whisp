@@ -136,6 +136,43 @@
     (deftest! error-for-non-cons
       (assert-error (let-cons ((a . b) nil) b))))
 
+  (defgroup! let-if
+    (deftest! binds-non-nil-value
+      (assert= 3 (let-if (a 2) (+ 1 a))))
+    (deftest! binds-0-value
+      (assert= 1 (let-if (a 0) (+ 1 a))))
+    (deftest! runs-false-branch-for-nil
+      (assert= 2 (let-if (a nil) (+ 1 a) 2)))
+    (deftest! does-not-bind-for-nil
+      (assert= 'outer
+        (let ((a 'outer))
+          (let-if (a nil) (+ 1 a) a))))
+    (deftest! runs-expr-once
+      (def! a (atom 0))
+      (assert= 1
+        (let-if (a (swap! a inc)) a))
+      (assert= 1 @a)))
+
+  (defgroup! let-if-cons
+    (deftest! extracts-first
+      (assert= 1 (let-if-cons ((a . b) (cons 1 2)) a)))
+    (deftest! extracts-second
+      (assert= 2 (let-if-cons ((a . b) (cons 1 2)) b)))
+    (deftest! extracts-tail-of-list
+      (assert-equal (list 2 3 4) (let-if-cons ((a . b) (list 1 2 3 4)) b)))
+    (deftest! run-false-branch-on-nil
+      (assert= 2
+        (let-if-cons
+          ((a . b) nil) b 2)))
+    (deftest! run-false-branch-on-number
+      (assert= 2
+        (let-if-cons
+          ((a . b) 7) b 2)))
+    (deftest! does-not-bind-for-non-cons
+      (assert= 'outer
+        (let ((a 'outer))
+          (let-if-cons ((a . b) nil) (+ a b) a)))))
+
   (defgroup! let-named
     (deftest! call-binding-in-tail-pos
       (assert= 55 (let-named loop ((acc 0) (n 10))

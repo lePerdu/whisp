@@ -20,12 +20,6 @@
       (not (or ~@(cdr conds)))
       (xor ~@(cdr conds)))))
 
-(defmacro! (let-if binding . branches)
-  ; TODO Generate temporary symbol so that the binding is not available in the
-  ; false branch
-  `(let (~binding)
-    (if ~(car binding) ~@branches)))
-
 (defmacro! (let-cond binding . branches)
   `(let (~binding)
     (cond ~@branches)))

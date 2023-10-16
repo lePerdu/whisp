@@ -105,6 +105,23 @@
         (~(cdr bind-pair) (cdr ~cons-sym)))
        ~body))))
 
+(defmacro! (let-if binding if-true . opt-if-nil)
+  (let
+    ((bind-sym (car binding))
+     (bind-expr (cadr binding))
+     ; Bind to a hidden symbol first so that the specified symbol isn't bound in
+     ; the "false" branch
+     (init-bind-sym (gensym))
+     (if-nil (cond
+      ((null? opt-if-nil) nil)
+      ((null? (cdr opt-if-nil)) (car opt-if-nil))
+      (else (syntax-error "too many arguments")))))
+    `(let ((~init-bind-sym ~bind-expr))
+      (if ~init-bind-sym
+        (let ((~bind-sym ~init-bind-sym))
+          ~if-true)
+        ~if-nil))))
+
 ; Version of let-cons which allows an "else" branch if the binding is nil
 ; TODO Allow more than 1 pattern
 ; TODO Allow nested / more complex patterns
@@ -120,12 +137,12 @@
      (cons-sym (gensym "pair")))
     `(let
       ((~cons-sym ~@(cdr binding)))
-      (if (null? ~cons-sym)
-        ~if-nil
+      (if (cons? ~cons-sym)
         (let
          ((~(car bind-pair) (car ~cons-sym))
           (~(cdr bind-pair) (cdr ~cons-sym)))
-         ~if-cons)))))
+         ~if-cons)
+        ~if-nil))))
 
 (defmacro! (letrec* bindings body)
   `(let ()
