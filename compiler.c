@@ -141,6 +141,7 @@ static void compiler_ctx_visit(struct lisp_val v, visit_callback cb,
                                void *cb_ctx) {
   const struct compiler_ctx *ctx = lisp_val_as_obj(v);
   cb(cb_ctx, lisp_val_from_obj(ctx->vm));
+  cb(cb_ctx, lisp_val_from_obj(ctx->source_metadata));
   if (ctx->outer != NULL) {
     cb(cb_ctx, lisp_val_from_obj(ctx->outer));
   }

@@ -69,10 +69,10 @@ struct lisp_closure *compile_file(struct lisp_vm *vm, const char *filename) {
   gc_push_root_obj(parsed);
   struct lisp_val wrapped_with_do = lisp_val_from_obj(
       lisp_cons_create(lisp_val_from_obj(SYMBOL_DO), parsed->datum));
+  gc_pop_root_expect_obj(parsed);
 
   struct lisp_closure *compiled =
       compile_top_level(vm, parsed, wrapped_with_do);
-  gc_pop_root_expect_obj(parsed);
   if (compiled == NULL) {
     return NULL;
   }
