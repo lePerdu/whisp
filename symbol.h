@@ -1,9 +1,10 @@
 #ifndef SYMBOL_H_
 #define SYMBOL_H_
 
-#include "types.h"
+#include <stddef.h>
 
-typedef unsigned hash_t;
+#include "hash_table.h"
+#include "types.h"
 
 /**
  * Symbol used for all identifiers.
@@ -34,31 +35,21 @@ static inline const char *lisp_symbol_name(const struct lisp_symbol *s) {
 
 bool lisp_symbol_eq(const struct lisp_symbol *a, const struct lisp_symbol *b);
 
-struct lisp_hash_table_entry {
-  struct lisp_obj header;
-  struct lisp_hash_table_entry *next;
-  struct lisp_symbol *key;
-};
+struct lisp_hash_table_entry *lisp_symbol_table_entry_create(
+    struct lisp_symbol *sym);
 
-struct lisp_symbol_table {
-  struct lisp_obj header;
-  size_t capacity;
-  size_t size;
-  struct lisp_hash_table_entry *entries[];
-};
+struct lisp_hash_table_entry *lisp_symbol_table_lookup(
+    struct lisp_hash_table *map, struct lisp_symbol *key);
+struct lisp_hash_table_entry *lisp_symbol_table_lookup_name(
+    struct lisp_hash_table *map, const char *name, size_t length);
 
-struct lisp_symbol_table *lisp_symbol_table_create(size_t capacity);
-
-struct lisp_hash_table_entry *lisp_symbol_table_lookup_symbol(
-    struct lisp_symbol_table *map, const struct lisp_symbol *sym);
-struct lisp_symbol_table *lisp_symbol_table_insert(
-    struct lisp_symbol_table *map, struct lisp_hash_table_entry *entry);
+void lisp_symbol_table_insert(struct lisp_hash_table *map,
+                              struct lisp_hash_table_entry *entry);
 
 // Utilities for interacting with the symbol intern table
-
-struct lisp_symbol_table *lisp_symbol_intern_table(void);
-
 // TODO This is very much a mix of concerns going on...
-void lisp_symbol_intern_table_delete_if(bool (*pred)(struct lisp_symbol *sym));
+
+struct lisp_val lisp_symbol_intern_table(void);
+void lisp_symbol_intern_table_remove_if(bool (*pred)(struct lisp_val sym));
 
 #endif

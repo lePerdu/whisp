@@ -13,6 +13,7 @@ SRCS = main.c \
 	env.c \
 	eval.c \
 	file.c \
+	hash_table.c \
 	memory.c \
 	printer.c \
 	reader.c \

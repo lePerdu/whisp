@@ -170,8 +170,8 @@ static void gc_sweep(void) {
   }
 }
 
-static bool symbol_not_marked(struct lisp_symbol *sym) {
-  struct alloc_header *header = obj_to_header(sym);
+static bool symbol_not_marked(struct lisp_val sym) {
+  struct alloc_header *header = obj_to_header(lisp_val_as_obj(sym));
   return !header->marked;
 }
 
@@ -181,13 +181,13 @@ static bool symbol_not_marked(struct lisp_symbol *sym) {
  */
 static void symbol_intern_table_gc(void) {
   // Remove un-marked entries
-  lisp_symbol_intern_table_delete_if(symbol_not_marked);
+  lisp_symbol_intern_table_remove_if(symbol_not_marked);
 
   // Easiest way to ensure safety is to just re-run the mark routine.
   // Since it has already been run, it will only mark previously-unmarked
   // obejcts accessible from the symbol table (i.e. just the symbol table and
   // it's allocations)
-  mark_gray(lisp_val_from_obj(lisp_symbol_intern_table()));
+  mark_gray(lisp_symbol_intern_table());
   gc_clear_gray_set();
 }
 
