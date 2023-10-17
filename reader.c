@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "hash_table.h"
 #include "log.h"
 #include "memory.h"
 #include "symbol.h"
@@ -92,6 +93,7 @@ static void parse_output_visit(struct lisp_val v, visit_callback cb,
   cb(ctx, lisp_val_from_obj(p->filename));
   cb(ctx, p->datum);
   cb(ctx, lisp_val_from_obj(p->error.message));
+  cb(ctx, lisp_val_from_obj(p->source_map));
 }
 
 static const struct lisp_vtable PARSE_OUTPUT_VTABLE = {
@@ -105,12 +107,17 @@ static struct parse_output *parse_output_create(const char *filename) {
   struct lisp_string *filename_str = lisp_string_create_cstr(filename);
   gc_push_root_obj(filename_str);
 
+  struct lisp_hash_table *source_map = lisp_hash_table_create(8);
+  gc_push_root_obj(source_map);
+
   struct parse_output *p = lisp_obj_alloc(&PARSE_OUTPUT_VTABLE, sizeof(*p));
   p->status = P_EMPTY;
   p->filename = filename_str;
+  p->source_map = source_map;
   p->datum = LISP_VAL_NIL;
   p->error.message = NULL;
   p->error.pos = (struct source_pos){.line = 0, .col = 0};
+  gc_pop_root_expect_obj(source_map);
   gc_pop_root_expect_obj(filename_str);
   return p;
 }
@@ -119,10 +126,80 @@ struct parse_output *parse_output_create_simple(const char *filename,
                                                 struct lisp_val ast) {
   gc_push_root(ast);
   struct parse_output *p = parse_output_create(filename);
+  p->source_map = NULL;
   p->status = P_SUCCESS;
   p->datum = ast;
   gc_pop_root_expect(ast);
   return p;
+}
+
+struct source_map_entry {
+  struct lisp_hash_table_entry ht;
+  struct source_pos pos;
+};
+
+static void lisp_source_map_entry_visit(struct lisp_val v, visit_callback cb,
+                                        void *ctx) {
+  const struct source_map_entry *e = lisp_val_as_obj(v);
+  cb(ctx, e->ht.key);
+}
+
+static const struct lisp_vtable SYMBOL_TABLE_ENTRY_VTABLE = {
+    .is_gc_managed = true,
+    .name = "source-map-table-entry",
+    .visit_children = lisp_source_map_entry_visit,
+    .destroy = lisp_destroy_none,
+};
+
+static bool can_store_source_map(struct lisp_val v) {
+  // TODO Can this contain more?
+  return lisp_val_is_cons(v) || lisp_val_is_string(v);
+}
+
+static bool source_map_search(void *ctx, struct lisp_val key) {
+  struct lisp_val search_for = *(struct lisp_val *)ctx;
+  return lisp_val_identical(search_for, key);
+}
+
+const struct source_pos *parse_output_get_source_pos(struct parse_output *p,
+                                                     struct lisp_val datum) {
+  if (p->source_map == NULL) {
+    return NULL;
+  }
+  if (!can_store_source_map(datum)) {
+    return NULL;
+  }
+
+  hash_t hash_code = hash_lisp_val(datum);
+  struct source_map_entry *ent =
+      (struct source_map_entry *)lisp_hash_table_lookup(
+          p->source_map, hash_code, source_map_search, &datum);
+  if (ent == NULL) {
+    return NULL;
+  } else {
+    return &ent->pos;
+  }
+}
+
+static void source_map_insert(struct reader *r, struct lisp_val datum,
+                              struct source_pos pos) {
+  if (r->output->source_map == NULL) {
+    return;
+  }
+  if (!can_store_source_map(datum)) {
+    return;
+  }
+
+  gc_push_root(datum);
+  struct source_map_entry *ent =
+      lisp_obj_alloc(&SYMBOL_TABLE_ENTRY_VTABLE, sizeof(*ent));
+  ent->ht.key = datum;
+  ent->ht.hash_code = hash_lisp_val(datum);
+  ent->pos = pos;
+  gc_pop_root_expect(datum);
+
+  lisp_hash_table_insert(r->output->source_map,
+                         (struct lisp_hash_table_entry *)ent);
 }
 
 static void reader_init(struct reader *r, const char *filename,
@@ -471,6 +548,8 @@ static enum parse_status read_form(struct reader *r, struct lisp_val *output);
 
 static enum parse_status read_list_or_pair(struct reader *r,
                                            struct lisp_val *output) {
+  struct source_pos list_start = r->token.start_pos;
+
   enum parse_status res;
   res = reader_next(r);
   if (res != P_SUCCESS) {
@@ -514,13 +593,18 @@ static enum parse_status read_list_or_pair(struct reader *r,
     }
   }
 
-  // This is built and assigned even in case of failure, which is fine
+  // Finish the list, but don't add the source map on error
   *output = list_build(&builder);
+  if (res == P_SUCCESS) {
+    source_map_insert(r, *output, list_start);
+  }
   return res;
 }
 
 static enum parse_status read_macro(struct reader *r, const char *name,
                                     struct lisp_val *output) {
+  struct source_pos macro_start = r->token.start_pos;
+
   enum parse_status res;
   res = reader_next(r);
   if (res != P_SUCCESS) {
@@ -543,6 +627,7 @@ static enum parse_status read_macro(struct reader *r, const char *name,
                       lisp_val_from_obj(lisp_symbol_create_cstr(name)));
   list_builder_append(&builder, inner);
   *output = list_build(&builder);
+  source_map_insert(r, *output, macro_start);
 
   gc_pop_root_expect(inner);
   return P_SUCCESS;
@@ -585,6 +670,7 @@ static enum parse_status read_form(struct reader *r, struct lisp_val *output) {
     }
     case TOK_STRING:
       *output = build_lisp_string(r->token.as_slice);
+      source_map_insert(r, *output, r->token.start_pos);
       return P_SUCCESS;
     case TOK_NIL:
       *output = LISP_VAL_NIL;

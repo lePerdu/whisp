@@ -26,6 +26,7 @@ struct parse_output {
   struct lisp_obj header;
   enum parse_status status;
   struct lisp_string *filename;
+  struct lisp_hash_table *source_map;
 
   struct lisp_val datum;
 
@@ -37,6 +38,8 @@ struct parse_output {
 
 struct parse_output *parse_output_create_simple(const char *filename,
                                                 struct lisp_val ast);
+const struct source_pos *parse_output_get_source_pos(struct parse_output *p,
+                                                     struct lisp_val datum);
 
 struct lisp_string *parse_error_format(struct parse_output *error);
 
