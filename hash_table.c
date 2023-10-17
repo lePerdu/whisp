@@ -1,6 +1,8 @@
 #include "hash_table.h"
 
+#include <assert.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -118,4 +120,31 @@ void lisp_hash_table_remove_if(struct lisp_hash_table *map,
       }
     }
   }
+}
+
+/**
+ * Basic string hashing function.
+ */
+hash_t hash_string(const char *str, size_t length) {
+#define STR_HASH_FACTOR 31
+// Only hash the beginning of strings to avoid extra cost for long strings
+#define STR_HASH_MAX_LENGTH 32
+
+  if (length > STR_HASH_MAX_LENGTH) {
+    length = STR_HASH_MAX_LENGTH;
+  }
+
+  hash_t hash = length;
+  for (unsigned i = 0; i < length; i++) {
+    hash = (hash * STR_HASH_FACTOR) + str[i];
+  }
+  return hash;
+
+#undef STR_HASH_MAX_LENGTH
+#undef STR_HASH_FACTOR
+}
+
+hash_t hash_lisp_val(struct lisp_val v) {
+  // TODO More testing on this (just pulled off of some random comment)
+  return (v.tagged_ptr * 13) ^ (v.tagged_ptr >> 15);
 }

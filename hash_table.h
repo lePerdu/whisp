@@ -42,4 +42,7 @@ void lisp_hash_table_insert(struct lisp_hash_table *map,
 void lisp_hash_table_remove_if(struct lisp_hash_table *map,
                                bool (*pred)(struct lisp_val key));
 
+hash_t hash_string(const char *str, size_t length);
+hash_t hash_lisp_val(struct lisp_val v);
+
 #endif

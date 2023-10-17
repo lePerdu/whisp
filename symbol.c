@@ -15,25 +15,6 @@ static const struct lisp_vtable SYMBOL_VTABLE = {
     .destroy = lisp_destroy_none,
 };
 
-#define STR_HASH_FACTOR 31
-// Only hash the beginning of strings to avoid extra cost for long strings
-#define STR_HASH_MAX_LENGTH 32
-
-/**
- * Basic string hashing function.
- */
-static hash_t str_hash(const char *str, size_t length) {
-  hash_t hash = 0;
-  if (length > STR_HASH_MAX_LENGTH) {
-    length = STR_HASH_MAX_LENGTH;
-  }
-
-  for (unsigned i = 0; i < length; i++) {
-    hash = (hash * STR_HASH_FACTOR) + str[i];
-  }
-  return hash;
-}
-
 /**
  * Create un-interned symbol. Should only be used internally by the interning
  * mechanism.
@@ -45,7 +26,7 @@ static struct lisp_symbol *lisp_symbol_create_uninterned(const char *name,
   sym->length = length;
   memcpy(sym->data, name, length);
   sym->data[length] = 0;
-  sym->hash_code = str_hash(name, length);
+  sym->hash_code = hash_string(name, length);
   return sym;
 }
 
@@ -119,7 +100,7 @@ static bool symbol_table_search_name(void *ctx, struct lisp_val key) {
 
 struct lisp_hash_table_entry *lisp_symbol_table_lookup_name(
     struct lisp_hash_table *map, const char *name, size_t length) {
-  hash_t hash_code = str_hash(name, length);
+  hash_t hash_code = hash_string(name, length);
   struct lisp_temp_symbol search_key = {
       .data = name,
       .length = length,
