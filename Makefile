@@ -10,11 +10,13 @@ SRCS = main.c \
 	bytecode.c \
 	compiler.c \
 	core.c \
+	env.c \
 	eval.c \
 	file.c \
 	memory.c \
 	printer.c \
 	reader.c \
+	symbol.c \
 	types.c \
 	val_array.c \
 	vm.c

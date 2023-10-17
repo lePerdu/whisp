@@ -8,6 +8,7 @@
 
 #include "eval.h"
 #include "log.h"
+#include "symbol.h"
 #include "types.h"
 #include "val_array.h"
 
@@ -180,13 +181,13 @@ static bool symbol_not_marked(struct lisp_symbol *sym) {
  */
 static void symbol_intern_table_gc(void) {
   // Remove un-marked entries
-  lisp_symbol_table_delete_if(symbol_intern_table, symbol_not_marked);
+  lisp_symbol_intern_table_delete_if(symbol_not_marked);
 
   // Easiest way to ensure safety is to just re-run the mark routine.
   // Since it has already been run, it will only mark previously-unmarked
   // obejcts accessible from the symbol table (i.e. just the symbol table and
   // it's allocations)
-  mark_gray(lisp_val_from_obj(symbol_intern_table));
+  mark_gray(lisp_val_from_obj(lisp_symbol_intern_table()));
   gc_clear_gray_set();
 }
 

@@ -50,6 +50,11 @@ struct lisp_vtable {
 };
 
 /**
+ * No-op visit callback.
+ */
+void lisp_visit_none(struct lisp_val object, visit_callback cb, void *ctx);
+
+/**
  * No-op destroy callback.
  */
 void lisp_destroy_none(struct lisp_val v);
@@ -247,43 +252,6 @@ static inline void lisp_array_set(struct lisp_array *arr, size_t index,
   arr->data[index] = new;
 }
 
-typedef unsigned hash_t;
-
-/**
- * Symbol used for all identifiers.
- * These are always interned so that comparison is just a pointer comparison.
- */
-struct lisp_symbol {
-  struct lisp_obj header;
-  // Hash code is computed at initialization since symbols are mainly used as
-  // lookup keys
-  hash_t hash_code;
-  size_t length;
-  char data[];
-};
-
-struct lisp_symbol *lisp_symbol_create(const char *s, size_t len);
-bool lisp_val_is_symbol(struct lisp_val v);
-/**
- * Create symbol from null-terminated string.
- *
- * The contents of the string are not checked for invalid characters/format,
- * so checking should be done up-front.
- */
-struct lisp_symbol *lisp_symbol_create_cstr(const char *s);
-
-static inline const char *lisp_symbol_name(const struct lisp_symbol *s) {
-  return s->data;
-}
-
-bool lisp_symbol_eq(const struct lisp_symbol *a, const struct lisp_symbol *b);
-
-extern struct lisp_symbol_table *symbol_intern_table;
-
-// TODO This is very much a mix of concerns going on...
-void lisp_symbol_table_delete_if(struct lisp_symbol_table *map,
-                                 bool (*pred)(struct lisp_symbol *sym));
-
 /** Immutable array of characters. */
 struct lisp_string {
   struct lisp_obj header;
@@ -408,37 +376,6 @@ void list_mapper_append_next(struct list_mapper *m, struct lisp_val next);
  * Return the built list. (Note: this will return NIL if the list is empty)
  */
 struct lisp_val list_mapper_build(struct list_mapper *m);
-
-/**
- * Key-value mapping used for the global environment.
- */
-struct lisp_env;
-struct lisp_env_binding;
-
-struct lisp_env *lisp_env_create(void);
-bool lisp_val_is_env(struct lisp_val v);
-
-/**
- * Lookup a value in the environment. Returns NULL (not LISP_VAL_NIL) if the
- * symbol is not mapped.
- */
-struct lisp_env_binding *lisp_env_get(struct lisp_env *env,
-                                      struct lisp_symbol *sym);
-
-struct lisp_env_binding *lisp_env_set(struct lisp_env *env,
-                                      struct lisp_symbol *sym,
-                                      struct lisp_val val);
-struct lisp_env_binding *lisp_env_set_macro(struct lisp_env *env,
-                                            struct lisp_symbol *sym,
-                                            struct lisp_val val);
-
-bool lisp_val_is_env_binding(struct lisp_val v);
-const struct lisp_symbol *lisp_env_binding_name(
-    const struct lisp_env_binding *b);
-struct lisp_val lisp_env_binding_value(const struct lisp_env_binding *b);
-void lisp_env_binding_set_value(struct lisp_env_binding *b,
-                                struct lisp_val new);
-bool lisp_env_binding_is_macro(const struct lisp_env_binding *b);
 
 struct code_chunk;
 

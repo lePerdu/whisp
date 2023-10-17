@@ -12,11 +12,13 @@
 
 #include "compiler.h"
 #include "core.h"
+#include "env.h"
 #include "eval.h"
 #include "file.h"
 #include "memory.h"
 #include "printer.h"
 #include "reader.h"
+#include "symbol.h"
 #include "types.h"
 #include "vm.h"
 

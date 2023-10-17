@@ -10,6 +10,7 @@
 
 #include "log.h"
 #include "memory.h"
+#include "symbol.h"
 #include "types.h"
 
 enum token_type {

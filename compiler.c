@@ -6,10 +6,12 @@
 
 #include "bytecode.h"
 #include "core.h"
+#include "env.h"
 #include "eval.h"
 #include "memory.h"
 #include "printer.h"
 #include "reader.h"
+#include "symbol.h"
 #include "types.h"
 #include "vm.h"
 

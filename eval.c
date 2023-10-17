@@ -5,7 +5,9 @@
 
 #include "bytecode.h"
 #include "core.h"
+#include "env.h"
 #include "memory.h"
+#include "symbol.h"
 #include "types.h"
 #include "vm.h"
 

@@ -4,7 +4,9 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include "env.h"
 #include "printer.h"
+#include "symbol.h"
 #include "types.h"
 #include "val_array.h"
 

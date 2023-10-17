@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "bytecode.h"
+#include "symbol.h"
 #include "types.h"
 
 static void print_cons(struct str_builder *b, struct lisp_cons *cons,
