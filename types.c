@@ -480,23 +480,37 @@ unsigned lisp_list_count(struct lisp_val list) {
   return count;
 }
 
+static void list_builder_visit(struct lisp_val v, visit_callback cb,
+                               void *ctx) {
+  struct list_builder *builder = lisp_val_as_obj(v);
+  cb(ctx, builder->head);
+  // Don't need to visit the tail since it's referenced from the head
+}
+
+static const struct lisp_vtable LIST_BUILDER_VTABLE = {
+    .name = "list-builder",
+    .alloc_type = LISP_ALLOC_STACK,
+    .visit_children = list_builder_visit,
+    .destroy = lisp_destroy_none,
+};
+
 void list_builder_init(struct list_builder *b) {
-  b->list_atom = lisp_atom_create(LISP_VAL_NIL);
+  b->header.vt = &LIST_BUILDER_VTABLE;
+  b->head = LISP_VAL_NIL;
   b->tail = NULL;
-  gc_push_root_obj(b->list_atom);
+  gc_push_root_obj(b);
 }
 
 void list_builder_append(struct list_builder *b, struct lisp_val v) {
   struct lisp_cons *node = lisp_cons_create(v, LISP_VAL_NIL);
 
   struct lisp_val node_val = lisp_val_from_obj(node);
-  if (lisp_val_is_nil(lisp_atom_deref(b->list_atom))) {
-    b->tail = node;
-    lisp_atom_reset(b->list_atom, node_val);
+  if (lisp_val_is_nil(b->head)) {
+    b->head = node_val;
   } else {
     b->tail->cdr = node_val;
-    b->tail = node;
   }
+  b->tail = node;
 }
 
 void list_builder_end_pair(struct list_builder *b, struct lisp_val pair_end) {
@@ -504,13 +518,9 @@ void list_builder_end_pair(struct list_builder *b, struct lisp_val pair_end) {
   b->tail->cdr = pair_end;
 }
 
-struct lisp_val list_builder_current(const struct list_builder *b) {
-  return lisp_atom_deref(b->list_atom);
-}
-
 struct lisp_val list_build(struct list_builder *b) {
-  gc_pop_root_expect_obj(b->list_atom);
-  return lisp_atom_deref(b->list_atom);
+  gc_pop_root_expect_obj(b);
+  return b->head;
 }
 
 void list_mapper_init(struct list_mapper *m, struct lisp_val original) {

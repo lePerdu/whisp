@@ -357,10 +357,9 @@ unsigned lisp_list_count(struct lisp_val list);
  * called befor the builder goes out of scope.
  */
 struct list_builder {
-  // Store an atom since the list is initially nil, but then becomes the
-  // head
-  // TODO Avoid GC'd atom here
-  struct lisp_atom *list_atom;
+  struct lisp_obj header;
+  // Store a lisp_val since the list is initially nil
+  struct lisp_val head;
   struct lisp_cons *tail;
 };
 
