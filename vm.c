@@ -11,9 +11,11 @@
 #include "val_array.h"
 
 #define STACK_INIT_CAP 8
+
 static void stack_frame_visit(struct stack_frame *rec, visit_callback cb,
                               void *ctx) {
   cb(ctx, lisp_val_from_obj(rec->func));
+  cb(ctx, rec->ex_handler_chain);
 }
 
 #define CALL_STACK_EMPTY \

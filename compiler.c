@@ -186,6 +186,7 @@ static const struct lisp_vtable COMPILER_VTABLE = {
 
 static struct compiler_ctx *compiler_ctx_create_top_level(
     struct lisp_vm *vm, struct parse_output *metadata) {
+  gc_push_root_obj(vm);
   gc_push_root_obj(metadata);
 
   struct code_chunk *new_chunk = chunk_create();
@@ -210,6 +211,7 @@ static struct compiler_ctx *compiler_ctx_create_top_level(
   ctx->chunk = new_chunk;
   gc_pop_root_expect_obj(new_chunk);
   gc_pop_root_expect_obj(metadata);
+  gc_pop_root_expect_obj(vm);
 
   // Keep the value pushed until an explicit "complete"
   gc_push_root_obj(ctx);
@@ -1536,16 +1538,19 @@ struct lisp_closure *compile_top_level(struct lisp_vm *vm,
   // execution frame).
   // The new VM shares the global environment, so they are at least partially
   // synchronized
-  gc_push_root_obj(metadata);
   gc_push_root(ast);
+
+  gc_push_root_obj(metadata);
   struct lisp_vm *compiler_vm = vm_create(vm->global_env);
-  gc_pop_root_expect(ast);
   gc_pop_root_expect_obj(metadata);
+
   struct compiler_ctx *ctx =
       compiler_ctx_create_top_level(compiler_vm, metadata);
 
   enum compile_res res = compile(ctx, ast);
   struct code_chunk *func = compiler_ctx_complete(ctx);
+
+  gc_pop_root_expect(ast);
   if (res == COMP_FAILED) {
     // Propagate the error to the original VM
     vm_raise_exception(vm, ctx->vm->current_exception);
