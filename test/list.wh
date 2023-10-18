@@ -38,8 +38,14 @@
       (assert= nil (concat nil)))
     (deftest! single-list
       (assert-equal (list 1 2 3) (concat (list 1 2 3))))
+    (deftest! single-non-list
+      (assert= 3 (concat 3)))
     (deftest! multiple-lists
       (assert-equal (list 1 2 3 4 5) (concat (list 1 2) (list 3) (list 4 5))))
+    (deftest! improper-tail
+      (assert-equal (list* 1 2 3 4 5) (concat (list 1 2) (list 3) (cons 4 5))))
+    (deftest! non-list-tail
+      (assert-equal (list* 1 2 3 4) (concat (list 1 2) (list 3) 4)))
     (deftest! empty-has-no-effect
       (assert-equal
         (list 1 2 3 4)

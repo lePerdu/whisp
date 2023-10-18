@@ -218,6 +218,10 @@
         (assert-equal
           (list 2 4 6 8)
           `(2 ~(+ 1 3) 6 ~(* 4 2))))
+      (deftest! start-of-improper-list
+        (assert-equal (cons 2 4) `(2 . ~(+ 1 3))))
+      (deftest! end-of-improper-list
+        (assert-equal (cons 4 2) `(~(+ 1 3) . 2)))
       (deftest! inside-deep-list
         (assert-equal
           (list 1 (list 2 (list 3 4 5)) 6)
@@ -226,8 +230,8 @@
     (defgroup! splice-unquote
       (deftest! not-expanded-at-top-level
         (assert-equal
-          (list 'splice-unquote (list 'list 1 2))
-          `~@(list 1 2)))
+          (list 'splice-unquote (list 'list '(+ 0 1) 2))
+          `~@(list (+ 0 1) 2)))
       (deftest! expanded-at-start-of-list
         (assert-equal
           (list 1 2 'x)
@@ -240,6 +244,14 @@
         (assert-equal
           (list 'x 1 2 'y)
           `(x ~@(list (+ 0 1) (/ 4 2)) y)))
+      (deftest! expanded-in-improper-list
+        (assert-equal
+          (list* 'x 1 2 'y)
+          `(x ~@(list (+ 0 1) (/ 4 2)) . y)))
+      (deftest! not-expanded-at-end-of-improper-list
+        (assert-equal
+          (list 'x 'splice-unquote '(list (+ 0 1) (/ 4 2)))
+          `(x . ~@(list (+ 0 1) (/ 4 2)))))
       (deftest! expands-empty-list
         (assert-equal
           (list 'x 'y)

@@ -49,12 +49,17 @@
     (cons (f (car l)) (map f (cdr l)))))
 
 (defn! (concat . lists)
-  ; Use foldr since it keeps prepending shorter lists instead of longer lists
-  (foldr nil (fn (l acc) (foldr acc cons l)) lists))
+  ; Can't use foldr since this needs to handle the last list specially
+  (if (null? lists)
+    nil
+    (if (null? (cdr lists))
+      (car lists)
+      (foldr (apply concat (cdr lists)) cons (car lists)))))
 
 (defn! (concat-map f l)
-  ; TODO Avoid foldr since it runs the map in reverse?
-  (foldr nil (fn (x acc) (concat (f x) acc)) l))
+  (if (null? l)
+    nil
+    (concat (f (car l)) (concat-map f (cdr l)))))
 
 ; Misc functions used in early macro definitions
 
