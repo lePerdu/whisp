@@ -28,12 +28,33 @@ bool lisp_val_identical(struct lisp_val a, struct lisp_val b);
 
 typedef void (*visit_callback)(void *ctx, struct lisp_val v);
 
+enum lisp_obj_alloc_type {
+  /**
+   * Statically allocated contant object. These objects must not contain
+   * references to other objects.
+   */
+  LISP_ALLOC_CONST,
+
+  /**
+   * Heap-allocated, GC-managed object.
+   */
+  LISP_ALLOC_GC,
+
+  /**
+   * Stack-allocated, GC-aware object.
+   *
+   * These objects can contain references to GC-allocated objects, but must not
+   * be referenced from the heap.
+   */
+  LISP_ALLOC_STACK,
+};
+
 struct lisp_vtable {
   const char *name;
 
   // TODO Should this be an object field instead? (Probably not worth adding an
   // extra flag to every object)
-  bool is_gc_managed;
+  enum lisp_obj_alloc_type alloc_type;
 
   /**
    * Call the visitor on direct children (should not be recursive).

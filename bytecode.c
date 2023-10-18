@@ -56,7 +56,7 @@ static void code_chunk_destroy(struct lisp_val v) {
 
 static const struct lisp_vtable CODE_CHUNK_VTABLE = {
     .name = "code-chunk",
-    .is_gc_managed = true,
+    .alloc_type = LISP_ALLOC_GC,
     .visit_children = code_chunk_visit,
     .destroy = code_chunk_destroy,
 };

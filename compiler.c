@@ -178,7 +178,7 @@ static void compiler_ctx_visit(struct lisp_val v, visit_callback cb,
 static void compiler_ctx_destroy(struct lisp_val v) { (void)v; }
 
 static const struct lisp_vtable COMPILER_VTABLE = {
-    .is_gc_managed = true,
+    .alloc_type = LISP_ALLOC_GC,
     .name = "compiler-context",
     .visit_children = compiler_ctx_visit,
     .destroy = compiler_ctx_destroy,

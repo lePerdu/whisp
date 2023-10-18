@@ -33,14 +33,14 @@ void lisp_visit_none(struct lisp_val object, visit_callback cb, void *ctx) {
 void lisp_destroy_none(struct lisp_val object) { (void)object; }
 
 static const struct lisp_vtable INT_VTABLE = {
-    .is_gc_managed = false,
+    .alloc_type = LISP_ALLOC_CONST,
     .name = "int",
     .visit_children = lisp_visit_none,
     .destroy = lisp_destroy_none,
 };
 
 static const struct lisp_vtable NIL_VTABLE = {
-    .is_gc_managed = false,
+    .alloc_type = LISP_ALLOC_CONST,
     .name = "nil",
     .visit_children = lisp_visit_none,
     .destroy = lisp_destroy_none,
@@ -66,7 +66,7 @@ const char *lisp_val_type_name(struct lisp_val v) {
 const struct lisp_val LISP_VAL_NIL = {TAG_OBJ};
 
 static const struct lisp_vtable NON_PRINTING_VTABLE = {
-    .is_gc_managed = false,
+    .alloc_type = LISP_ALLOC_CONST,
     .name = "non-printing",
     .visit_children = lisp_visit_none,
     .destroy = lisp_destroy_none,
@@ -85,8 +85,8 @@ bool lisp_is_non_printing(struct lisp_val v) {
 }
 
 static const struct lisp_vtable UNINIT_VTABLE = {
-    .is_gc_managed = false,
     .name = "uninitialized",
+    .alloc_type = LISP_ALLOC_CONST,
     .visit_children = lisp_visit_none,
     .destroy = lisp_destroy_none,
 };
@@ -122,7 +122,7 @@ struct lisp_real {
 };
 
 static const struct lisp_vtable REAL_VTABLE = {
-    .is_gc_managed = true,
+    .alloc_type = LISP_ALLOC_GC,
     .name = "real",
     .visit_children = lisp_visit_none,
     .destroy = lisp_destroy_none,
@@ -156,7 +156,7 @@ static const struct lisp_vtable CHAR_VTABLE = {
     // TODO Figure out a way to avoid heap allocating these?
     // For strictly 8-bit characters, they could be statically allocated, but
     // not when e.g. UTF-8 chars are supported
-    .is_gc_managed = true,
+    .alloc_type = LISP_ALLOC_GC,
     .name = "char",
     .visit_children = lisp_visit_none,
     .destroy = lisp_destroy_none,
@@ -186,7 +186,7 @@ static void lisp_atom_visit(struct lisp_val a, visit_callback cb, void *ctx) {
 }
 
 static const struct lisp_vtable ATOM_VTABLE = {
-    .is_gc_managed = true,
+    .alloc_type = LISP_ALLOC_GC,
     .name = "atom",
     .visit_children = lisp_atom_visit,
     .destroy = lisp_destroy_none,
@@ -212,7 +212,7 @@ static void lisp_array_visit(struct lisp_val v, visit_callback cb, void *ctx) {
 }
 
 static const struct lisp_vtable ARRAY_VTABLE = {
-    .is_gc_managed = true,
+    .alloc_type = LISP_ALLOC_GC,
     .name = "array",
     .visit_children = lisp_array_visit,
     .destroy = lisp_destroy_none,
@@ -234,7 +234,7 @@ bool lisp_val_is_array(struct lisp_val v) {
 }
 
 static const struct lisp_vtable STRING_VTABLE = {
-    .is_gc_managed = true,
+    .alloc_type = LISP_ALLOC_GC,
     .name = "string",
     .visit_children = lisp_visit_none,
     .destroy = lisp_destroy_none,
@@ -426,7 +426,7 @@ static void lisp_cons_visit(struct lisp_val v, visit_callback cb, void *ctx) {
 }
 
 static const struct lisp_vtable CONS_VTABLE = {
-    .is_gc_managed = true,
+    .alloc_type = LISP_ALLOC_GC,
     .name = "cons",
     .visit_children = lisp_cons_visit,
     .destroy = lisp_destroy_none,
@@ -578,7 +578,7 @@ static void lisp_closure_visit(struct lisp_val v, visit_callback cb,
 }
 
 static const struct lisp_vtable CLOSURE_VTABLE = {
-    .is_gc_managed = true,
+    .alloc_type = LISP_ALLOC_GC,
     .name = "closure",
     .visit_children = lisp_closure_visit,
     .destroy = lisp_destroy_none,

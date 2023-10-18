@@ -98,7 +98,7 @@ static void parse_output_visit(struct lisp_val v, visit_callback cb,
 
 static const struct lisp_vtable PARSE_OUTPUT_VTABLE = {
     .name = "parse-output",
-    .is_gc_managed = true,
+    .alloc_type = LISP_ALLOC_GC,
     .visit_children = parse_output_visit,
     .destroy = lisp_destroy_none,
 };
@@ -145,7 +145,7 @@ static void lisp_source_map_entry_visit(struct lisp_val v, visit_callback cb,
 }
 
 static const struct lisp_vtable SYMBOL_TABLE_ENTRY_VTABLE = {
-    .is_gc_managed = true,
+    .alloc_type = LISP_ALLOC_GC,
     .name = "source-map-table-entry",
     .visit_children = lisp_source_map_entry_visit,
     .destroy = lisp_destroy_none,

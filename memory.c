@@ -112,16 +112,29 @@ void gc_pop_root_expect_obj(void *root) {
 static struct val_array gray_set = VAL_ARRAY_EMPTY;
 
 static void mark_gray(struct lisp_val v) {
-  if (!lisp_val_vtable(v)->is_gc_managed) {
-    return;
+  switch (lisp_val_vtable(v)->alloc_type) {
+    case LISP_ALLOC_CONST:
+      // These can't contain refrences to GC objects, so skip them
+      return;
+    case LISP_ALLOC_GC: {
+      // Make sure it hasn't already been marked
+      struct alloc_header *header = obj_to_header(lisp_val_as_obj(v));
+      if (header->marked) {
+        return;
+      }
+
+      header->marked = true;
+      break;
+    }
+    case LISP_ALLOC_STACK:
+      // No mark stored for these objects, so always push them
+      // (They should only be referenced from the GC root stack, so this won't
+      // cause infinite loops)
+      break;
+    default:
+      abort();
   }
 
-  struct alloc_header *header = obj_to_header(lisp_val_as_obj(v));
-  if (header->marked) {
-    return;
-  }
-
-  header->marked = true;
   val_array_push(&gray_set, v);
 }
 

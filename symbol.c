@@ -9,7 +9,7 @@
 
 static const struct lisp_vtable SYMBOL_VTABLE = {
     // TODO Mark as non-GC managed since they really aren't?
-    .is_gc_managed = true,
+    .alloc_type = LISP_ALLOC_GC,
     .name = "symbol",
     .visit_children = lisp_visit_none,
     .destroy = lisp_destroy_none,
@@ -58,7 +58,7 @@ static void lisp_symbol_table_entry_visit(struct lisp_val v, visit_callback cb,
 }
 
 static const struct lisp_vtable SYMBOL_TABLE_ENTRY_VTABLE = {
-    .is_gc_managed = true,
+    .alloc_type = LISP_ALLOC_GC,
     .name = "hash-table-entry",
     .visit_children = lisp_symbol_table_entry_visit,
     .destroy = lisp_destroy_none,

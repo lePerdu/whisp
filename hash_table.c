@@ -27,7 +27,7 @@ static void lisp_hash_table_destroy(struct lisp_val v) {
 }
 
 static const struct lisp_vtable HASH_TABLE_VTABLE = {
-    .is_gc_managed = true,
+    .alloc_type = LISP_ALLOC_GC,
     .name = "hash_table",
     .visit_children = lisp_hash_table_visit,
     .destroy = lisp_hash_table_destroy,

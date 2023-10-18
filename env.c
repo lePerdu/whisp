@@ -19,7 +19,7 @@ static void lisp_env_visit(struct lisp_val v, visit_callback cb, void *ctx) {
 }
 
 static const struct lisp_vtable ENV_VTABLE = {
-    .is_gc_managed = true,
+    .alloc_type = LISP_ALLOC_GC,
     .name = "environment",
     .visit_children = lisp_env_visit,
     .destroy = lisp_destroy_none,
@@ -43,7 +43,7 @@ bool lisp_val_is_env(struct lisp_val v) {
 }
 
 static const struct lisp_vtable ENV_TABLE_ENTRY_VTABLE = {
-    .is_gc_managed = true,
+    .alloc_type = LISP_ALLOC_GC,
     .name = "environment-entry",
     .visit_children = lisp_env_binding_visit,
     .destroy = lisp_destroy_none,
