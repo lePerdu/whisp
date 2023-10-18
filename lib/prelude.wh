@@ -9,6 +9,7 @@
 (load-file "lib/list.wh")
 (load-file "lib/func.wh")
 (load-file "lib/math.wh")
+(load-file "lib/ports.wh")
 (load-file "lib/string.wh")
 (load-file "lib/exception.wh")
 (load-file "lib/array.wh")

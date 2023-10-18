@@ -15,6 +15,7 @@ SRCS = main.c \
 	file.c \
 	hash_table.c \
 	memory.c \
+	ports.c \
 	printer.c \
 	reader.c \
 	symbol.c \

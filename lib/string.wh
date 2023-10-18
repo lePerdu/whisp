@@ -1,19 +1,6 @@
 ; TODO Should these be the builtins? (they are more useful than display and
 ; newline and more efficient to implement as builtins)
 
-(defn! (print . args)
-  (if (null? args)
-    nil
-    (do
-      ; Print first without space
-      (display (car args))
-      (for-each
-        (fn (x) (do (display " ") (display x)))
-        (cdr args)))))
-
-(defn! (println . args)
-  (do (apply print args) (newline)))
-
 (defn! (string->list str) (do
   (defn! (rec acc index)
     (if (= index 0)

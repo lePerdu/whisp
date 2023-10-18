@@ -133,7 +133,8 @@ static inline void *lisp_val_cast(lisp_predicate pred, struct lisp_val v) {
     struct lisp_cons *: "cons", \
     struct lisp_atom *: "atom", \
     struct lisp_array *: "array", \
-    struct lisp_closure *: "function" \
+    struct lisp_closure *: "function", \
+    struct lisp_file_port *: "port" \
   )
 // clang-format on
 
@@ -282,6 +283,7 @@ struct lisp_string {
 
 struct lisp_string *lisp_string_create(const char *s, size_t len);
 struct lisp_string *lisp_string_create_cstr(const char *s);
+struct lisp_string *lisp_string_create_empty(size_t len);
 bool lisp_val_is_string(struct lisp_val v);
 
 /**

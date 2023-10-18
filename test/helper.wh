@@ -37,7 +37,7 @@
   (do
     (print "RUNNING" (test-entry-name test))
     (print " ... ")
-    (flush)
+    (flush-output-port)
     (guard
       (err
         (else

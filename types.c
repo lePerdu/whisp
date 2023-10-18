@@ -246,13 +246,19 @@ static struct lisp_string *lisp_string_alloc(size_t capacity) {
   return s;
 }
 
-struct lisp_string *lisp_string_create(const char *s, size_t len) {
+struct lisp_string *lisp_string_create_empty(size_t len) {
   struct lisp_string *str =
       lisp_obj_alloc(&STRING_VTABLE, sizeof(*str) + len + 1);
-  str->length = len;
-  memcpy(str->data, s, len);
-  str->data[len] = 0;
+  str->length = 0;
+  str->data[0] = 0;
+  return str;
+}
 
+struct lisp_string *lisp_string_create(const char *s, size_t len) {
+  struct lisp_string *str = lisp_string_create_empty(len);
+  memcpy(str->data, s, len);
+  str->length = len;
+  str->data[len] = 0;
   return str;
 }
 

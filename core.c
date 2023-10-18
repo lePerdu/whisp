@@ -20,6 +20,7 @@
 #include "eval.h"
 #include "file.h"
 #include "memory.h"
+#include "ports.h"
 #include "printer.h"
 #include "reader.h"
 #include "symbol.h"
@@ -98,7 +99,7 @@ DEF_BUILTIN(core_identical) {
 DEF_BUILTIN(core_make_cons) {
   POP_ARG(cdr);
   POP_ARG(car);
-  BUILTIN_RETURN(lisp_val_from_obj(lisp_cons_create(car, cdr)));
+  BUILTIN_RETURN_OBJ(lisp_cons_create(car, cdr));
 }
 
 DEF_BUILTIN(core_car) {
@@ -130,7 +131,7 @@ DEF_BUILTIN(core_string_concat) {
     str_builder_concat(&builder, s);
   }
 
-  BUILTIN_RETURN(lisp_val_from_obj(str_build(&builder)));
+  BUILTIN_RETURN_OBJ(str_build(&builder));
 
 ERROR:
   str_build(&builder);
@@ -197,7 +198,7 @@ DEF_BUILTIN(core_string_to_symbol) {
   if (is_valid_symbol(name)) {
     struct lisp_symbol *sym = lisp_symbol_create(name, str->length);
     CLEAR_ARGS(1);
-    BUILTIN_RETURN(lisp_val_from_obj(sym));
+    BUILTIN_RETURN_OBJ(sym);
   } else {
     vm_raise_func_exception(vm, "invalid symbol name: '%s'", name);
     return EV_EXCEPTION;
@@ -244,19 +245,19 @@ DEF_BUILTIN_PRED(core_is_function, lisp_val_is_func);
  */
 DEF_BUILTIN(core_function_name) {
   POP_OBJ_ARG(struct lisp_closure, func, lisp_val_is_func);
-  BUILTIN_RETURN(lisp_val_from_obj(func->code->name));
+  BUILTIN_RETURN_OBJ(func->code->name);
 }
 
 DEF_BUILTIN(core_function_source_info) {
   POP_OBJ_ARG(struct lisp_closure, func, lisp_val_is_func);
-  BUILTIN_RETURN(lisp_val_from_obj(func->code->filename));
+  BUILTIN_RETURN_OBJ(func->code->filename);
 }
 
 DEF_BUILTIN_PRED(core_is_atom, lisp_val_is_atom);
 
 DEF_BUILTIN(core_make_atom) {
   POP_ARG(value);
-  BUILTIN_RETURN(lisp_val_from_obj(lisp_atom_create(value)));
+  BUILTIN_RETURN_OBJ(lisp_atom_create(value));
 }
 
 DEF_BUILTIN(core_deref) {
@@ -277,7 +278,7 @@ DEF_BUILTIN(core_make_array) {
   POP_INT_ARG(length);
 
   if (length >= 0) {
-    BUILTIN_RETURN(lisp_val_from_obj(lisp_array_create(length)));
+    BUILTIN_RETURN_OBJ(lisp_array_create(length));
   } else {
     vm_raise_func_exception(vm, "length must be non-negative");
     return EV_EXCEPTION;
@@ -322,41 +323,121 @@ DEF_BUILTIN(core_to_string) {
   REF_ARG(arg, 0);
   struct lisp_string *str = print_str(arg, false);
   CLEAR_ARGS(1);
-  BUILTIN_RETURN(lisp_val_from_obj(str));
+  BUILTIN_RETURN_OBJ(str);
 }
 
-/**
- * Print AST.
- */
-DEF_BUILTIN(core_write) {
-  REF_ARG(arg, 0);
-  display_str(print_str(arg, true));
+DEF_BUILTIN(core_open_input_file) {
+  REF_OBJ_ARG(struct lisp_string, filename, lisp_val_is_string, 0);
+  struct lisp_file_port *port = lisp_input_file_port_open(filename->data);
+  if (port == NULL) {
+    vm_raise_format_exception(vm, "cannot open input file: %s", filename->data);
+    return EV_EXCEPTION;
+  }
+
   CLEAR_ARGS(1);
+  BUILTIN_RETURN_OBJ(port);
+}
+
+DEF_BUILTIN_PRED(core_is_input_file, lisp_val_is_input_file_port);
+
+#define DEF_INPUT_FILE_BUILTIN(name, c_func)                                  \
+  DEF_BUILTIN(name) {                                                         \
+    REF_OBJ_ARG(struct lisp_file_port, port, lisp_val_is_input_file_port, 0); \
+    struct lisp_val output;                                                   \
+    if (c_func(port, &output) == EV_EXCEPTION) {                              \
+      vm_raise_format_exception(vm, "error reading from file");               \
+      return EV_EXCEPTION;                                                    \
+    }                                                                         \
+    CLEAR_ARGS(1);                                                            \
+    BUILTIN_RETURN(output);                                                   \
+  }
+
+DEF_INPUT_FILE_BUILTIN(core_input_file_read_char,
+                       lisp_input_file_port_read_char);
+DEF_INPUT_FILE_BUILTIN(core_input_file_peek_char,
+                       lisp_input_file_port_peek_char);
+DEF_INPUT_FILE_BUILTIN(core_input_file_read_line,
+                       lisp_input_file_port_read_line);
+
+DEF_BUILTIN(core_input_file_read_string) {
+  REF_OBJ_ARG(struct lisp_file_port, port, lisp_val_is_input_file_port, 1);
+  REF_INT_ARG(n, 0);
+  if (n < 0) {
+    vm_raise_format_exception(vm, "string size out of bounds: %ld", n);
+    return EV_EXCEPTION;
+  }
+
+  struct lisp_val output;
+  if (lisp_input_file_port_read_string(port, n, &output) == EV_EXCEPTION) {
+    vm_raise_format_exception(vm, "error reading from file");
+    return EV_EXCEPTION;
+  }
+  CLEAR_ARGS(2);
+  BUILTIN_RETURN(output);
+}
+
+DEF_BUILTIN(core_input_file_close) {
+  POP_OBJ_ARG(struct lisp_file_port, port, lisp_val_is_input_file_port);
+  lisp_file_port_close(port);
   BUILTIN_RETURN(lisp_non_printing());
 }
 
-/**
- * Print values with ' ' separator.
- */
-DEF_BUILTIN(core_newline) {
-  putchar('\n');
-  BUILTIN_RETURN(lisp_non_printing());
-}
-
-/**
- * Print value in non-readable format
- */
-DEF_BUILTIN(core_display) {
-  REF_ARG(arg, 0);
-  display_str(print_str(arg, false));
+DEF_BUILTIN(core_open_output_file) {
+  REF_OBJ_ARG(struct lisp_string, filename, lisp_val_is_string, 0);
+  struct lisp_file_port *port = lisp_output_file_port_open(filename->data);
+  if (port == NULL) {
+    vm_raise_format_exception(vm, "cannot open output file: %s",
+                              filename->data);
+    return EV_EXCEPTION;
+  }
   CLEAR_ARGS(1);
+  BUILTIN_RETURN_OBJ(port);
+}
+
+DEF_BUILTIN_PRED(core_is_output_file, lisp_val_is_output_file_port);
+
+DEF_BUILTIN(core_output_file_write_char) {
+  REF_OBJ_ARG(struct lisp_file_port, port, lisp_val_is_output_file_port, 1);
+  REF_CHAR_ARG(c, 0);
+
+  if (lisp_output_file_port_write_char(port, c) == EV_EXCEPTION) {
+    vm_raise_format_exception(vm, "error writing to file");
+    return EV_EXCEPTION;
+  }
+  CLEAR_ARGS(2);
   BUILTIN_RETURN(lisp_non_printing());
 }
 
-DEF_BUILTIN(core_flush) {
-  fflush(stdout);
+DEF_BUILTIN(core_output_file_write_string) {
+  REF_OBJ_ARG(struct lisp_file_port, port, lisp_val_is_output_file_port, 1);
+  REF_OBJ_ARG(struct lisp_string, str, lisp_val_is_string, 0);
+
+  if (lisp_output_file_port_write_string(port, str) == EV_EXCEPTION) {
+    vm_raise_format_exception(vm, "error writing to file");
+    return EV_EXCEPTION;
+  }
+  CLEAR_ARGS(2);
   BUILTIN_RETURN(lisp_non_printing());
 }
+
+DEF_BUILTIN(core_output_file_flush) {
+  POP_OBJ_ARG(struct lisp_file_port, port, lisp_val_is_output_file_port);
+  if (lisp_output_file_port_flush(port) == EV_EXCEPTION) {
+    vm_raise_format_exception(vm, "error flushing file");
+    return EV_EXCEPTION;
+  }
+  BUILTIN_RETURN(lisp_non_printing());
+}
+
+DEF_BUILTIN(core_output_file_close) {
+  POP_OBJ_ARG(struct lisp_file_port, port, lisp_val_is_output_file_port);
+  lisp_file_port_close(port);
+  BUILTIN_RETURN(lisp_non_printing());
+}
+
+DEF_BUILTIN(core_get_eof_object) { BUILTIN_RETURN(lisp_eof_object()); }
+
+DEF_BUILTIN_PRED(core_is_eof_object, lisp_val_is_eof_object);
 
 DEF_BUILTIN(core_compile_file) {
   REF_OBJ_ARG(struct lisp_string, filename, lisp_val_is_string, 0);
@@ -368,7 +449,7 @@ DEF_BUILTIN(core_compile_file) {
   }
 
   CLEAR_ARGS(1);
-  BUILTIN_RETURN(lisp_val_from_obj(compiled));
+  BUILTIN_RETURN_OBJ(compiled);
 }
 
 /**
@@ -449,7 +530,7 @@ DEF_BUILTIN(core_compile_to_closure) {
   if (cl == NULL) {
     return EV_EXCEPTION;
   }
-  BUILTIN_RETURN(lisp_val_from_obj(cl));
+  BUILTIN_RETURN_OBJ(cl);
 }
 
 DEF_BUILTIN(core_prepare_apply) {
@@ -572,10 +653,39 @@ static const struct builtin_config builtins[] = {
     [INTRINSIC_ARRAY_GET] = {"array-get", core_array_get, 2, false},
     [INTRINSIC_ARRAY_SET] = {"array-set!", core_array_set, 3, false},
 
-    [INTRINSIC_WRITE] = {"write", core_write, 1, false},
-    [INTRINSIC_DISPLAY] = {"display", core_display, 1, false},
-    [INTRINSIC_NEWLINE] = {"newline", core_newline, 0, false},
-    [INTRINSIC_FLUSH] = {"flush", core_flush, 0, false},
+    [INTRINSIC_OPEN_INPUT_FILE] = {"open-input-file", core_open_input_file, 1,
+                                   false},
+    [INTRINSIC_IS_INPUT_FILE] = {"input-file?", core_is_input_file, 1, false},
+    [INTRINSIC_INPUT_FILE_READ_CHAR] = {"input-file-read-char",
+                                        core_input_file_read_char, 1, false},
+    [INTRINSIC_INPUT_FILE_PEEK_CHAR] = {"input-file-peek-char",
+                                        core_input_file_peek_char, 1, false},
+    [INTRINSIC_INPUT_FILE_READ_STRING] = {"input-file-read-string",
+                                          core_input_file_read_string, 2,
+                                          false},
+    [INTRINSIC_INPUT_FILE_READ_LINE] = {"input-file-read-line",
+                                        core_input_file_read_line, 1, false},
+    [INTRINSIC_CLOSE_INPUT_FILE] = {"close-input-file", core_input_file_close,
+                                    1, false},
+
+    [INTRINSIC_OPEN_OUTPUT_FILE] = {"open-output-file", core_open_output_file,
+                                    1, false},
+    [INTRINSIC_IS_OUTPUT_FILE] = {"output-file?", core_is_output_file, 1,
+                                  false},
+    [INTRINSIC_OUTPUT_FILE_WRITE_CHAR] = {"output-file-write-char",
+                                          core_output_file_write_char, 2,
+                                          false},
+    [INTRINSIC_OUTPUT_FILE_WRITE_STRING] = {"output-file-write-string",
+                                            core_output_file_write_string, 2,
+                                            false},
+    [INTRINSIC_OUTPUT_FILE_FLUSH] = {"output-file-flush",
+                                     core_output_file_flush, 1, false},
+    [INTRINSIC_CLOSE_OUTPUT_FILE] = {"close-output-file",
+                                     core_output_file_close, 1, false},
+
+    [INTRINSIC_EOF_OBJECT] = {"eof-object", core_get_eof_object, 0, false},
+    [INTRINSIC_IS_EOF_OBJECT] = {"eof-object?", core_is_eof_object, 1, false},
+
     [INTRINSIC_BACKTRACE] = {"backtrace", core_backtrace, 0, false},
     [INTRINSIC_RUNTIME] = {"runtime", core_runtime, 0, false},
     [INTRINSIC_TIME_MS] = {"time-ms", core_time_ms, 0, false},
@@ -776,4 +886,11 @@ void define_builtins(struct lisp_env *global_env) {
   // TODO Make these constants or part of the reader?
   define_const(global_env, "true", lisp_true());
   define_const(global_env, "false", lisp_false());
+
+  define_const(global_env, "*stdin-port*",
+               lisp_val_from_obj(lisp_input_file_port_create(stdin)));
+  define_const(global_env, "*stdout-port*",
+               lisp_val_from_obj(lisp_output_file_port_create(stdout)));
+  define_const(global_env, "*stderr-port*",
+               lisp_val_from_obj(lisp_output_file_port_create(stderr)));
 }
