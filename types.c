@@ -301,50 +301,61 @@ bool lisp_string_eq(const struct lisp_string *a, const struct lisp_string *b) {
   return memcmp(a->data, b->data, a->length) == 0;
 }
 
+static void str_builder_visit(struct lisp_val v, visit_callback cb, void *ctx) {
+  struct str_builder *builder = lisp_val_as_obj(v);
+  cb(ctx, lisp_val_from_obj(builder->buf));
+}
+
+static const struct lisp_vtable STR_BUILDER_VTABLE = {
+    .name = "string-builder",
+    .alloc_type = LISP_ALLOC_STACK,
+    .visit_children = str_builder_visit,
+    .destroy = lisp_destroy_none,
+};
+
 #define STR_BUILDER_INIT_CAP 8
+
+void str_builder_init_cap_no_preserve(struct str_builder *b, size_t capacity) {
+  b->header.vt = &STR_BUILDER_VTABLE;
+  // Include null byte
+  b->capacity = capacity + 1;
+  b->buf = lisp_string_alloc(b->capacity);
+}
+
+void str_builder_init_no_preserve(struct str_builder *b) {
+  str_builder_init_cap_no_preserve(b, STR_BUILDER_INIT_CAP);
+}
 
 void str_builder_init(struct str_builder *b) {
   str_builder_init_cap(b, STR_BUILDER_INIT_CAP);
 }
 
 void str_builder_init_cap(struct str_builder *b, size_t capacity) {
-  // Include null byte
-  b->capacity = capacity + 1;
-  b->str_atom =
-      lisp_atom_create(lisp_val_from_obj(lisp_string_alloc(b->capacity)));
-  gc_push_root_obj(b->str_atom);
-}
-
-static struct lisp_string *str_builder_get(struct str_builder *b) {
-  return lisp_val_as_obj(lisp_atom_deref(b->str_atom));
+  str_builder_init_cap_no_preserve(b, capacity);
+  gc_push_root_obj(b);
 }
 
 const struct lisp_string *str_builder_get_str(const struct str_builder *b) {
-  return str_builder_get((struct str_builder *)b);
+  return b->buf;
 }
 
-static struct lisp_string *str_builder_ensure_cap(struct str_builder *b,
-                                                  size_t added_size) {
-  struct lisp_string *str = str_builder_get(b);
-  size_t new_size = str->length + added_size;
+static void str_builder_ensure_cap(struct str_builder *b, size_t added_size) {
+  size_t new_size = b->buf->length + added_size;
   if (new_size > b->capacity) {
     // TODO Avoid loop and just do max(cap*2, new_size)?
     do {
       b->capacity *= 2;
     } while (new_size > b->capacity);
     struct lisp_string *new_str = lisp_string_alloc(b->capacity);
-    new_str->length = str->length;
-    memcpy(new_str->data, str->data, str->length);
-    lisp_atom_reset(b->str_atom, lisp_val_from_obj(new_str));
-    return new_str;
-  } else {
-    return str;
+    new_str->length = b->buf->length;
+    memcpy(new_str->data, b->buf->data, b->buf->length);
+    b->buf = new_str;
   }
 }
 
 void str_builder_append(struct str_builder *b, char c) {
-  struct lisp_string *str = str_builder_ensure_cap(b, 1);
-  str->data[str->length++] = c;
+  str_builder_ensure_cap(b, 1);
+  b->buf->data[b->buf->length++] = c;
 }
 
 void str_builder_concat(struct str_builder *b, const struct lisp_string *s) {
@@ -362,9 +373,9 @@ void str_builder_concat_cstr(struct str_builder *b, const char *cstr) {
 }
 
 void str_builder_concat_n(struct str_builder *b, const char *buf, size_t n) {
-  struct lisp_string *str = str_builder_ensure_cap(b, n);
-  memcpy(&str->data[str->length], buf, n);
-  str->length += n;
+  str_builder_ensure_cap(b, n);
+  memcpy(&b->buf->data[b->buf->length], buf, n);
+  b->buf->length += n;
 }
 
 int str_builder_format(struct str_builder *b, const char *format, ...) {
@@ -376,13 +387,12 @@ int str_builder_format(struct str_builder *b, const char *format, ...) {
 }
 
 int str_builder_vformat(struct str_builder *b, const char *format, va_list ap) {
-  struct lisp_string *str = str_builder_get(b);
   // Try to build with existing capacity first
-  char *format_buf = &str->data[str->length];
-  size_t remaining_cap = b->capacity - str->length;
+  char *format_buf = &b->buf->data[b->buf->length];
+  size_t remaining_cap = b->capacity - b->buf->length;
 
   // Call vsnprintf with NULL buffer first to get the required buffer
-  // size, then allocate the string and run it again.
+  // size, then allocate the b->bufing and run it again.
   va_list ap_check_size;
   va_copy(ap_check_size, ap);
   int n_chars = vsnprintf(format_buf, remaining_cap, format, ap_check_size);
@@ -394,28 +404,34 @@ int str_builder_vformat(struct str_builder *b, const char *format, va_list ap) {
 
   // Resize and try again
   // In the equal case snprintf wanted to write an extra NULL byte. Even though
-  // str_builder handles NULL terminators itself, snprintf may not write the
+  // b->buf_builder handles NULL terminators itself, snprintf may not write the
   // full content if it can't write the NULL byte.
   if ((unsigned)n_chars >= remaining_cap) {
     size_t req_cap = n_chars + 1;
-    str = str_builder_ensure_cap(b, req_cap);
-    format_buf = &str->data[str->length];
+    str_builder_ensure_cap(b, req_cap);
+    format_buf = &b->buf->data[b->buf->length];
 
     int n_chars_actual = vsnprintf(format_buf, req_cap, format, ap);
     assert(n_chars_actual == n_chars);
     (void)n_chars_actual;
   }
 
-  str->length += n_chars;
+  b->buf->length += n_chars;
   return n_chars;
 }
 
-struct lisp_string *str_build(struct str_builder *b) {
+struct lisp_string *str_build_no_preserve(struct str_builder *b) {
   // Add in null byte, but don't count in string size
-  struct lisp_string *str = str_builder_ensure_cap(b, 1);
-  str->data[str->length] = 0;
+  str_builder_ensure_cap(b, 1);
+  b->buf->data[b->buf->length] = 0;
+  // TODO Reallocate the string to truncate unused space
 
-  gc_pop_root_expect_obj(b->str_atom);
+  return b->buf;
+}
+
+struct lisp_string *str_build(struct str_builder *b) {
+  struct lisp_string *str = str_build_no_preserve(b);
+  gc_pop_root_expect_obj(b);
   return str;
 }
 

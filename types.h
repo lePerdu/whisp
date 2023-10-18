@@ -303,7 +303,8 @@ static inline const char *lisp_string_as_cstr(const struct lisp_string *s) {
 bool lisp_string_eq(const struct lisp_string *a, const struct lisp_string *b);
 
 struct str_builder {
-  struct lisp_atom *str_atom;
+  struct lisp_obj header;
+  struct lisp_string *buf;
   size_t capacity;
 };
 
@@ -324,6 +325,13 @@ int str_builder_format(struct str_builder *b, const char *format, ...);
 int str_builder_vformat(struct str_builder *b, const char *format, va_list ap);
 
 struct lisp_string *str_build(struct str_builder *b);
+
+// Utilities for embedding str_builder in a GC-managed object
+// TODO Add more generic support for stack-allocated GC roots
+
+void str_builder_init_no_preserve(struct str_builder *b);
+void str_builder_init_cap_no_preserve(struct str_builder *b, size_t capacity);
+struct lisp_string *str_build_no_preserve(struct str_builder *b);
 
 /** Pair of items. Used to represent lists as well. */
 struct lisp_cons {
