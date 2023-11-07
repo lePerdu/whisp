@@ -13,6 +13,6 @@
 (load-file "lib/array.wh")
 (load-file "lib/record.wh")
 (load-file "lib/vector.wh")
-(load-file "lib/ports.wh")
 (load-file "lib/fluid.wh")
+(load-file "lib/ports.wh")
 (load-file "lib/exception.wh")

@@ -1,10 +1,6 @@
-(def! *current-input-port* (atom *stdin-port*))
-(def! *current-output-port* (atom *stdout-port*))
-(def! *current-error-port* (atom *stderr-port*))
-
-(defn! (current-input-port) @*current-input-port*)
-(defn! (current-output-port) @*current-output-port*)
-(defn! (current-error-port) @*current-error-port*)
+(def! current-input-port (make-parameter *stdin-port*))
+(def! current-output-port (make-parameter *stdout-port*))
+(def! current-error-port (make-parameter *stderr-port*))
 
 (defn! (check-opt-arg vararg-list get-default)
   (cond
@@ -66,7 +62,7 @@
 
 (defn! (call-with-cleanup-handler cleanup proc)
   (with-exception-handler
-    ; TODO How should this interact with contiuable exceptions?
+    ; TODO How should this interact with escape continuations?
     ; Currently, it just forbids/ignores them
     (fn (err) (do (cleanup) (raise err)))
     (fn ()
@@ -84,27 +80,17 @@
 (defn! (call-with-output-file filename proc)
   (call-with-port (open-output-file filename) proc))
 
-(defn! (with-input-from-port port proc)
-  (let ((initial-input-port (current-input-port)))
-    (do
-      (reset! *current-input-port* port)
-      (call-with-cleanup-handler
-        (fn () (reset! *current-input-port* initial-input-port))
-        proc))))
-
 (defn! (with-input-from-file filename proc)
-  (with-input-from-port (open-input-file filename) proc))
-
-(defn! (with-output-to-port port proc)
-  (let ((initial-output-port (current-output-port)))
-    (do
-      (reset! *current-output-port* port)
-      (call-with-cleanup-handler
-        (fn () (reset! *current-output-port* initial-output-port))
-        proc))))
+  (call-with-input-file
+    filename
+    (fn (file-port)
+      (parameterize ((current-input-port file-port)) (proc)))))
 
 (defn! (with-output-to-file filename proc)
-  (with-output-to-port (open-output-file filename) proc))
+  (call-with-output-file
+    filename
+    (fn (file-port)
+      (parameterize ((current-output-port file-port)) (proc)))))
 
 ;; Printing
 
