@@ -16,12 +16,12 @@ struct stack_frame {
   /** Offset into the bytecode array of the function. */
   unsigned instr_pointer;
   /**
-   * Current exception handler chain for the stack frame.
+   * Dynamic state of the current stack frame.
    *
    * By default, this is the same as the parent stack frame, but is modified
-   * with `OP_PUSH_EX_HANDLER` and `OP_POP_EX_HANDLER`.
+   * with `OP_SET_DYNAMIC_STATE`.
    */
-  struct lisp_val ex_handler_chain;
+  struct lisp_val dynamic_state;
 };
 
 struct call_stack {
@@ -38,36 +38,25 @@ struct lisp_vm {
   struct call_stack call_frames;
   struct val_array stack;
 
-  bool has_exception;
+  struct lisp_val primitive_error_handler;
+  bool is_fatal_error;
   struct lisp_val current_exception;
 };
 
 struct lisp_vm *vm_create(struct lisp_env *global_env);
 
-/**
- * Return whether there is an active exception.
- * This is needed since currently NIL can be raised as an exception.
- * TODO Collapse all of these into a single vm_current_exception() which returns
- * a pointer to the exception (returning NULL if there is none and allowing it
- * to be overwritten).
- */
-static inline bool vm_has_exception(const struct lisp_vm *vm) {
-  return vm->has_exception;
-}
-
 static inline struct lisp_val vm_current_exception(const struct lisp_vm *vm) {
-  assert(vm->has_exception);
   return vm->current_exception;
 }
 
 static inline void vm_raise_exception(struct lisp_vm *vm,
                                       struct lisp_val exception) {
-  vm->has_exception = true;
+  vm->is_fatal_error = false;
   vm->current_exception = exception;
 }
 
 static inline void vm_clear_exception(struct lisp_vm *vm) {
-  vm->has_exception = false;
+  vm->is_fatal_error = false;
   vm->current_exception = LISP_VAL_NIL;
 }
 
@@ -105,6 +94,7 @@ static inline unsigned vm_current_frame_index(const struct lisp_vm *vm) {
 }
 
 struct stack_frame *vm_current_frame(struct lisp_vm *vm);
+struct stack_frame *vm_parent_frame(struct lisp_vm *vm);
 
 /**
  * Create a new stack frame with a given execution environment.
@@ -127,17 +117,6 @@ void vm_stack_frame_return(struct lisp_vm *vm);
  * Return from a specified frame.
  */
 void vm_stack_frame_return_from(struct lisp_vm *vm, unsigned frame_index);
-
-/**
- * Register exception handler point in the current function.
- */
-void vm_push_ex_handler(struct lisp_vm *vm, struct lisp_closure *handler);
-
-/**
- * Pop and return the exception handler for the current frame. Return `NULL` if
- * there is none.
- */
-struct lisp_closure *vm_pop_ex_handler(struct lisp_vm *vm);
 
 /**
  * Jump to a set exception handler and setup for running it:

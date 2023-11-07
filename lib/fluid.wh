@@ -1,0 +1,50 @@
+; TODO Use a better data structure for tracking dynamic state
+
+; Wrapper around set-dynamic-state! to make it useable with abstractions.
+; By itself, it can't be wrapped in functions as it would only apply to the
+; wrapper function.
+(defn! (with-dynamic-state new-state thunk)
+  (do
+    (set-dynamic-state! new-state)
+    (thunk)))
+
+; "Fluid"-based wrapper on dynamic-state. All dynamic state operations
+; should go through these
+
+(defrecord! <fluid>
+  make-fluid
+  fluid?
+  ; TODO Force specifying a name for debugging?
+  ; (can wrap with a macro to avoid duplication)
+  (initial _fluid-initial))
+
+; TODO Enforce types?
+
+(defn! (with-fluid fluid value thunk)
+  (with-dynamic-state
+    (cons (cons fluid value) (dynamic-state))
+    thunk))
+
+(defn! (fluid-get fluid)
+  (let-if (pair (assq fluid (dynamic-state)))
+    (cdr pair)
+    (_fluid-initial fluid)))
+
+(defn! (make-parameter initial)
+  (let ((param-fluid (make-fluid initial)))
+    (fn args
+      ; If any argument is passed, returns the fluid directly.
+      ; Otherwise, returns the current value
+      ; (users should only call with no arguments)
+      (if (null? args)
+        (fluid-get param-fluid)
+        param-fluid))))
+
+(defmacro! (parameterize bindings body)
+  (let-if-cons ((binding . rest) bindings)
+    `(with-fluid
+      (~(car binding) nil)  ; Call with argument to extract the raw fluid
+      ~(cadr binding)
+      (fn ()
+        (parameterize ~rest ~body)))
+    `(let () ~body)))

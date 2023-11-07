@@ -78,8 +78,6 @@ static enum eval_status eval_print_many(struct lisp_vm *vm,
       }
       (void)vm_stack_pop(vm);
     } else {
-      assert(vm_has_exception(vm));
-
       struct lisp_string *printed_exc =
           print_str(vm_current_exception(vm), false);
       vm_clear_exception(vm);
@@ -107,7 +105,6 @@ static struct lisp_val create_argv_list(int argc, char *argv[]) {
 
 static struct lisp_vm *setup_vm(int argc, char **argv) {
   init_global_compile_state();
-  init_global_builtins();
 
   struct lisp_vm *vm = vm_create(lisp_env_create());
   // Save the VM permenantly

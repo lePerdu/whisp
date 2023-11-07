@@ -521,6 +521,37 @@ DEF_BUILTIN(core_get_macro_fn) {
   }
 }
 
+// TODO Make these dynamic state functions bytecode instructions?
+
+DEF_BUILTIN(core_dynamic_state) {
+  BUILTIN_RETURN(vm_current_frame(vm)->dynamic_state);
+}
+
+DEF_BUILTIN(core_set_dynamic_state) {
+  POP_ARG(new_state);
+  // TODO This is a bit of a hack to make dynamic state work: This
+  // primitive function sets the dynamic state of the _parent_ frame,
+  // since setting it for the current frame isn't very useful.  Seems
+  // like the real solution is something like dynamic-wind (which
+  // might be more efficient anyway since right now each stack frame
+  // contains a reference to the dynamic state)
+  vm_parent_frame(vm)->dynamic_state = new_state;
+  BUILTIN_RETURN(lisp_non_printing());
+}
+
+DEF_BUILTIN(core_set_primitive_error_handler) {
+  POP_OBJ_ARG(struct lisp_closure, handler, lisp_val_is_func);
+  vm->primitive_error_handler = lisp_val_from_obj(handler);
+  BUILTIN_RETURN(lisp_non_printing());
+}
+
+DEF_BUILTIN(core_abort) {
+  POP_OBJ_ARG(struct lisp_string, message, lisp_val_is_string);
+  vm_raise_exception(vm, lisp_val_from_obj(message));
+  vm->is_fatal_error = true;
+  return EV_EXCEPTION;
+}
+
 DEF_BUILTIN(core_compile_to_closure) {
   REF_ARG(ast, 0);
   struct lisp_closure *cl =
@@ -695,6 +726,14 @@ static const struct builtin_config builtins[] = {
     [INTRINSIC_DISASSEMBLE] = {"disassemble", core_disassemble, 1, false},
     [INTRINSIC_GET_MACRO_FN] = {"macro-fn", core_get_macro_fn, 1, false},
 
+    [INTRINSIC_DYNAMIC_STATE] = {"dynamic-state", core_dynamic_state, 0, false},
+    [INTRINSIC_SET_DYNAMIC_STATE] = {"set-dynamic-state!",
+                                     core_set_dynamic_state, 1, false},
+    [INTRINSIC_SET_PRIMITIVE_ERROR_HANDLER] = {"set-primitive-error-handler!",
+                                               core_set_primitive_error_handler,
+                                               1, false},
+    [INTRINSIC_ABORT] = {"abort", core_abort, 1, false},
+
     // These are intrinsics, but not exposed directly as functions
     [INTRINSIC_PERPARE_APPLY] = {NULL, core_prepare_apply, 2, false},
     [INTRINSIC_COMPILE_TO_CLOSURE] = {NULL, core_compile_to_closure, 1, false},
@@ -757,24 +796,6 @@ static struct lisp_closure *make_builtin_eval(void) {
   return lisp_closure_create(chunk, 0);
 }
 
-static struct lisp_closure *make_builtin_with_exception_handler(void) {
-  struct code_chunk *chunk = chunk_create();
-  chunk->req_arg_count = 2;  // handler, thunk
-  chunk_append_byte(chunk, OP_GET_FP);
-  chunk_append_byte(chunk, 0);  // handler
-  chunk_append_byte(chunk, OP_PUSH_EX_HANDLER);
-  chunk_append_byte(chunk, OP_GET_FP);
-  chunk_append_byte(chunk, 1);  // thunk
-  // Call + return instead of tail call to preserve the exception handler state
-  chunk_append_byte(chunk, OP_CALL);
-  chunk_append_byte(chunk, 0);  // no args
-  chunk_append_byte(chunk, OP_RETURN);
-
-  set_builtin_name(chunk, "with-exception-handler");
-
-  return lisp_closure_create(chunk, 0);
-}
-
 static struct lisp_closure *make_builtin_with_escape_continuation(void) {
   struct code_chunk *esc_chunk = chunk_create();
   esc_chunk->req_arg_count = 1;
@@ -782,7 +803,7 @@ static struct lisp_closure *make_builtin_with_escape_continuation(void) {
 
   chunk_append_byte(esc_chunk, OP_GET_UPVALUE);
   chunk_append_byte(esc_chunk, 0);
-  chunk_append_byte(esc_chunk, OP_ESCAPE_FRAME);
+  chunk_append_byte(esc_chunk, OP_RETURN_FROM_FRAME);
 
   struct code_chunk *chunk = chunk_create();
   chunk_append_byte(chunk, OP_ALLOC_CLOSURE);
@@ -809,35 +830,6 @@ static struct lisp_closure *make_builtin_with_escape_continuation(void) {
   return lisp_closure_create(chunk, 0);
 }
 
-static struct lisp_closure *make_builtin_raise(void) {
-  struct code_chunk *chunk = chunk_create();
-  chunk->req_arg_count = 1;  // Exception
-  unsigned start_pos = chunk_append_byte(chunk, OP_GET_FP);
-  // Copy the exception so it can be passed to the next handler if necessary
-  chunk_append_byte(chunk, 0);  // Exception
-  chunk_append_byte(chunk, OP_CALL_EX_HANDLER);
-  chunk_append_byte(chunk, OP_POP);  // Ignore return
-  // Re-raise by simply restarting the function
-  chunk_append_byte(chunk, OP_BRANCH);
-  unsigned branch_pos = chunk->bytecode.size;
-  int16_t branch_offset = (int16_t)start_pos - (int16_t)branch_pos;
-  chunk_append_short(chunk, branch_offset);
-
-  set_builtin_name(chunk, "raise");
-  return lisp_closure_create(chunk, 0);
-}
-
-static struct lisp_closure *make_builtin_raise_continuable(void) {
-  struct code_chunk *chunk = chunk_create();
-  chunk->req_arg_count = 1;  // Exception
-  // Exception is already in proper position for the call
-  chunk_append_byte(chunk, OP_CALL_EX_HANDLER);
-  chunk_append_byte(chunk, OP_RETURN);
-
-  set_builtin_name(chunk, "raise-continuable");
-  return lisp_closure_create(chunk, 0);
-}
-
 enum eval_status call_intrinsic(uint8_t index, struct lisp_vm *vm) {
   assert(index < BUILTIN_COUNT);
   return builtins[index].c_func(vm);
@@ -856,18 +848,6 @@ static void define_cl(struct lisp_env *env, struct lisp_closure *cl) {
   lisp_env_set(env, name, lisp_val_from_obj(cl));
 }
 
-static struct lisp_closure *BUILTIN_RAISE = NULL;
-
-void init_global_builtins(void) {
-  BUILTIN_RAISE = make_builtin_raise();
-  gc_push_root_obj(BUILTIN_RAISE);
-}
-
-struct lisp_closure *get_builtin_raise(void) {
-  assert(BUILTIN_RAISE != NULL);
-  return BUILTIN_RAISE;
-}
-
 void define_builtins(struct lisp_env *global_env) {
   for (unsigned i = INTRINSIC_FN_START; i < INTRINSIC_FN_END; i++) {
     const struct builtin_config *b = &builtins[i];
@@ -878,9 +858,6 @@ void define_builtins(struct lisp_env *global_env) {
   // Special builtins
   define_cl(global_env, make_builtin_apply());
   define_cl(global_env, make_builtin_eval());
-  define_cl(global_env, BUILTIN_RAISE);
-  define_cl(global_env, make_builtin_raise_continuable());
-  define_cl(global_env, make_builtin_with_exception_handler());
   define_cl(global_env, make_builtin_with_escape_continuation());
 
   // TODO Make these constants or part of the reader?

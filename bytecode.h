@@ -137,26 +137,19 @@ enum bytecode_op {
   OP_BRANCH_IF_FALSE,
 
   /**
-   * Push an exception handler function (top of the stack) to the handler stack.
-   */
-  OP_PUSH_EX_HANDLER,
-
-  /**
-   * Pop an exception handler from the handler stack and call it (as in
-   * `OP_CALL`), passing a single argument.
-   */
-  OP_CALL_EX_HANDLER,
-
-  /**
    * Push the current frame index onto the stack.
+   *
+   * `get-current-frame`
    */
   OP_GET_CURRENT_FRAME,
 
   /**
    * Pop a frame index off the stack, and act as if a `OP_RETURN` was executed
    * from that stack frame.
+   *
+   * `return-from-frame`
    */
-  OP_ESCAPE_FRAME,
+  OP_RETURN_FROM_FRAME,
 };
 
 struct bytecode_array {

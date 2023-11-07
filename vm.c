@@ -15,7 +15,7 @@
 static void stack_frame_visit(struct stack_frame *rec, visit_callback cb,
                               void *ctx) {
   cb(ctx, lisp_val_from_obj(rec->func));
-  cb(ctx, rec->ex_handler_chain);
+  cb(ctx, rec->dynamic_state);
 }
 
 #define CALL_STACK_EMPTY \
@@ -53,9 +53,7 @@ static void vm_visit_children(struct lisp_val v, visit_callback cb, void *ctx) {
     cb(ctx, vm->stack.data[i]);
   }
 
-  if (vm->has_exception) {
-    cb(ctx, vm->current_exception);
-  }
+  cb(ctx, vm->current_exception);
 }
 
 static void vm_destroy(struct lisp_val v) {
@@ -77,7 +75,8 @@ struct lisp_vm *vm_create(struct lisp_env *global_env) {
   vm->global_env = global_env;
   vm->call_frames = CALL_STACK_EMPTY;
   vm->stack = VAL_ARRAY_EMPTY;
-  vm->has_exception = false;
+  vm->primitive_error_handler = LISP_VAL_NIL;
+  vm->is_fatal_error = false;
   vm->current_exception = LISP_VAL_NIL;
   gc_pop_root_expect_obj(global_env);
   return vm;
@@ -95,6 +94,14 @@ inline struct stack_frame *vm_current_frame(struct lisp_vm *vm) {
     return NULL;
   } else {
     return call_stack_top(&vm->call_frames);
+  }
+}
+
+struct stack_frame *vm_parent_frame(struct lisp_vm *vm) {
+  if (vm->call_frames.size <= 1) {
+    return NULL;
+  } else {
+    return &vm->call_frames.data[vm->call_frames.size - 2];
   }
 }
 
@@ -152,8 +159,8 @@ void vm_create_stack_frame(struct lisp_vm *vm, struct lisp_closure *func,
           .frame_pointer = new_fp,
           .func = func,
           .instr_pointer = 0,
-          .ex_handler_chain =
-              cur_frame != NULL ? cur_frame->ex_handler_chain : LISP_VAL_NIL,
+          .dynamic_state =
+              cur_frame != NULL ? cur_frame->dynamic_state : LISP_VAL_NIL,
       });
 }
 
@@ -184,27 +191,6 @@ void vm_stack_frame_return_from(struct lisp_vm *vm, unsigned frame_index) {
   }
 
   vm_stack_push(vm, return_val);
-}
-
-void vm_push_ex_handler(struct lisp_vm *vm, struct lisp_closure *handler) {
-  struct stack_frame *frame = vm_current_frame(vm);
-  frame->ex_handler_chain = lisp_val_from_obj(
-      lisp_cons_create(lisp_val_from_obj(handler), frame->ex_handler_chain));
-}
-
-/**
- * Pop and return the exception handler for the current frame. Return `NULL` if
- * there is none.
- */
-struct lisp_closure *vm_pop_ex_handler(struct lisp_vm *vm) {
-  struct stack_frame *frame = vm_current_frame(vm);
-  if (lisp_val_is_nil(frame->ex_handler_chain)) {
-    return NULL;
-  } else {
-    struct lisp_cons *chain = lisp_val_as_obj(frame->ex_handler_chain);
-    frame->ex_handler_chain = chain->cdr;
-    return lisp_val_as_obj(chain->car);
-  }
 }
 
 void vm_stack_frame_unwind(struct lisp_vm *vm) {

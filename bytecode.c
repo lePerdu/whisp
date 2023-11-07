@@ -258,17 +258,11 @@ static int disassemble_instr(const struct code_chunk *chunk, unsigned offset) {
     case OP_BRANCH_IF_FALSE:
       return disassemble_branch(chunk, OP_BRANCH_IF_FALSE, "branch-if-false",
                                 offset);
-    case OP_PUSH_EX_HANDLER:
-      printf("(push-ex-handler)\n");
-      return 1;
-    case OP_CALL_EX_HANDLER:
-      printf("(call-ex-handler)\n");
-      return 1;
     case OP_GET_CURRENT_FRAME:
       printf("(get-current-frame)\n");
       return 1;
-    case OP_ESCAPE_FRAME:
-      printf("(escape-frame)\n");
+    case OP_RETURN_FROM_FRAME:
+      printf("(return-from-frame)\n");
       return 1;
   }
 

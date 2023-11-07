@@ -270,32 +270,18 @@ LOOP:
       uint8_t index = chunk_read_byte(code, ip);
       enum eval_status res = call_intrinsic(index, vm);
       if (res == EV_EXCEPTION) {
-        goto HANDLE_EXCEPTION;
+        if (vm->is_fatal_error) {
+          goto HANDLE_FATAL_ERROR;
+        } else {
+          goto HANDLE_EXCEPTION;
+        }
       }
       goto LOOP;
-    }
-    case OP_PUSH_EX_HANDLER: {
-      struct lisp_closure *handler = check_call(vm, vm_stack_pop(vm), 1);
-      if (handler == NULL) {
-        goto HANDLE_FATAL_ERROR;
-      }
-      vm_push_ex_handler(vm, handler);
-      goto LOOP;
-    }
-    case OP_CALL_EX_HANDLER: {
-      struct lisp_closure *handler = vm_pop_ex_handler(vm);
-      if (handler == NULL) {
-        // No more handlers, so forward the error
-        vm_raise_exception(vm, vm_stack_pop(vm));
-        goto HANDLE_FATAL_ERROR;
-      }
-      vm_create_stack_frame(vm, handler, 1);
-      goto LOOP_NEW_FRAME;
     }
     case OP_GET_CURRENT_FRAME:
       vm_stack_push(vm, lisp_val_from_int(vm_current_frame_index(vm)));
       goto LOOP;
-    case OP_ESCAPE_FRAME: {
+    case OP_RETURN_FROM_FRAME: {
       struct lisp_val frame_val = vm_stack_pop(vm);
       if (!lisp_val_is_int(frame_val)) {
         vm_raise_format_exception(vm, "escape frame must be of type int");
@@ -333,10 +319,26 @@ HANDLE_FATAL_ERROR:
   return EV_EXCEPTION;
 
 HANDLE_EXCEPTION : {
-  // Manual call to the same `raise` function exposed to user code
+  // Manual call to the global error handler
+  // TODO Can this process be simplified since this sort of error can only be
+  // generated internally?
+  // TODO Change error calling-convention to pass a (well-known) error name so
+  // the handler can be smarter
+  if (lisp_val_is_nil(vm->primitive_error_handler)) {
+    goto HANDLE_FATAL_ERROR;
+  }
+  const int arg_count = 1;
+  struct lisp_closure *func =
+      check_call(vm, vm->primitive_error_handler, arg_count);
+  if (func == NULL) {
+    // Missing/invalid handler
+    goto HANDLE_FATAL_ERROR;
+  }
+
+  // Clear the exception now that the function is checked
   vm_stack_push(vm, vm_current_exception(vm));
   vm_clear_exception(vm);
-  vm_create_stack_frame(vm, get_builtin_raise(), 1);
+  vm_create_stack_frame(vm, func, arg_count);
   goto LOOP_NEW_FRAME;
 }
 }

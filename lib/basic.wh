@@ -72,10 +72,11 @@
 (defn! (false? x) (if x false true))
 (def! not false?)
 
-; TODO Make error wrap the value somehow
-(def! error raise)
+; Preliminary definition of error until exception handling functionality is in place
+(defn! (error message . irritants) (abort message))
 
-(def! syntax-error error)
+; TODO Should this be more sophisticated?
+(defn! (syntax-error message) (abort message))
 
 ; TODO Proper, native support for this
 (def! gensym

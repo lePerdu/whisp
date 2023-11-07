@@ -1,0 +1,45 @@
+(defgroup! parameter
+  (deftest! initial-value-if-unbound
+    (def! radix (make-parameter 10))
+	(assert= 10 (radix)))
+  (deftest! local-value-in-parameterize
+    (def! radix (make-parameter 10))
+	(assert=
+	  16
+	  (parameterize ((radix 16)) (radix))))
+  (deftest! outer-scope-function-uses-dynamic-value
+    (def! radix (make-parameter 10))
+    (defn! (twice-radix) (* 2 (radix)))
+	(assert=
+	  32
+	  (parameterize ((radix 16)) (twice-radix))))
+  (deftest! closure-inside-parameterize-uses-dynamic-value
+    (def! radix (make-parameter 10))
+	(def! twice-radix
+	  (parameterize ((radix 16))
+	    (fn () (* 2 (radix)))))
+    (assert= 20 (twice-radix)))
+  (deftest! uses-innermost-binding
+    (def! radix (make-parameter 10))
+	(assert=
+	  2
+	  (parameterize ((radix 16))
+	    (parameterize ((radix 2))
+		  (radix)))))
+  (deftest! uses-last-binding-in-single-parameterize
+    (def! radix (make-parameter 10))
+	(assert=
+	  2
+	  (parameterize ((radix 16) (radix 2))
+        (radix))))
+
+  (deftest! multiple-parameters-are-distinct
+    (def! radix (make-parameter 10))
+	(def! width (make-parameter 70))
+	(assert= 70 (parameterize ((radix 16)) (width))))
+  (deftest! aliased-parameter-works
+    (def! radix (make-parameter 10))
+	(def! also-radix radix)
+	(assert= 10 (also-radix))
+	(assert= 16 (parameterize ((radix 16)) (also-radix)))
+	(assert= 2 (parameterize ((also-radix 2)) (radix)))))
