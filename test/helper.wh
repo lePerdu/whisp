@@ -86,6 +86,10 @@
   `(if (not ~expr)
     (assert-make-error '~expr ~(cons 'list extra))))
 
+(defmacro! (assert-not expr . extra)
+  `(if ~expr
+    (assert-make-error '(not ~expr) ~(cons 'list extra))))
+
 (defmacro! (assert= expected actual)
   `(assert (= ~expected ~actual) 'expected ~expected 'got ~actual))
 

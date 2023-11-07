@@ -1,0 +1,47 @@
+(defgroup! record
+   (deftest! empty-record-allowed
+    (defrecord! <empty>
+      make-empty-rec
+      empty-rec?)
+    ; Just make sure it doesn't error
+    (make-empty-rec))
+
+  (deftest! pred-maches-constructed
+    (defrecord! <empty>
+      make-empty-rec
+      empty-rec?)
+    (assert (empty-rec? (make-empty-rec))))
+  (deftest! pred-does-not-match-other-types
+    (defrecord! <empty>
+      make-empty-rec
+      empty-rec?)
+    (assert-not (empty-rec? 0))
+    (assert-not (empty-rec? "empty"))
+    (assert-not (empty-rec? (array 1 2 3))))
+
+  (deftest! records-types-with-same-name-are-unique
+    (defrecord! <empty>
+      make-empty-1
+      empty-1?)
+    (defrecord! <empty>
+      make-empty-2
+      empty-2?)
+    (assert-not (empty-1? (make-empty-2)))
+    (assert-not (empty-2? (make-empty-1))))
+
+  (deftest! get-field-after-construction
+    (defrecord! <box>
+      make-box
+      box?
+      (value get-box))
+    (assert= 5 (get-box (make-box 5))))
+
+  (deftest! set-does-not-mutate
+    (defrecord! <box>
+      make-box
+      box?
+      (value get-box set-box))
+    (def! b1 (make-box 5))
+    (def! b2 (set-box b1 6))
+    (assert= 5 (get-box b1))
+    (assert= 6 (get-box b2))))
