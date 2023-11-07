@@ -466,7 +466,7 @@ DEF_BUILTIN(core_backtrace) {
   struct list_builder builder;
   list_builder_init(&builder);
 
-  for (unsigned i = 0; i < vm->call_frames.size; i++) {
+  for (int i = vm->call_frames.size - 1; i >= 0; i--) {
     list_builder_append(&builder,
                         lisp_val_from_obj(vm->call_frames.data[i].func));
   }
