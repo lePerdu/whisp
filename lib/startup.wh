@@ -1,0 +1,6 @@
+; TODO Proper argument parsing and error reporting
+(let ((arg-count (count *command-line*)))
+  (cond
+    ((= arg-count 1) (repl))
+	((= arg-count 2) (load (cadr *command-line*)))
+	(else (error "too many command-line arguments"))))

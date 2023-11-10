@@ -119,7 +119,7 @@ static struct lisp_vm *setup_vm(int argc, char **argv) {
   return vm;
 }
 
-#define PRELUDE_FILENAME (WHISP_LIB_DIR "/prelude.wh")
+#define STARTUP_FILENAME (WHISP_LIB_DIR "/boot.wh")
 
 static enum eval_status load_file(struct lisp_vm *vm, const char *filename) {
   struct lisp_closure *compiled =
@@ -144,7 +144,9 @@ static void run_file(struct lisp_vm *vm, const char *filename) {
   }
 }
 
-static void load_prelude(struct lisp_vm *vm) { run_file(vm, PRELUDE_FILENAME); }
+static void load_startup_file(struct lisp_vm *vm) {
+  run_file(vm, STARTUP_FILENAME);
+}
 
 static void rep(struct lisp_vm *vm, const char *input) {
   struct parse_output *parsed =
@@ -177,37 +179,15 @@ static void repl(struct lisp_vm *vm) {
   }
 }
 
-enum prog_mode {
-  PROG_REPL,
-  PROG_FILE,
-};
-
 int main(int argc, char *argv[]) {
-  enum prog_mode mode = PROG_REPL;
-  const char *filename = NULL;
-
-  // TODO Proper argument parsing
-  int consumed_args = 1;
-  if (argc >= 2) {
-    mode = PROG_FILE;
-    filename = argv[1];
-    consumed_args++;
-  }
-
-  argc -= consumed_args;
-  argv += consumed_args;
-
   struct lisp_vm *vm = setup_vm(argc, argv);
-  load_prelude(vm);
 
-  switch (mode) {
-    case PROG_REPL:
-      repl(vm);
-      break;
-    case PROG_FILE: {
-      run_file(vm, filename);
-      break;
-    }
+  // TODO Proper argument parsing?
+  if (argc >= 2 && strcmp(argv[1], "-q") == 0) {
+    // Simple REPL without loading the prelude
+    repl(vm);
+  } else {
+    load_startup_file(vm);
   }
 
   return 0;

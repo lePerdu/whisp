@@ -1,0 +1,27 @@
+(def! *prompt* "> ")
+
+(defn! (repl-handle-exception ex)
+  (do
+    (println "exception:" (exception->string ex))
+    (print-backtrace (backtrace))))
+
+(defn! (eval-print line)
+  (cond
+    ((eof-object? line)
+      (do (newline) (exit)))
+    ((string-null? (string-trim line)) nil)
+    (else
+      (let*
+        ((closure (compile-string "stdin" line))
+         (result (closure))
+         (result-string (write->string result)))
+        (println result-string)))))
+
+(defn! (repl)
+  (do
+    (print *prompt*)
+    (flush-output-port)
+    (guard
+      (ex (else (repl-handle-exception ex)))
+      (eval-print (read-line)))
+    (repl)))

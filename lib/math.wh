@@ -148,4 +148,4 @@
     (error "sqrt: cannot be negative")
     (sqrt-iter (real x)))))
 
-(load-file "lib/ratio.wh")
+(load-library "ratio.wh")
