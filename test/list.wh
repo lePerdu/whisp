@@ -144,4 +144,18 @@
     (deftest! numeric-list-is-sorted
       (assert-equal
         (list 1 11 18 25 25 25 28 41 43 44)
-        (sort compare-num (list 25 43 44 28 1 25 11 41 25 18))))))
+        (sort compare-num (list 25 43 44 28 1 25 11 41 25 18)))))
+
+  (defgroup! intersperse
+    (deftest! no-op-for-empty-list
+      (assert= nil (intersperse 5 nil)))
+    (deftest! no-op-for-singleton-list
+      (assert-equal (list 1) (intersperse 5 (list 1))))
+    (deftest! intersperses-in-middle-of-longer-list
+      (assert-equal
+        (list 1 #\a 2 #\a 3 #\a 4)
+        (intersperse #\a (list 1 2 3 4))))
+    (deftest! does-not-flatten-list
+      (assert-equal
+        (list 1 (list #\a #\b) 2 (list #\a #\b) 3)
+        (intersperse (list #\a #\b) (list 1 2 3))))))

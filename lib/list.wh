@@ -135,3 +135,8 @@
          (right (cdr halves)))
         (merge compare (sort compare left) (sort compare right))))))
 
+(defn! (intersperse x l)
+  (cond
+    ((null? l) nil)
+    ((null? (cdr l)) l)
+    (else (list* (car l) x (intersperse x (cdr l))))))
