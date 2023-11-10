@@ -49,6 +49,11 @@ enum bytecode_op {
   OP_SET_GLOBAL,
 
   /**
+   * Duplicate the top of the stack.
+   */
+  OP_DUP,
+
+  /**
    * Pops a value off the stack.
    */
   OP_POP,

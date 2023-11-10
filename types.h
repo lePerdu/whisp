@@ -169,15 +169,6 @@ static inline struct lisp_val lisp_val_from_bool(bool x) {
 }
 
 /**
- * Object returned by forms of unspecified return to indicate that the REPL
- * should not print their result.
- *
- * E.g. `def!`, `display`
- */
-struct lisp_val lisp_non_printing(void);
-bool lisp_is_non_printing(struct lisp_val v);
-
-/**
  * Special object to mark uninitialized value.
  */
 struct lisp_val lisp_uninitialized(void);

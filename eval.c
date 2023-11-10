@@ -153,6 +153,9 @@ LOOP:
       lisp_env_binding_set_value(binding, vm_stack_pop(vm));
       goto LOOP;
     }
+    case OP_DUP:
+      vm_stack_push(vm, vm_stack_top(vm));
+      goto LOOP;
     case OP_POP:
       vm_stack_pop(vm);
       goto LOOP;

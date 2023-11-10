@@ -336,6 +336,11 @@ static enum compile_res emit_const(struct compiler_ctx *ctx,
   return COMP_SUCCESS;
 }
 
+static void emit_dup(struct compiler_ctx *ctx) {
+  emit_instr(ctx, OP_DUP);
+  inc_stack_size(ctx, 1);
+}
+
 static void emit_pop(struct compiler_ctx *ctx) {
   emit_instr(ctx, OP_POP);
   inc_stack_size(ctx, -1);
@@ -1022,13 +1027,14 @@ static enum compile_res compile_top_level_def(struct compiler_ctx *ctx,
     return res;
   }
 
+  // Copy for return vaule
+  emit_dup(ctx);
+
   res = emit_set_global(ctx, resolved.value.global_binding);
   if (res == COMP_FAILED) {
     return res;
   }
 
-  // Return value
-  emit_const(ctx, lisp_non_printing());
   emit_return_if_tail_pos(ctx);
   return COMP_SUCCESS;
 }
@@ -1054,7 +1060,7 @@ static enum compile_res compile_local_def(struct compiler_ctx *ctx,
   // Still need to return a value so that the stack is in the proper state.
   // Probably the only way to avoid it would be a separate pass to collect a
   // strip out `def!`s.
-  emit_const(ctx, lisp_non_printing());
+  emit_const(ctx, LISP_VAL_NIL);
   emit_return_if_tail_pos(ctx);
   return COMP_SUCCESS;
 }
@@ -1118,7 +1124,7 @@ static enum compile_res compile_defsyntax(struct compiler_ctx *ctx,
   }
 
   // Need to emit something for the produced code
-  emit_const(ctx, lisp_non_printing());
+  emit_const(ctx, LISP_VAL_NIL);
   emit_return_if_tail_pos(ctx);
   return COMP_SUCCESS;
 }

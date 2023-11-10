@@ -197,6 +197,9 @@ static int disassemble_instr(const struct code_chunk *chunk, unsigned offset) {
     }
       printf("(set-global)\n");
       return 1;
+    case OP_DUP:
+      printf("(dup)\n");
+      return 1;
     case OP_POP:
       printf("(pop)\n");
       return 1;

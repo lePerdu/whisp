@@ -65,25 +65,6 @@ const char *lisp_val_type_name(struct lisp_val v) {
 // passed to it. = lisp_val_from_obj(NULL)
 const struct lisp_val LISP_VAL_NIL = {TAG_OBJ};
 
-static const struct lisp_vtable NON_PRINTING_VTABLE = {
-    .alloc_type = LISP_ALLOC_CONST,
-    .name = "non-printing",
-    .visit_children = lisp_visit_none,
-    .destroy = lisp_destroy_none,
-};
-
-struct lisp_val lisp_non_printing(void) {
-  static struct lisp_obj NON_PRINTING_VAL = {
-      .vt = &NON_PRINTING_VTABLE,
-  };
-
-  return lisp_val_from_obj(&NON_PRINTING_VAL);
-}
-
-bool lisp_is_non_printing(struct lisp_val v) {
-  return lisp_val_vtable(v) == &NON_PRINTING_VTABLE;
-}
-
 static const struct lisp_vtable UNINIT_VTABLE = {
     .name = "uninitialized",
     .alloc_type = LISP_ALLOC_CONST,

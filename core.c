@@ -379,7 +379,7 @@ DEF_BUILTIN(core_input_file_read_string) {
 DEF_BUILTIN(core_input_file_close) {
   POP_OBJ_ARG(struct lisp_file_port, port, lisp_val_is_input_file_port);
   lisp_file_port_close(port);
-  BUILTIN_RETURN(lisp_non_printing());
+  BUILTIN_RETURN(LISP_VAL_NIL);
 }
 
 DEF_BUILTIN(core_open_output_file) {
@@ -405,7 +405,7 @@ DEF_BUILTIN(core_output_file_write_char) {
     return EV_EXCEPTION;
   }
   CLEAR_ARGS(2);
-  BUILTIN_RETURN(lisp_non_printing());
+  BUILTIN_RETURN(LISP_VAL_NIL);
 }
 
 DEF_BUILTIN(core_output_file_write_string) {
@@ -417,7 +417,7 @@ DEF_BUILTIN(core_output_file_write_string) {
     return EV_EXCEPTION;
   }
   CLEAR_ARGS(2);
-  BUILTIN_RETURN(lisp_non_printing());
+  BUILTIN_RETURN(LISP_VAL_NIL);
 }
 
 DEF_BUILTIN(core_output_file_flush) {
@@ -426,13 +426,13 @@ DEF_BUILTIN(core_output_file_flush) {
     vm_raise_format_exception(vm, "error flushing file");
     return EV_EXCEPTION;
   }
-  BUILTIN_RETURN(lisp_non_printing());
+  BUILTIN_RETURN(LISP_VAL_NIL);
 }
 
 DEF_BUILTIN(core_output_file_close) {
   POP_OBJ_ARG(struct lisp_file_port, port, lisp_val_is_output_file_port);
   lisp_file_port_close(port);
-  BUILTIN_RETURN(lisp_non_printing());
+  BUILTIN_RETURN(LISP_VAL_NIL);
 }
 
 DEF_BUILTIN(core_get_eof_object) { BUILTIN_RETURN(lisp_eof_object()); }
@@ -510,7 +510,7 @@ DEF_BUILTIN(core_sleep) {
     vm_raise_func_exception(vm, "sleep interrupted");
     return EV_EXCEPTION;
   } else {
-    BUILTIN_RETURN(lisp_non_printing());
+    BUILTIN_RETURN(LISP_VAL_NIL);
   }
 }
 
@@ -518,7 +518,7 @@ DEF_BUILTIN(core_disassemble) {
   REF_OBJ_ARG(struct lisp_closure, func, lisp_val_is_func, 0);
   chunk_disassemble(func->code);
   CLEAR_ARGS(1);
-  BUILTIN_RETURN(lisp_non_printing());
+  BUILTIN_RETURN(LISP_VAL_NIL);
 }
 
 DEF_BUILTIN(core_get_macro_fn) {
@@ -550,13 +550,13 @@ DEF_BUILTIN(core_set_dynamic_state) {
   // might be more efficient anyway since right now each stack frame
   // contains a reference to the dynamic state)
   vm_parent_frame(vm)->dynamic_state = new_state;
-  BUILTIN_RETURN(lisp_non_printing());
+  BUILTIN_RETURN(new_state);
 }
 
 DEF_BUILTIN(core_set_primitive_error_handler) {
   POP_OBJ_ARG(struct lisp_closure, handler, lisp_val_is_func);
   vm->primitive_error_handler = lisp_val_from_obj(handler);
-  BUILTIN_RETURN(lisp_non_printing());
+  BUILTIN_RETURN_OBJ(handler);
 }
 
 DEF_BUILTIN(core_abort) {

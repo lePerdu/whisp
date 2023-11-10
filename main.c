@@ -72,11 +72,9 @@ static enum eval_status eval_print_many(struct lisp_vm *vm,
     if (res == EV_SUCCESS) {
       // Keep on the stack while printing so it is't GC'd
       struct lisp_val res_val = vm_stack_top(vm);
-      if (!lisp_is_non_printing(res_val)) {
-        struct lisp_string *printed = print_str(res_val, true);
-        display_str(printed);
-        putchar('\n');
-      }
+      struct lisp_string *printed = print_str(res_val, true);
+      display_str(printed);
+      putchar('\n');
       (void)vm_stack_pop(vm);
     } else {
       struct lisp_string *printed_exc =
@@ -108,7 +106,7 @@ static struct lisp_vm *setup_vm(int argc, char **argv) {
   init_global_compile_state();
 
   struct lisp_vm *vm = vm_create(lisp_env_create());
-  // Save the VM permenantly
+  // Save the VM permanently
   gc_push_root_obj(vm);
 
   struct lisp_env *global_env = vm->global_env;
