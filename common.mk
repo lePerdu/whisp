@@ -27,6 +27,7 @@ OBJS = $(SRCS:%.c=$(BUILD)/%.o)
 
 WHISP_LIB_SRCS_DIR = lib
 WHISP_LIB_SRC_FILES = \
+	boot.wh \
 	array.wh \
 	basic.wh \
 	bool.wh \
@@ -37,8 +38,10 @@ WHISP_LIB_SRC_FILES = \
 	macros.wh \
 	math.wh \
 	ports.wh \
-	prelude.wh \
+	ratio.wh \
 	record.wh \
+	repl.wh \
+	startup.wh \
 	string.wh \
 	vector.wh
 WHISP_LIB_SRCS = $(WHISP_LIB_SRC_FILES:%=$(WHISP_LIB_SRCS_DIR)/%)

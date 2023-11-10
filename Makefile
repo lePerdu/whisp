@@ -1,29 +1,29 @@
 all:
-	$(MAKE) -f Makefile.debug $@
+	$(MAKE) -f debug.mk $@
 
 run:
-	$(MAKE) -f Makefile.debug $@
+	$(MAKE) -f debug.mk $@
 
 debug:
-	$(MAKE) -f Makefile.debug $@
+	$(MAKE) -f debug.mk $@
 
 test:
-	$(MAKE) -f Makefile.debug $@
+	$(MAKE) -f debug.mk $@
 
 configure:
-	$(MAKE) -f Makefile.release $@
+	$(MAKE) -f release.mk $@
 
 build-install:
-	$(MAKE) -f Makefile.release all
+	$(MAKE) -f release.mk all
 
 install:
-	$(MAKE) -f Makefile.release $@
+	$(MAKE) -f release.mk $@
 
 uninstall:
-	$(MAKE) -f Makefile.release $@
+	$(MAKE) -f release.mk $@
 
 clean:
-	$(MAKE) -f Makefile.debug $@
-	$(MAKE) -f Makefile.release $@
+	$(MAKE) -f debug.mk $@
+	$(MAKE) -f release.mk $@
 
-.PHONY: all run debug test install uninstall clean
+.PHONY: all run debug test configure build-install install uninstall clean

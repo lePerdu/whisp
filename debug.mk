@@ -2,7 +2,7 @@ CFLAGS = -g -Og
 BUILD = build/debug
 WHISP_LIB_DIR = ./lib
 
-include Makefile.common
+include common.mk
 
 run: $(EXEC)
 	eval $<
