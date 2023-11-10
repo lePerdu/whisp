@@ -1,4 +1,14 @@
 (defgroup! string
+  (defgroup! string-null?
+    (deftest! empty-string-is-null
+      (assert (string-null? "")))
+    (deftest! whitespace-string-is-not-null
+      (assert-not (string-null? "\n")))
+    (deftest! zero-string-is-not-null
+      (assert-not (string-null? "\0")))
+    (deftest! text-string-is-not-null
+      (assert-not (string-null? "abc"))))
+
   (defgroup! int->string
     (deftest! positive
       (assert-equal "14" (->string 14)))
@@ -88,4 +98,21 @@
       (assert-equal "" (substring "abcdef" 2 2))
       (assert-equal "" (substring "abcdef" 0 0)))
     (deftest! start=end+1-is-singleton
-      (assert-equal "c" (substring "abcdef" 2 3)))))
+      (assert-equal "c" (substring "abcdef" 2 3))))
+
+  (defgroup! string-trim
+    (defgroup! string-trim-left
+      (deftest! no-op-if-no-whitespace
+        (assert-equal "abc \n" (string-trim-left "abc \n")))
+      (deftest! removes-spaces-on-left
+        (assert-equal "abc " (string-trim-left "\t \nabc "))))
+    (defgroup! string-trim-right
+      (deftest! no-op-if-no-whitespace
+        (assert-equal "\t \nabc" (string-trim-right "\t \nabc")))
+      (deftest! removes-spaces-on-right
+        (assert-equal " abc" (string-trim-right " abc\t \n"))))
+    (defgroup! string-trim
+      (deftest! no-op-if-no-whitespace
+        (assert-equal "abc\ndef" (string-trim "abc\ndef")))
+      (deftest! removes-spaces-on-both-sides
+        (assert-equal "abc" (string-trim "\t \nabc  \t "))))))
