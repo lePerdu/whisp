@@ -94,7 +94,9 @@
     (deftest! any-false-is-false
       (assert (not (and true true false true))))
     (deftest! short-circuits-on-false
-      (assert (not (and true false (error "and does not short-circuit"))))))
+      (assert (not (and true false (error "and does not short-circuit")))))
+	(deftest! returns-last-value-if-true
+	  (assert= 5 (and 4 5))))
 
   (defgroup! or
     (deftest! empty-returns-false
@@ -106,7 +108,9 @@
     (deftest! any-true-is-true
       (assert (or false false true false)))
     (deftest! short-circuits-on-true
-      (assert (or false true (error "does not short-circuit")))))
+      (assert (or false true (error "does not short-circuit"))))
+	(deftest! returns-first-true-value
+	  (assert= 5 (or nil 5 6))))
 
   (defgroup! xor
     (deftest! empty-returns-false

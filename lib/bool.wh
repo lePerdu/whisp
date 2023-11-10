@@ -2,16 +2,23 @@
 (defn! (map-if f x)
   (if x (f x)))
 
-; TODO Make these return values? It's useful sometimes and enables these forms
-; to be tail-call optimized, but adds in overhead without good optimizations
 (defmacro! (and . conds)
-  (if (null? conds)
-    true
-    `(if ~(car conds) (and ~@(cdr conds)) false)))
+  (cond
+    ((null? conds) true)
+    ((null? (cdr conds)) (car conds))
+    (else
+      `(if ~(car conds) (and ~@(cdr conds)) false))))
 (defmacro! (or . conds)
-  (if (null? conds)
-    false
-    `(if ~(car conds) true (or ~@(cdr conds)))))
+  (cond
+    ((null? conds) false)
+    ((null? (cdr conds)) (car conds))
+    (else
+      (let ((temp-sym (gensym)))
+        `(let ((~temp-sym ~(car conds)))
+          (if ~temp-sym
+            ~temp-sym
+            (or ~@(cdr conds))))))))
+; TODO Is there a good return value for xor besides true/false?
 (defmacro! (xor . conds)
   (if (null? conds)
     false
