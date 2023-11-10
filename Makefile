@@ -1,56 +1,29 @@
-CFLAGS = -Wall -Wextra -Werror -std=c17 -g -Og
-LDFLAGS = $(CFLAGS)
-LDLIBS = -lreadline -lm
+all:
+	$(MAKE) -f Makefile.debug $@
 
-BUILD = build
-BIN = bin
+run:
+	$(MAKE) -f Makefile.debug $@
 
-EXEC = $(BIN)/whisp
-SRCS = main.c \
-	bytecode.c \
-	compiler.c \
-	core.c \
-	env.c \
-	eval.c \
-	file.c \
-	hash_table.c \
-	memory.c \
-	ports.c \
-	printer.c \
-	reader.c \
-	symbol.c \
-	types.c \
-	val_array.c \
-	vm.c
-OBJS = $(SRCS:%.c=$(BUILD)/%.o)
+debug:
+	$(MAKE) -f Makefile.debug $@
 
-all: $(EXEC)
+test:
+	$(MAKE) -f Makefile.debug $@
 
-run: $(EXEC)
-	./$<
+configure:
+	$(MAKE) -f Makefile.release $@
 
-debug: $(EXEC)
-	gdb $<
+build-install:
+	$(MAKE) -f Makefile.release all
 
-test: $(EXEC)
-	./$< test/all.wh
-.PHONY: test
+install:
+	$(MAKE) -f Makefile.release $@
+
+uninstall:
+	$(MAKE) -f Makefile.release $@
 
 clean:
-	$(RM) -r $(BUILD) $(BIN)
+	$(MAKE) -f Makefile.debug $@
+	$(MAKE) -f Makefile.release $@
 
-.PHONY: run debug clean
-
-$(EXEC): $(OBJS) | $(BIN)
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
-
-$(BUILD)/%.o: %.c | $(BUILD)
-	$(CC) $(CFLAGS) -MMD -c -o $@ $<
-
-$(BIN):
-	mkdir -p $@
-
-$(BUILD):
-	mkdir -p $@
-
--include $(BUILD)/*.d
+.PHONY: all run debug test install uninstall clean

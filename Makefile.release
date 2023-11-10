@@ -1,0 +1,28 @@
+CFLAGS = -O3
+BUILD = build/release
+
+-include $(BUILD)/Makefile.configured
+PREFIX ?= /usr/local
+WHISP_LIB_DIR = $(PREFIX)/lib/whisp
+
+# configure has to be run before building/installing
+GENERATE_CONFIG_TARGET = configure-generate-config
+
+include Makefile.common
+
+configure: configure-generate-config
+	# Save the prefix used at configure time for future "install"s
+	printf 'PREFIX = %s\n' $(PREFIX) >$(BUILD)/Makefile.configured
+
+EXEC_INSTALL = $(PREFIX)/bin/$(EXEC_NAME)
+LIB_INSTALL = $(WHISP_LIB_DIR)
+
+install: $(EXEC) $(WHISP_LIB_SRCS)
+	install --mode=755 -D $(EXEC) $(EXEC_INSTALL)
+	install --mode=644 -D  -t $(LIB_INSTALL) $(WHISP_LIB_SRCS)
+
+uninstall:
+	$(RM) $(EXEC_INSTALL)
+	$(RM) -r $(LIB_INSTALL)
+
+.PHONY: install configure uninstall

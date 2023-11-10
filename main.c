@@ -11,6 +11,7 @@
 // clang-format on
 
 #include "compiler.h"
+#include "config.h"
 #include "core.h"
 #include "env.h"
 #include "eval.h"
@@ -124,7 +125,7 @@ static struct lisp_vm *setup_vm(int argc, char **argv) {
   return vm;
 }
 
-#define PRELUDE_FILENAME "lib/prelude.wh"
+#define PRELUDE_FILENAME (WHISP_LIB_DIR "/prelude.wh")
 
 static enum eval_status load_file(struct lisp_vm *vm, const char *filename) {
   struct lisp_closure *compiled = compile_file(vm, filename);
