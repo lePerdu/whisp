@@ -311,6 +311,7 @@ void str_builder_concat_n(struct str_builder *b, const char *buf, size_t n);
 // Functions for low-level inspection/manipulation
 
 void str_builder_ensure_cap(struct str_builder *b, size_t added_size);
+size_t str_builder_remaining_cap(const struct str_builder *b);
 void str_builder_include_size(struct str_builder *b, size_t added_size);
 
 static inline char *str_builder_raw_buf(struct str_builder *b) {

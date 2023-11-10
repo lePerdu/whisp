@@ -336,6 +336,10 @@ void str_builder_ensure_cap(struct str_builder *b, size_t added_size) {
   }
 }
 
+size_t str_builder_remaining_cap(const struct str_builder *b) {
+  return b->capacity - b->buf->length;
+}
+
 void str_builder_include_size(struct str_builder *b, size_t added_size) {
   size_t new_size = b->buf->length + added_size;
   assert(new_size <= b->capacity);

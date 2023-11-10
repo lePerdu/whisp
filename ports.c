@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "eval.h"
+#include "file.h"
 #include "types.h"
 
 inline bool lisp_val_is_file_open(struct lisp_file_port *port) {
@@ -124,33 +125,17 @@ enum eval_status lisp_input_file_port_read_line(struct lisp_file_port *port,
     return EV_EXCEPTION;
   }
 
-  struct str_builder builder;
-  str_builder_init(&builder);
-
-  char buf[1024];
-  while (true) {
-    if (fgets(buf, sizeof(buf), port->file) == NULL) {
-      if (feof(port->file)) {
-        str_build(&builder);
-        *output = lisp_eof_object();
-        return EV_SUCCESS;
-      } else {
-        str_build(&builder);
-        return EV_EXCEPTION;
-      }
-    }
-
-    size_t n_read = strlen(buf);
-    str_builder_concat_n(&builder, buf, n_read);
-
-    assert(n_read > 0);
-    // TODO Wider check for EOL?
-    if (buf[n_read - 1] == '\n') {
-      break;
+  struct lisp_string *line = read_line(port->file);
+  if (line == NULL) {
+    if (feof(port->file)) {
+      *output = lisp_eof_object();
+      return EV_SUCCESS;
+    } else {
+      return EV_EXCEPTION;
     }
   }
 
-  *output = lisp_val_from_obj(str_build(&builder));
+  *output = lisp_val_from_obj(line);
   return EV_SUCCESS;
 }
 

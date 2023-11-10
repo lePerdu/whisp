@@ -1,6 +1,8 @@
 #ifndef FILE_H_
 #define FILE_H_
 
+#include <stdio.h>
+
 #include "vm.h"
 
 /**
@@ -22,6 +24,11 @@ struct lisp_closure *compile_file(struct lisp_vm *vm,
 struct lisp_closure *compile_string(struct lisp_vm *vm,
                                     struct lisp_string *filename,
                                     struct lisp_string *contents);
+
+/**
+ * Read a single line from a file stream.
+ */
+struct lisp_string *read_line(FILE *stream);
 
 /**
  * Simple existence check to be provided as a builtin.

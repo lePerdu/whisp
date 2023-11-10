@@ -51,6 +51,47 @@ struct lisp_string *read_file(struct lisp_vm *vm, const char *filename) {
   return error ? NULL : result;
 }
 
+#define READ_LINE_BUF_INITIAL_CAP 16
+
+struct lisp_string *read_line(FILE *stream) {
+  struct str_builder builder;
+  str_builder_init_cap(&builder, READ_LINE_BUF_INITIAL_CAP);
+
+  while (true) {
+    char *buf = str_builder_raw_buf_end(&builder);
+    size_t remaining_cap = str_builder_remaining_cap(&builder);
+    if (fgets(buf, remaining_cap, stream) == NULL) {
+      if (ferror(stream)) {
+        return NULL;
+      } else {
+        // For EOF, can check later if data was read or not
+        break;
+      }
+    }
+
+    size_t n_read = strlen(buf);
+    str_builder_include_size(&builder, n_read);
+
+    assert(n_read > 0);
+    // Check last character to know if reading stopped because of a full buffer
+    // or a newline
+    // TODO Wider check for EOL?
+    if (str_builder_raw_buf_end(&builder)[-1] == '\n') {
+      break;
+    } else {
+      // Expand the buffer before continuing
+      str_builder_ensure_cap(&builder, builder.capacity);
+    }
+  }
+
+  struct lisp_string *line = str_build(&builder);
+  if (line->length == 0) {
+    return NULL;
+  } else {
+    return line;
+  }
+}
+
 struct lisp_closure *compile_file(struct lisp_vm *vm,
                                   struct lisp_string *filename) {
   gc_push_root_obj(filename);

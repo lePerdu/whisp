@@ -4,12 +4,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-// These imports need to be after stdio.h but clang-format sorts them first
-// clang-format off
-#include <readline/history.h>
-#include <readline/readline.h>
-// clang-format on
-
 #include "compiler.h"
 #include "config.h"
 #include "core.h"
@@ -23,37 +17,13 @@
 #include "types.h"
 #include "vm.h"
 
-/*
-#define READLINE_BUF_SIZE 1024
-
-static const char *readline(void) {
-  static char buf[READLINE_BUF_SIZE];
-
-  // TODO Check if input is too long
-  if (fgets(buf, READLINE_BUF_SIZE, stdin) == NULL) {
-    return NULL;
-  }
-
-  // TODO Allocate to new memory?
-  return buf;
-}
-*/
-
-#define HISTORY_FILENAME ".whisp_history"
-
-static void init_repl(void) {
-  using_history();
-  read_history(HISTORY_FILENAME);
-}
-
-static char *read_prompt(void) {
-  char *input = readline("> ");
+static struct lisp_string *read_prompt(void) {
+  printf("(no-init)> ");
+  struct lisp_string *input = read_line(stdin);
   if (input == NULL) {
     return NULL;
   }
 
-  add_history(input);
-  append_history(1, HISTORY_FILENAME);
   return input;
 }
 
@@ -148,9 +118,12 @@ static void load_startup_file(struct lisp_vm *vm) {
   run_file(vm, STARTUP_FILENAME);
 }
 
-static void rep(struct lisp_vm *vm, const char *input) {
-  struct parse_output *parsed =
-      read_str_many(lisp_string_create_cstr("stdin"), input);
+static void rep(struct lisp_vm *vm, struct lisp_string *input) {
+  gc_push_root_obj(input);
+  struct parse_output *parsed = read_str_many(lisp_string_create_cstr("stdin"),
+                                              lisp_string_as_cstr(input));
+  gc_pop_root_expect_obj(input);
+
   switch (parsed->status) {
     case P_EMPTY:
       return;
@@ -166,16 +139,14 @@ static void rep(struct lisp_vm *vm, const char *input) {
 }
 
 static void repl(struct lisp_vm *vm) {
-  init_repl();
   while (true) {
-    char *input = read_prompt();
-
+    struct lisp_string *input = read_prompt();
     if (input == NULL) {
+      putchar('\n');
       break;
     }
 
     rep(vm, input);
-    free(input);
   }
 }
 

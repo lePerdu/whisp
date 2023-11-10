@@ -1,6 +1,6 @@
 CFLAGS += -Wall -Wextra -Werror -std=c17
 LDFLAGS = $(CFLAGS)
-LDLIBS = -lreadline -lm
+LDLIBS = -lm
 
 BIN = $(BUILD)/bin
 
