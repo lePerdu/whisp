@@ -79,3 +79,22 @@ struct lisp_closure *compile_file(struct lisp_vm *vm, const char *filename) {
 
   return compiled;
 }
+
+bool file_exists(const char *filename) {
+  FILE *file = fopen(filename, "r");
+  if (file != NULL) {
+    fclose(file);
+    return true;
+  } else {
+    return false;
+  }
+}
+
+bool delete_file(const char *filename) {
+  if (remove(filename) != 0) {
+    // TODO Report error message
+    return false;
+  } else {
+    return true;
+  }
+}

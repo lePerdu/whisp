@@ -439,6 +439,20 @@ DEF_BUILTIN(core_get_eof_object) { BUILTIN_RETURN(lisp_eof_object()); }
 
 DEF_BUILTIN_PRED(core_is_eof_object, lisp_val_is_eof_object);
 
+DEF_BUILTIN(core_file_exists) {
+  REF_OBJ_ARG(struct lisp_string, filename, lisp_val_is_string, 0);
+  bool exists = file_exists(lisp_string_as_cstr(filename));
+  CLEAR_ARGS(1);
+  BUILTIN_RETURN(lisp_val_from_bool(exists));
+}
+
+DEF_BUILTIN(core_delete_file) {
+  REF_OBJ_ARG(struct lisp_string, filename, lisp_val_is_string, 0);
+  bool success = delete_file(lisp_string_as_cstr(filename));
+  CLEAR_ARGS(1);
+  BUILTIN_RETURN(lisp_val_from_bool(success));
+}
+
 DEF_BUILTIN(core_compile_file) {
   REF_OBJ_ARG(struct lisp_string, filename, lisp_val_is_string, 0);
 
@@ -716,6 +730,9 @@ static const struct builtin_config builtins[] = {
 
     [INTRINSIC_EOF_OBJECT] = {"eof-object", core_get_eof_object, 0, false},
     [INTRINSIC_IS_EOF_OBJECT] = {"eof-object?", core_is_eof_object, 1, false},
+
+    [INTRINSIC_FILE_EXISTS] = {"file-exists?", core_file_exists, 1, false},
+    [INTRINSIC_DELETE_FILE] = {"delete-file", core_delete_file, 1, false},
 
     [INTRINSIC_BACKTRACE] = {"backtrace", core_backtrace, 0, false},
     [INTRINSIC_RUNTIME] = {"runtime", core_runtime, 0, false},

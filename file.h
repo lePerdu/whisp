@@ -15,4 +15,14 @@ struct lisp_string *read_file(struct lisp_vm *vm, const char *filename);
  */
 struct lisp_closure *compile_file(struct lisp_vm *vm, const char *filename);
 
+/**
+ * Simple existence check to be provided as a builtin.
+ */
+bool file_exists(const char *filename);
+
+/**
+ * Delete a file. Returns true on success, false on error.
+ */
+bool delete_file(const char *filename);
+
 #endif
