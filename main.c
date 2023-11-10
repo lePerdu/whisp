@@ -112,13 +112,9 @@ static struct lisp_vm *setup_vm(int argc, char **argv) {
   struct lisp_env *global_env = vm->global_env;
 
   define_builtins(global_env);
-  // Just for testing purposes
-  // define_compiler_builtins(global_env);
 
   struct lisp_val argv_list = create_argv_list(argc, argv);
-  gc_push_root(argv_list);
-  lisp_env_set(global_env, lisp_symbol_create_cstr("*ARGV*"), argv_list);
-  gc_pop_root_expect(argv_list);
+  define_const(global_env, "*command-line*", argv_list);
 
   return vm;
 }
@@ -126,7 +122,8 @@ static struct lisp_vm *setup_vm(int argc, char **argv) {
 #define PRELUDE_FILENAME (WHISP_LIB_DIR "/prelude.wh")
 
 static enum eval_status load_file(struct lisp_vm *vm, const char *filename) {
-  struct lisp_closure *compiled = compile_file(vm, filename);
+  struct lisp_closure *compiled =
+      compile_file(vm, lisp_string_create_cstr(filename));
   if (compiled == NULL) {
     return EV_EXCEPTION;
   }
@@ -150,7 +147,8 @@ static void run_file(struct lisp_vm *vm, const char *filename) {
 static void load_prelude(struct lisp_vm *vm) { run_file(vm, PRELUDE_FILENAME); }
 
 static void rep(struct lisp_vm *vm, const char *input) {
-  struct parse_output *parsed = read_str_many("stdin", input);
+  struct parse_output *parsed =
+      read_str_many(lisp_string_create_cstr("stdin"), input);
   switch (parsed->status) {
     case P_EMPTY:
       return;

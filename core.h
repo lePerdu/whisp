@@ -134,6 +134,12 @@ enum intrinsic_id {
 static_assert(INTRINSIC_INVALID <= UINT8_MAX, "too many intrinsics");
 
 enum eval_status call_intrinsic(uint8_t index, struct lisp_vm *vm);
+
+/**
+ * Helper function for defining constants in an environment.
+ */
+void define_const(struct lisp_env *env, const char *name, struct lisp_val v);
+
 void define_builtins(struct lisp_env *global_env);
 
 #endif

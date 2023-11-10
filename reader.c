@@ -103,26 +103,25 @@ static const struct lisp_vtable PARSE_OUTPUT_VTABLE = {
     .destroy = lisp_destroy_none,
 };
 
-static struct parse_output *parse_output_create(const char *filename) {
-  struct lisp_string *filename_str = lisp_string_create_cstr(filename);
-  gc_push_root_obj(filename_str);
+static struct parse_output *parse_output_create(struct lisp_string *filename) {
+  gc_push_root_obj(filename);
 
   struct lisp_hash_table *source_map = lisp_hash_table_create(8);
   gc_push_root_obj(source_map);
 
   struct parse_output *p = lisp_obj_alloc(&PARSE_OUTPUT_VTABLE, sizeof(*p));
   p->status = P_EMPTY;
-  p->filename = filename_str;
+  p->filename = filename;
   p->source_map = source_map;
   p->datum = LISP_VAL_NIL;
   p->error.message = NULL;
   p->error.pos = (struct source_pos){.line = 0, .col = 0};
   gc_pop_root_expect_obj(source_map);
-  gc_pop_root_expect_obj(filename_str);
+  gc_pop_root_expect_obj(filename);
   return p;
 }
 
-struct parse_output *parse_output_create_simple(const char *filename,
+struct parse_output *parse_output_create_simple(struct lisp_string *filename,
                                                 struct lisp_val ast) {
   gc_push_root(ast);
   struct parse_output *p = parse_output_create(filename);
@@ -202,7 +201,7 @@ static void source_map_insert(struct reader *r, struct lisp_val datum,
                          (struct lisp_hash_table_entry *)ent);
 }
 
-static void reader_init(struct reader *r, const char *filename,
+static void reader_init(struct reader *r, struct lisp_string *filename,
                         const char *input) {
   r->input = input;
   r->pos = 0;
@@ -699,7 +698,7 @@ static enum parse_status read_form(struct reader *r, struct lisp_val *output) {
   }
 }
 
-struct parse_output *read_str(const char *filename, const char *input) {
+struct parse_output *read_str(struct lisp_string *filename, const char *input) {
   struct reader r;
   reader_init(&r, filename, input);
 
@@ -729,7 +728,8 @@ RETURN:
   return reader_return(status, &r);
 }
 
-struct parse_output *read_str_many(const char *filename, const char *input) {
+struct parse_output *read_str_many(struct lisp_string *filename,
+                                   const char *input) {
   struct reader r;
   reader_init(&r, filename, input);
 
@@ -766,7 +766,7 @@ struct parse_output *read_str_many(const char *filename, const char *input) {
 bool is_valid_symbol(const char *name) {
   // Leverage existing tokenizer
   struct reader r;
-  reader_init(&r, "", name);
+  reader_init(&r, NULL, name);
 
   bool valid = false;
   enum token_status res = read_next_atom(&r);

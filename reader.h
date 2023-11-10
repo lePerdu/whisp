@@ -36,7 +36,7 @@ struct parse_output {
   } error;
 };
 
-struct parse_output *parse_output_create_simple(const char *filename,
+struct parse_output *parse_output_create_simple(struct lisp_string *filename,
                                                 struct lisp_val ast);
 const struct source_pos *parse_output_get_source_pos(struct parse_output *p,
                                                      struct lisp_val datum);
@@ -46,12 +46,12 @@ struct lisp_string *parse_error_format(struct parse_output *error);
 /**
  * Parse input into a single AST.
  */
-struct parse_output *read_str(const char *filename, const char *input);
+struct parse_output *read_str(struct lisp_string *filename, const char *input);
 
 /**
  * Like read_str, but read multiple top-level ASTs into a list.
  */
-struct parse_output *read_str_many(const char *filename, const char *input);
+struct parse_output *read_str_many(struct lisp_string *filename, const char *input);
 
 bool is_valid_symbol(const char *name);
 

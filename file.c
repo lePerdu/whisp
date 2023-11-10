@@ -50,13 +50,23 @@ struct lisp_string *read_file(struct lisp_vm *vm, const char *filename) {
   return error ? NULL : result;
 }
 
-struct lisp_closure *compile_file(struct lisp_vm *vm, const char *filename) {
-  struct lisp_string *contents = read_file(vm, filename);
+struct lisp_closure *compile_file(struct lisp_vm *vm,
+                                  struct lisp_string *filename) {
+  gc_push_root_obj(filename);
+  struct lisp_string *contents = read_file(vm, lisp_string_as_cstr(filename));
+  gc_pop_root_expect_obj(filename);
+
   if (contents == NULL) {
     // Exception is set by read_file
     return NULL;
   }
 
+  return compile_string(vm, filename, contents);
+}
+
+struct lisp_closure *compile_string(struct lisp_vm *vm,
+                                    struct lisp_string *filename,
+                                    struct lisp_string *contents) {
   gc_push_root_obj(contents);
   struct parse_output *parsed =
       read_str_many(filename, lisp_string_as_cstr(contents));

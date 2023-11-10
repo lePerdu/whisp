@@ -456,8 +456,7 @@ DEF_BUILTIN(core_delete_file) {
 DEF_BUILTIN(core_compile_file) {
   REF_OBJ_ARG(struct lisp_string, filename, lisp_val_is_string, 0);
 
-  struct lisp_closure *compiled =
-      compile_file(vm, lisp_string_as_cstr(filename));
+  struct lisp_closure *compiled = compile_file(vm, filename);
   if (compiled == NULL) {
     return EV_EXCEPTION;
   }
@@ -568,8 +567,10 @@ DEF_BUILTIN(core_abort) {
 
 DEF_BUILTIN(core_compile_to_closure) {
   REF_ARG(ast, 0);
-  struct lisp_closure *cl =
-      compile_top_level(vm, parse_output_create_simple("#<unknown>", ast), ast);
+  struct lisp_closure *cl = compile_top_level(
+      vm,
+      parse_output_create_simple(lisp_string_create_cstr("#<unknown>"), ast),
+      ast);
   CLEAR_ARGS(1);
 
   if (cl == NULL) {
@@ -852,8 +853,7 @@ enum eval_status call_intrinsic(uint8_t index, struct lisp_vm *vm) {
   return builtins[index].c_func(vm);
 }
 
-static void define_const(struct lisp_env *env, const char *name,
-                         struct lisp_val v) {
+void define_const(struct lisp_env *env, const char *name, struct lisp_val v) {
   gc_push_root(v);
   lisp_env_set(env, lisp_symbol_create_cstr(name), v);
   gc_pop_root_expect(v);

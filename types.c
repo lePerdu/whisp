@@ -322,11 +322,7 @@ void str_builder_init_cap(struct str_builder *b, size_t capacity) {
   gc_push_root_obj(b);
 }
 
-const struct lisp_string *str_builder_get_str(const struct str_builder *b) {
-  return b->buf;
-}
-
-static void str_builder_ensure_cap(struct str_builder *b, size_t added_size) {
+void str_builder_ensure_cap(struct str_builder *b, size_t added_size) {
   size_t new_size = b->buf->length + added_size;
   if (new_size > b->capacity) {
     // TODO Avoid loop and just do max(cap*2, new_size)?
@@ -338,6 +334,12 @@ static void str_builder_ensure_cap(struct str_builder *b, size_t added_size) {
     memcpy(new_str->data, b->buf->data, b->buf->length);
     b->buf = new_str;
   }
+}
+
+void str_builder_include_size(struct str_builder *b, size_t added_size) {
+  size_t new_size = b->buf->length + added_size;
+  assert(new_size <= b->capacity);
+  b->buf->length = new_size;
 }
 
 void str_builder_append(struct str_builder *b, char c) {
