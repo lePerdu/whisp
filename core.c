@@ -15,6 +15,7 @@
 
 #include "bytecode.h"
 #include "compiler.h"
+#include "config.h"
 #include "core_helper.h"
 #include "env.h"
 #include "eval.h"
@@ -326,6 +327,16 @@ DEF_BUILTIN(core_to_string) {
   BUILTIN_RETURN_OBJ(str);
 }
 
+/**
+ * Convert value to a string in a format which can be parsed.
+ */
+DEF_BUILTIN(core_write_to_string) {
+  REF_ARG(arg, 0);
+  struct lisp_string *str = print_str(arg, true);
+  CLEAR_ARGS(1);
+  BUILTIN_RETURN_OBJ(str);
+}
+
 DEF_BUILTIN(core_open_input_file) {
   REF_OBJ_ARG(struct lisp_string, filename, lisp_val_is_string, 0);
   struct lisp_file_port *port = lisp_input_file_port_open(filename->data);
@@ -453,6 +464,10 @@ DEF_BUILTIN(core_delete_file) {
   BUILTIN_RETURN(lisp_val_from_bool(success));
 }
 
+DEF_BUILTIN(core_current_directory) {
+  BUILTIN_RETURN(lisp_val_from_obj(get_current_directory()));
+}
+
 DEF_BUILTIN(core_compile_file) {
   REF_OBJ_ARG(struct lisp_string, filename, lisp_val_is_string, 0);
 
@@ -462,6 +477,19 @@ DEF_BUILTIN(core_compile_file) {
   }
 
   CLEAR_ARGS(1);
+  BUILTIN_RETURN_OBJ(compiled);
+}
+
+DEF_BUILTIN(core_compile_string) {
+  REF_OBJ_ARG(struct lisp_string, filename, lisp_val_is_string, 1);
+  REF_OBJ_ARG(struct lisp_string, contents, lisp_val_is_string, 0);
+
+  struct lisp_closure *compiled = compile_string(vm, filename, contents);
+  if (compiled == NULL) {
+    return EV_EXCEPTION;
+  }
+
+  CLEAR_ARGS(2);
   BUILTIN_RETURN_OBJ(compiled);
 }
 
@@ -562,6 +590,12 @@ DEF_BUILTIN(core_abort) {
   POP_OBJ_ARG(struct lisp_string, message, lisp_val_is_string);
   vm_raise_exception(vm, lisp_val_from_obj(message));
   vm->is_fatal_error = true;
+  return EV_EXCEPTION;
+}
+
+DEF_BUILTIN(core_exit) {
+  POP_INT_ARG(exit_code);
+  exit(exit_code);
   return EV_EXCEPTION;
 }
 
@@ -687,6 +721,8 @@ static const struct builtin_config builtins[] = {
     [INTRINSIC_STRING_GET] = {"string-get", core_string_get, 2, false},
     [INTRINSIC_STRING_CONCAT] = {"string-concat", core_string_concat, 0, true},
     [INTRINSIC_TO_STRING] = {"->string", core_to_string, 1, false},
+    [INTRINSIC_WRITE_TO_STRING] = {"write->string", core_write_to_string, 1,
+                                   false},
 
     [INTRINSIC_IS_ATOM] = {"atom?", core_is_atom, 1, false},
     [INTRINSIC_MAKE_ATOM] = {"atom", core_make_atom, 1, false},
@@ -734,6 +770,8 @@ static const struct builtin_config builtins[] = {
 
     [INTRINSIC_FILE_EXISTS] = {"file-exists?", core_file_exists, 1, false},
     [INTRINSIC_DELETE_FILE] = {"delete-file", core_delete_file, 1, false},
+    [INTRINSIC_CURRENT_DIRECTORY] = {"current-directory",
+                                     core_current_directory, 0, false},
 
     [INTRINSIC_BACKTRACE] = {"backtrace", core_backtrace, 0, false},
     [INTRINSIC_RUNTIME] = {"runtime", core_runtime, 0, false},
@@ -741,6 +779,9 @@ static const struct builtin_config builtins[] = {
     [INTRINSIC_SLEEP] = {"sleep", core_sleep, 1, false},
 
     [INTRINSIC_COMPILE_FILE] = {"compile-file", core_compile_file, 1, false},
+    [INTRINSIC_COMPILE_STRING] = {"compile-string", core_compile_string, 2,
+                                  false},
+
     [INTRINSIC_DISASSEMBLE] = {"disassemble", core_disassemble, 1, false},
     [INTRINSIC_GET_MACRO_FN] = {"macro-fn", core_get_macro_fn, 1, false},
 
@@ -751,6 +792,7 @@ static const struct builtin_config builtins[] = {
                                                core_set_primitive_error_handler,
                                                1, false},
     [INTRINSIC_ABORT] = {"abort", core_abort, 1, false},
+    [INTRINSIC_EXIT] = {"system-exit", core_exit, 1, false},
 
     // These are intrinsics, but not exposed directly as functions
     [INTRINSIC_PERPARE_APPLY] = {NULL, core_prepare_apply, 2, false},
@@ -887,4 +929,12 @@ void define_builtins(struct lisp_env *global_env) {
                lisp_val_from_obj(lisp_output_file_port_create(stdout)));
   define_const(global_env, "*stderr-port*",
                lisp_val_from_obj(lisp_output_file_port_create(stderr)));
+
+  struct lisp_val library_path =
+      lisp_val_from_obj(lisp_string_create_cstr(WHISP_LIB_DIR));
+  define_const(global_env, "*library-path*", library_path);
+
+  // TODO Configure based on the system
+  struct lisp_val path_separator = lisp_val_from_char('/');
+  define_const(global_env, "*path-separator*", path_separator);
 }

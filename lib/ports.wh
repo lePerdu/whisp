@@ -112,3 +112,42 @@
 
 (defn! (println . args)
   (do (apply print args) (newline)))
+
+;; Misc file operations
+
+(defn! (path-join . parts)
+  (apply string-concat
+    (intersperse (->string *path-separator*) parts)))
+
+(defn! (path-separator? c)
+  (char= c *path-separator*))
+
+(defn! (path-directory path)
+  (let-if (slash-index (string-rindex path path-separator?))
+    (substring path 0 slash-index)
+    ; Full path if there is no slash
+    path))
+
+; TODO Is there a good way to make the default value track (current-directory)
+; if it changes?
+(def! load-path (make-parameter (current-directory)))
+
+(defn! (load filename)
+  (let*
+    ((full-path (path-join (load-path) filename))
+     (new-load-path (path-directory full-path)))
+    (parameterize ((load-path new-load-path))
+      ((compile-file full-path)))))
+
+(defn! (convert-exit-status status)
+  (cond
+    ((= status true) 0)
+    ((null? status) 1)
+    ((int? status) status)
+    (else (error "exit: invalid status code" status))))
+
+(defn! (exit . opt-arg)
+  (cond
+    ((null? opt-arg) (system-exit 0))
+    ((null? (cdr opt-arg)) (system-exit (convert-exit-status (car opt-arg))))
+    (else (error "exit: too many arguments" opt-arg))))

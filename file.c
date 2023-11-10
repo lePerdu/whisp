@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "compiler.h"
 #include "eval.h"
@@ -107,4 +108,21 @@ bool delete_file(const char *filename) {
   } else {
     return true;
   }
+}
+
+#define INITIAL_CURRENT_DIRECTORY_SIZE 64
+
+struct lisp_string *get_current_directory(void) {
+  // Use a string builder since the path length isn't known.
+  // The buffer is progressively grown as needed
+  struct str_builder builder;
+  str_builder_init_cap(&builder, INITIAL_CURRENT_DIRECTORY_SIZE);
+  const char *ret;
+  while ((ret = getcwd(str_builder_raw_buf(&builder), builder.capacity)) ==
+         NULL) {
+    str_builder_ensure_cap(&builder, builder.capacity * 2);
+  }
+
+  str_builder_include_size(&builder, strlen(ret));
+  return str_build(&builder);
 }

@@ -33,4 +33,6 @@ bool file_exists(const char *filename);
  */
 bool delete_file(const char *filename);
 
+struct lisp_string *get_current_directory(void);
+
 #endif
