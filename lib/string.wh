@@ -96,3 +96,46 @@
       ""
       (let ((end (string-rindex-or-start s char-non-blank?)))
         (substring s start (inc end))))))
+
+(defn! (string-opt-range-or-default opt-range-list s)
+  (cond
+    ((null? opt-range-list)
+      (cons 0 (string-count s)))
+    ((null? (cdr opt-range-list))
+      (cons (car opt-range-list) (string-count s)))
+    ((null? (cddr opt-range-list))
+      (cons (car opt-range-list) (cadr opt-range-list)))))
+
+(defn! (string-for-each f s . opt-range)
+  (let-cons ((start . end) (string-opt-range-or-default opt-range s))
+    (let-named loop ((index start))
+      (if (< index end)
+        (do
+          (f (string-get s index))
+          (loop (inc index)))))))
+
+(defn! (string-for-each-index f s . opt-range)
+  (let-cons ((start . end) (string-opt-range-or-default opt-range s))
+    (let-named loop ((index start))
+      (if (< index end)
+        (do
+          (f index (string-get s index))
+          (loop (inc index)))))))
+
+(defn! (string-foldl init f s . opt-range)
+  (let-cons ((start . end) (string-opt-range-or-default opt-range s))
+    (let-named loop ((acc init) (index start))
+      (if (>= index end)
+        acc
+        (loop
+          (f acc (string-get s index))
+          (inc index))))))
+
+(defn! (string-foldr init f s . opt-range)
+  (let-cons ((start . end) (string-opt-range-or-default opt-range s))
+    (let-named loop ((acc init) (index (dec end)))
+      (if (< index start)
+        acc
+        (loop
+          (f (string-get s index) acc)
+          (dec index))))))

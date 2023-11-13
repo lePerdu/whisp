@@ -9,8 +9,8 @@
   ; TODO Decide on private export syntax/convention (or just wait for real modules)
   _build-vector
   vector?
-  (length vector-length _vector-length-set)
-  (shift _vector-shift _vector-shift-set)
+  (length vector-length)
+  (shift _vector-shift)
   (root _vector-root _vector-root-set))
 
 (def! empty-vector (_build-vector 0 0 (array)))
@@ -196,8 +196,36 @@
     (fn (acc x) (vector-append acc (f x)))
     v))
 
-(defn! (vector-sub v start-index end-index)
-  (let-named loop ((acc empty-vector) (index start-index))
-    (if (= index end-index)
-      acc
-      (loop (vector-append acc (vector-get v index)) (inc index)))))
+(defn! (vector-opt-range-or-default opt-range-list v)
+  (cond
+    ((null? opt-range-list)
+      (cons 0 (vector-length v)))
+    ((null? (cdr opt-range-list))
+      (cons (car opt-range-list) (vector-length v)))
+    ((null? (cddr opt-range-list))
+      (cons (car opt-range-list) (cadr opt-range-list)))))
+
+(defn! (vector-sub v . opt-range)
+  (let-cons ((start . end) (vector-opt-range-or-default opt-range v))
+    (let-named loop ((acc empty-vector) (index start))
+      (if (= index end)
+        acc
+        (loop (vector-append acc (vector-get v index)) (inc index))))))
+
+(defn! (vector-for-each f v . opt-range)
+  (let-cons ((start . end) (vector-opt-range-or-default opt-range v))
+    (let-named loop ((index start))
+      (if (= index end)
+        nil
+        (do
+          (f (vector-get v index))
+          (loop (inc index)))))))
+
+(defn! (vector-for-each-index f v . opt-range)
+  (let-cons ((start . end) (vector-opt-range-or-default opt-range v))
+    (let-named loop ((index start))
+      (if (= index end)
+        nil
+        (do
+          (f index (vector-get v index))
+          (loop (inc index)))))))

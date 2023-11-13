@@ -82,14 +82,6 @@
         (array-get from start))
       (array-copy-sub from into (inc start) end into-offset))))
 
-(defn! (array-sub arr start end)
-  (array-copy-sub
-    arr
-    (make-array (int- end start))
-    start
-    end
-    (int- 0 start)))
-
 (defn! (array-concat . arrays)
   (let*
     ((total-len
@@ -106,3 +98,39 @@
               sub-arr new-arr 0 sub-arr-len offset)
             (loop (int+ offset sub-arr-len) rest)))
         new-arr))))
+
+(defn! (array-opt-range-or-default opt-range-list arr)
+  (cond
+    ((null? opt-range-list)
+      (cons 0 (array-length arr)))
+    ((null? (cdr opt-range-list))
+      (cons (car opt-range-list) (array-length arr)))
+    ((null? (cddr opt-range-list))
+      (cons (car opt-range-list) (cadr opt-range-list)))))
+
+(defn! (array-sub arr . opt-range)
+  (let-cons ((start . end) (array-opt-range-or-default opt-range arr))
+    (array-copy-sub
+      arr
+      (make-array (int- end start))
+      start
+      end
+      (int- 0 start))))
+
+(defn! (array-for-each f arr . opt-range)
+  (let-cons ((start . end) (array-opt-range-or-default opt-range arr))
+    (let-named loop ((index start))
+      (if (= index end)
+        nil
+        (do
+          (f (array-get arr index))
+          (loop (inc index)))))))
+
+(defn! (array-for-each-index f arr . opt-range)
+  (let-cons ((start . end) (array-opt-range-or-default opt-range arr))
+    (let-named loop ((index start))
+      (if (= index end)
+        nil
+        (do
+          (f index (array-get arr index))
+          (loop (inc index)))))))
