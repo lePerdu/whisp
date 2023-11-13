@@ -90,7 +90,9 @@ struct reader {
 static void parse_output_visit(struct lisp_val v, visit_callback cb,
                                void *ctx) {
   struct parse_output *p = lisp_val_as_obj(v);
-  cb(ctx, lisp_val_from_obj(p->filename));
+  if (p->filename != NULL) {
+    cb(ctx, lisp_val_from_obj(p->filename));
+  }
   cb(ctx, p->datum);
   cb(ctx, lisp_val_from_obj(p->error.message));
   cb(ctx, lisp_val_from_obj(p->source_map));
@@ -760,34 +762,55 @@ struct parse_output *read_str_many(struct lisp_string *filename,
   return reader_return(res, &r);
 }
 
+static struct token read_single_atom(const char *input) {
+  struct reader r;
+  reader_init(&r, NULL, input);
+  enum token_status res = read_next_atom(&r);
+  struct token tok;
+  if (res == T_SUCCESS && reader_at_eof(&r)) {
+    tok = r.token;
+  } else {
+    tok.type = TOK_INVALID;
+  }
+  reader_return(P_EMPTY, &r);
+  return tok;
+}
+
 /**
  * Exported function used in the core library.
  */
 bool is_valid_symbol(const char *name) {
-  // Leverage existing tokenizer
-  struct reader r;
-  reader_init(&r, NULL, name);
+  struct token tok = read_single_atom(name);
+  return tok.type == TOK_SYMBOL;
+}
 
-  bool valid = false;
-  enum token_status res = read_next_atom(&r);
-  if (res != T_SUCCESS) {
-    goto RETURN;
+struct lisp_val read_int(const char *input) {
+  struct token tok = read_single_atom(input);
+  if (tok.type == TOK_INT) {
+    return lisp_val_from_int(tok.as_integer);
+  } else {
+    return LISP_VAL_NIL;
   }
-  if (r.token.type != TOK_SYMBOL) {
-    goto RETURN;
-  }
+}
 
-  valid = reader_at_eof(&r);
-RETURN:
-  reader_return(P_EMPTY, &r);
-  return valid;
+struct lisp_val read_real(const char *input) {
+  struct token tok = read_single_atom(input);
+  if (tok.type == TOK_REAL) {
+    return lisp_val_from_real(tok.as_real);
+  } else {
+    return LISP_VAL_NIL;
+  }
+}
+
+const char *parse_output_filename(struct parse_output *p) {
+  return p->filename != NULL ? lisp_string_as_cstr(p->filename) : "#<unknown>";
 }
 
 struct lisp_string *parse_error_format(struct parse_output *error) {
   assert(error->status == P_ERROR);
   gc_push_root_obj(error);
   struct lisp_string *result = lisp_string_format(
-      "parse error: %s:%u:%u: %s", lisp_string_as_cstr(error->filename),
+      "parse error: %s:%u:%u: %s", parse_output_filename(error),
       error->error.pos.line + 1, error->error.pos.col + 1,
       lisp_string_as_cstr(error->error.message));
   gc_pop_root_expect_obj(error);

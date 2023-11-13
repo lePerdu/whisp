@@ -206,6 +206,34 @@ DEF_BUILTIN(core_string_to_symbol) {
   }
 }
 
+DEF_BUILTIN(core_string_to_int) {
+  REF_OBJ_ARG(struct lisp_string, str, lisp_val_is_string, 0);
+
+  const char *contents = lisp_string_as_cstr(str);
+  struct lisp_val v = read_int(contents);
+  if (lisp_val_is_nil(v)) {
+    vm_raise_format_exception(vm, "invalid integer: '%s'", contents);
+    return EV_EXCEPTION;
+  } else {
+    CLEAR_ARGS(1);
+    BUILTIN_RETURN(v);
+  }
+}
+
+DEF_BUILTIN(core_string_to_real) {
+  REF_OBJ_ARG(struct lisp_string, str, lisp_val_is_string, 0);
+
+  const char *contents = lisp_string_as_cstr(str);
+  struct lisp_val v = read_real(contents);
+  if (lisp_val_is_nil(v)) {
+    vm_raise_format_exception(vm, "invalid real: '%s'", contents);
+    return EV_EXCEPTION;
+  } else {
+    CLEAR_ARGS(1);
+    BUILTIN_RETURN(v);
+  }
+}
+
 DEF_BUILTIN_PRED(core_is_symbol, lisp_val_is_symbol);
 DEF_BUILTIN_PRED(core_is_char, lisp_val_is_char);
 DEF_BUILTIN_PRED(core_is_string, lisp_val_is_string);
@@ -601,10 +629,8 @@ DEF_BUILTIN(core_exit) {
 
 DEF_BUILTIN(core_compile_to_closure) {
   REF_ARG(ast, 0);
-  struct lisp_closure *cl = compile_top_level(
-      vm,
-      parse_output_create_simple(lisp_string_create_cstr("#<unknown>"), ast),
-      ast);
+  struct lisp_closure *cl =
+      compile_top_level(vm, parse_output_create_simple(NULL, ast), ast);
   CLEAR_ARGS(1);
 
   if (cl == NULL) {
@@ -694,6 +720,9 @@ static const struct builtin_config builtins[] = {
     [INTRINSIC_IDENTICAL] = {"=", core_identical, 2, false},
     [INTRINSIC_STRING_TO_SYMBOL] = {"string->symbol", core_string_to_symbol, 1,
                                     false},
+    [INTRINSIC_STRING_TO_INT] = {"string->int", core_string_to_int, 1, false},
+    [INTRINSIC_STRING_TO_REAL] = {"string->real", core_string_to_real, 1,
+                                  false},
     [INTRINSIC_IS_SYMBOL] = {"symbol?", core_is_symbol, 1, false},
     [INTRINSIC_IS_FUNCTION] = {"fn?", core_is_function, 1, false},
     [INTRINSIC_FUNCTION_NAME] = {"fn-name", core_function_name, 1, false},

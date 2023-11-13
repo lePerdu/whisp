@@ -252,7 +252,8 @@ static void compiler_raise(struct compiler_ctx *ctx, const char *format, ...) {
   str_builder_init(&builder);
 
   str_builder_concat_cstr(&builder, "compile: ");
-  str_builder_concat(&builder, ctx->source_metadata->filename);
+  str_builder_concat_cstr(&builder,
+                          parse_output_filename(ctx->source_metadata));
 
   const struct source_pos *err_pos = compiler_source_pos(ctx);
   if (err_pos) {
@@ -858,7 +859,8 @@ static enum compile_res expand_and_compile_macro(struct compiler_ctx *ctx,
     str_builder_init(&builder);
 
     str_builder_concat_cstr(&builder, "compile: ");
-    str_builder_concat(&builder, ctx->source_metadata->filename);
+    str_builder_concat_cstr(&builder,
+                            parse_output_filename(ctx->source_metadata));
     str_builder_format(&builder,
                        ": expanding %s: ", lisp_symbol_name(macro_sym));
     print_str_into(&builder, ctx->vm->current_exception, false);

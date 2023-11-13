@@ -11,8 +11,8 @@ GENERATE_CONFIG_TARGET = configure-generate-config
 
 include common.mk
 
+# Save the prefix used at configure time for future "install"s
 configure: configure-generate-config
-	# Save the prefix used at configure time for future "install"s
 	printf 'PREFIX = %s\n' $(PREFIX) >$(CONFIGURED_MAKEFILE)
 
 EXEC_INSTALL = $(PREFIX)/bin/$(EXEC_NAME)

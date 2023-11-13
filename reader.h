@@ -41,6 +41,11 @@ struct parse_output *parse_output_create_simple(struct lisp_string *filename,
 const struct source_pos *parse_output_get_source_pos(struct parse_output *p,
                                                      struct lisp_val datum);
 
+/**
+ * Return the filename, or a placeholder string if there is no associated file
+ * name.
+ */
+const char *parse_output_filename(struct parse_output *p);
 struct lisp_string *parse_error_format(struct parse_output *error);
 
 /**
@@ -51,8 +56,23 @@ struct parse_output *read_str(struct lisp_string *filename, const char *input);
 /**
  * Like read_str, but read multiple top-level ASTs into a list.
  */
-struct parse_output *read_str_many(struct lisp_string *filename, const char *input);
+struct parse_output *read_str_many(struct lisp_string *filename,
+                                   const char *input);
 
 bool is_valid_symbol(const char *name);
+
+/**
+ * Try to parse text as an integer.
+ *
+ * Return the parsed value, or NIL on error.
+ */
+struct lisp_val read_int(const char *input);
+
+/**
+ * Try to parse text as a real number.
+ *
+ * Return the parsed value, or NIL on error.
+ */
+struct lisp_val read_real(const char *input);
 
 #endif

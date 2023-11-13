@@ -9,25 +9,37 @@
     (deftest! text-string-is-not-null
       (assert-not (string-null? "abc"))))
 
-  (defgroup! int->string
-    (deftest! positive
-      (assert-equal "14" (->string 14)))
-    (deftest! negative
-      (assert-equal "-54" (->string -54))))
+  (defmacro! (assert-mapping a->b b->a a b)
+    ; Note: this evaluates arguments multiple times
+    ; (that's probably good for testing, but might hit some edge cases)
+    `(do
+      (assert-equal ~a (~b->a ~b))
+      (assert-equal ~b (~a->b ~a))))
+  ; TODO These trigger compile errors when they are put directly inside `defgroup!`
+  (defmacro! (assert-int-conv str-val int-val)
+    `(assert-mapping string->int ->string ~str-val ~int-val))
+  (defmacro! (assert-real-conv str-val real-val)
+    `(assert-mapping string->real ->string ~str-val ~real-val))
 
-  (defgroup! real->string
+  (defgroup! int<->string
+    (deftest! positive
+      (assert-int-conv "14" 14))
+    (deftest! negative
+      (assert-int-conv "-54" -54)))
+
+  (defgroup! real<->string    
     (deftest! integral-positive
-      (assert-equal "14.0" (->string 14.0)))
+      (assert-real-conv "14.0" 14.0))
     (deftest! integral-negative
-      (assert-equal "-54.0" (->string -54.0)))
+      (assert-real-conv "-54.0" -54.0))
     (deftest! fractional
-      (assert-equal "-5.74" (->string -5.74)))
+      (assert-real-conv "-5.74" -5.74))
     (deftest! very-small
-      (assert-equal "5.74e-05" (->string (real/ 5.74 100000.0))))
+      (assert-real-conv "5.74e-05" (real/ 5.74 100000.0)))
     (deftest! very-large
-      (assert-equal "5.74e+16" (->string (real* 5.74 1e16))))
+      (assert-real-conv "5.74e+16" (real* 5.74 1e16)))
     (deftest! very-large-negative
-      (assert-equal "-5.74e+16" (->string (real* -5.74 1e16)))))
+      (assert-real-conv "-5.74e+16" (real* -5.74 1e16))))
 
   (defgroup! string-count
     (deftest! empty-string
