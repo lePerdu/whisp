@@ -47,12 +47,6 @@
 (def! >= (generic-nary-compare int>= real>=))
 (def! == (generic-nary-compare int= real=))
 
-(defn! (compare-num a b)
-  (cond
-    ((< a b) 'lt)
-    ((> a b) 'gt)
-    (else 'eq)))
-
 (defn! (int** b n) (do
   (defn! (iter a b n)
     (cond

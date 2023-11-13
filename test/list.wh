@@ -138,13 +138,13 @@
     (defn! (compare-never a b) (error "comparison should not be called"))
 
     (deftest! empty-list-is-sorted
-      (assert= nil (sort compare-never nil)))
+      (assert= nil (sort nil compare-never)))
     (deftest! singleton-list-is-sorted
-      (assert-equal (list 4) (sort compare-never (list 4))))
+      (assert-equal (list 4) (sort (list 4) compare-never)))
     (deftest! numeric-list-is-sorted
       (assert-equal
         (list 1 11 18 25 25 25 28 41 43 44)
-        (sort compare-num (list 25 43 44 28 1 25 11 41 25 18)))))
+        (sort (list 25 43 44 28 1 25 11 41 25 18) <))))
 
   (defgroup! intersperse
     (deftest! no-op-for-empty-list

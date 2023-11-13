@@ -112,19 +112,18 @@
     ((equal? key (caar l)) (car l))
     (else (assoc key (cdr l)))))
 
-(defn! (merge compare a b)
+(defn! (merge a b less)
   (cond
     ((null? a) b)
     ((null? b) a)
     (else
       (let
         ((next-a (car a)) (next-b (car b)))
-        (if (= (compare next-a next-b) 'gt)
-          (cons next-b (merge compare a (cdr b)))
-          (cons next-a (merge compare (cdr a) b)))))))
+        (if (less next-a next-b)
+          (cons next-a (merge (cdr a) b less))
+          (cons next-b (merge a (cdr b) less)))))))
 
-; Sort using a compare function that returns 'lt, 'gt, or 'eq
-(defn! (sort compare l)
+(defn! (sort l less)
   (let
     ((mid (int/ (count l) 2)))
     (if (= mid 0)
@@ -133,7 +132,7 @@
         ((halves (split-at mid l))
          (left (car halves))
          (right (cdr halves)))
-        (merge compare (sort compare left) (sort compare right))))))
+        (merge (sort left less) (sort right less) less)))))
 
 (defn! (intersperse x l)
   (cond
