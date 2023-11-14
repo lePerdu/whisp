@@ -69,8 +69,8 @@ struct token {
   struct source_pos end_pos;
 
   union {
-    long as_integer;
-    double as_real;
+    lisp_int_t as_integer;
+    lisp_real_t as_real;
     char as_char;
     struct slice as_slice;
   };
@@ -289,7 +289,7 @@ static void skip_line(struct reader *r) {
 static enum token_status parse_int(struct reader *r, const char *atom_start,
                                    const char *atom_end) {
   char *endptr;
-  long n = strtol(atom_start, &endptr, 10);
+  lisp_int_t n = strtol(atom_start, &endptr, 10);
   if (endptr != atom_end) {
     return T_NO_MATCH;
   }
@@ -304,7 +304,7 @@ static enum token_status parse_real(struct reader *r, const char *atom_start,
   char *endptr;
   // TODO strtod has some undesired behavior, like parsing as hex and parsing
   // nan/infinity.
-  double x = strtod(atom_start, &endptr);
+  lisp_real_t x = strtod(atom_start, &endptr);
   if (endptr != atom_end) {
     return T_NO_MATCH;
   }

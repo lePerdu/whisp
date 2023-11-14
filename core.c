@@ -51,10 +51,10 @@ static enum eval_status core_int_bitshift(struct lisp_vm *vm) {
   POP_INT_ARG(x);
 
   BUILTIN_RETURN(lisp_val_from_int(
-      shift >= 0 ? (unsigned long)(x << shift)
+      shift >= 0 ? (lisp_unsigned_int_t)(x << shift)
                  // Cast to unsigned to avoid sign extension
                  // TODO Figure out if this is necessary
-                 : ((unsigned long)x >> (unsigned long)-shift)));
+                 : ((lisp_unsigned_int_t)x >> (lisp_unsigned_int_t)-shift)));
 }
 
 MAKE_INT_COMPARE(lt, <);
@@ -72,11 +72,11 @@ MAKE_REAL_BINARY(div, /);
 DEF_BUILTIN(core_real_bits) {
   POP_REAL_ARG(x);
   // Use a union rather than pointer casting to avoid compiler warnings
-  static_assert(sizeof(long) <= sizeof(double),
+  static_assert(sizeof(lisp_int_t) <= sizeof(lisp_real_t),
                 "Cannot safely get bits of real number");
   union {
-    long int_bits;
-    double real_bits;
+    lisp_int_t int_bits;
+    lisp_real_t real_bits;
   } u = {.real_bits = x};
   BUILTIN_RETURN(lisp_val_from_int(u.int_bits));
 }
@@ -171,7 +171,7 @@ DEF_BUILTIN(core_string_get) {
   POP_INT_ARG(index);
   POP_OBJ_ARG(struct lisp_string, str, lisp_val_is_string);
 
-  if (index < 0 || (long)str->length <= index) {
+  if (index < 0 || (lisp_int_t)str->length <= index) {
     vm_raise_func_exception(vm, "string index out of bounds: %ld", index);
     return EV_EXCEPTION;
   }
@@ -188,7 +188,7 @@ DEF_BUILTIN(core_to_real) {
   POP_ARG(arg);
 
   if (lisp_val_is_int(arg)) {
-    BUILTIN_RETURN(lisp_val_from_real((double)lisp_val_as_int(arg)));
+    BUILTIN_RETURN(lisp_val_from_real((lisp_real_t)lisp_val_as_int(arg)));
   } else if (lisp_val_is_real(arg)) {
     BUILTIN_RETURN(arg);
   } else {
@@ -203,7 +203,7 @@ DEF_BUILTIN(core_to_int) {
   if (lisp_val_is_int(arg)) {
     BUILTIN_RETURN(arg);
   } else if (lisp_val_is_real(arg)) {
-    BUILTIN_RETURN(lisp_val_from_int((long)lisp_val_as_real(arg)));
+    BUILTIN_RETURN(lisp_val_from_int((lisp_int_t)lisp_val_as_real(arg)));
   } else {
     vm_raise_func_exception(vm, ERROR_NUMBER_ARG);
     return EV_EXCEPTION;
@@ -341,7 +341,7 @@ DEF_BUILTIN(core_array_get) {
   POP_INT_ARG(index);
   POP_OBJ_ARG(struct lisp_array, arr, lisp_val_is_array);
 
-  if (0 <= index && index < (long)arr->length) {
+  if (0 <= index && index < (lisp_int_t)arr->length) {
     BUILTIN_RETURN(lisp_array_get(arr, index));
   } else {
     vm_raise_func_exception(vm, "index out of bounds: %ld", index);
@@ -354,7 +354,7 @@ DEF_BUILTIN(core_array_set) {
   POP_INT_ARG(index);
   POP_OBJ_ARG(struct lisp_array, arr, lisp_val_is_array);
 
-  if (0 <= index && index < (long)arr->length) {
+  if (0 <= index && index < (lisp_int_t)arr->length) {
     lisp_array_set(arr, index, value);
     BUILTIN_RETURN(LISP_VAL_NIL);
   } else {
@@ -576,8 +576,8 @@ DEF_BUILTIN(core_time_ms) {
 DEF_BUILTIN(core_sleep) {
   POP_INT_ARG(millis);
 
-  long seconds = millis / 1000;
-  long nanos = (millis - seconds * 1000) * 1000;
+  lisp_int_t seconds = millis / 1000;
+  lisp_int_t nanos = (millis - seconds * 1000) * 1000;
   struct timespec t = {.tv_sec = seconds, .tv_nsec = nanos};
   if (thrd_sleep(&t, NULL) < 0) {
     vm_raise_func_exception(vm, "sleep interrupted");

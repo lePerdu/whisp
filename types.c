@@ -108,7 +108,7 @@ struct lisp_val lisp_false(void) { return LISP_VAL_NIL; }
 
 struct lisp_real {
   struct lisp_obj header;
-  double value;
+  lisp_real_t value;
 };
 
 static const struct lisp_vtable REAL_VTABLE = {
@@ -118,7 +118,7 @@ static const struct lisp_vtable REAL_VTABLE = {
     .destroy = lisp_destroy_none,
 };
 
-struct lisp_val lisp_val_from_real(double d) {
+struct lisp_val lisp_val_from_real(lisp_real_t d) {
   struct lisp_real *v = lisp_obj_alloc(&REAL_VTABLE, sizeof(*v));
   v->value = d;
   return lisp_val_from_obj(v);
@@ -128,7 +128,7 @@ bool lisp_val_is_real(struct lisp_val v) {
   return lisp_val_vtable(v) == &REAL_VTABLE;
 }
 
-double lisp_val_as_real(struct lisp_val v) {
+lisp_real_t lisp_val_as_real(struct lisp_val v) {
   assert(lisp_val_is_real(v));
   return LISP_VAL_AS(struct lisp_real, v)->value;
 }

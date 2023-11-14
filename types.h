@@ -130,9 +130,9 @@ static inline void *lisp_val_cast(lisp_predicate pred, struct lisp_val v) {
 // clang-format off
 #define LISP_TYPE_NAME(t) \
   _Generic((t)(uintptr_t)NULL, \
-    long: "int", \
+    lisp_int_t: "int", \
     lisp_char_t: "char", \
-    double: "real", \
+    lisp_real_t: "real", \
     struct lisp_symbol *: "symbol", \
     struct lisp_string *: "string", \
     struct lisp_cons *: "cons", \
@@ -179,11 +179,18 @@ static inline struct lisp_val lisp_val_from_bool(bool x) {
 struct lisp_val lisp_uninitialized(void);
 bool lisp_is_uninitialized(struct lisp_val v);
 
+typedef long lisp_int_t;
+
+/**
+ * Unsigned integer type is used in a couple scenarios.
+ */
+typedef unsigned long lisp_unsigned_int_t;
+
 #define LISP_INT_MIN (LONG_MIN >> 2)
 #define LISP_INT_MAX (LONG_MAX >> 2)
 
 /** Fixed-sized integer. */
-static inline struct lisp_val lisp_val_from_int(long n) {
+static inline struct lisp_val lisp_val_from_int(lisp_int_t n) {
   // Having the assertions aborts the program on integer overflow.
   // TODO Make a runtime error? Just ignore overflow?
   // assert(n >= LISP_INT_MIN);
@@ -195,9 +202,9 @@ static inline bool lisp_val_is_int(struct lisp_val v) {
   return (v.tagged_ptr & INT_TAG_MASK) == TAG_INT;
 }
 
-static inline long lisp_val_as_int(struct lisp_val v) {
+static inline lisp_int_t lisp_val_as_int(struct lisp_val v) {
   assert(lisp_val_is_int(v));
-  return ((long)v.tagged_ptr) >> INT_TAG_SHIFT;
+  return ((lisp_int_t)v.tagged_ptr) >> INT_TAG_SHIFT;
 }
 
 typedef unsigned char lisp_char_t;
@@ -219,10 +226,12 @@ static inline lisp_char_t lisp_val_as_char(struct lisp_val v) {
   return (lisp_char_t)(v.tagged_ptr >> CHAR_TAG_SHIFT);
 }
 
+typedef double lisp_real_t;
+
 /** Double-precision floating point number. */
-struct lisp_val lisp_val_from_real(double d);
+struct lisp_val lisp_val_from_real(lisp_real_t d);
 bool lisp_val_is_real(struct lisp_val v);
-double lisp_val_as_real(struct lisp_val v);
+lisp_real_t lisp_val_as_real(struct lisp_val v);
 
 bool lisp_val_is_number(struct lisp_val v);
 

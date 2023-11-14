@@ -104,7 +104,7 @@ static bool is_int_char(char c) { return isdigit(c) || c == '-' || c == '+'; }
  * Customization over `printf` to ensure real numbers are always printed in a
  * way which differentiates them from integers.
  */
-static void print_real(struct str_builder *b, double v) {
+static void print_real(struct str_builder *b, lisp_real_t v) {
   int n_chars = str_builder_format(b, "%.*g", DBL_DIG, v);
   const struct lisp_string *str_buf = str_builder_get_str(b);
 

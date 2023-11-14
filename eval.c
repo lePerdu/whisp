@@ -290,7 +290,7 @@ LOOP:
         vm_raise_format_exception(vm, "escape frame must be of type int");
         goto HANDLE_FATAL_ERROR;
       }
-      long frame_index = lisp_val_as_int(frame_val);
+      lisp_int_t frame_index = lisp_val_as_int(frame_val);
       if (frame_index <= 0 || vm_current_frame_index(vm) < frame_index) {
         vm_raise_format_exception(vm, "escape frame is out of bounds: %d",
                                   frame_index);

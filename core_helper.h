@@ -22,9 +22,9 @@
   POP_TYPED_ARG(obj_type *, arg, pred, lisp_val_as_obj)
 
 #define POP_INT_ARG(arg) \
-  POP_TYPED_ARG(long, arg, lisp_val_is_int, lisp_val_as_int)
+  POP_TYPED_ARG(lisp_int_t, arg, lisp_val_is_int, lisp_val_as_int)
 #define POP_REAL_ARG(arg) \
-  POP_TYPED_ARG(double, arg, lisp_val_is_int, lisp_val_as_int)
+  POP_TYPED_ARG(lisp_real_t, arg, lisp_val_is_int, lisp_val_as_int)
 #define POP_CHAR_ARG(arg) \
   POP_TYPED_ARG(lisp_char_t, arg, lisp_val_is_char, lisp_val_as_char)
 
@@ -44,9 +44,9 @@
   REF_TYPED_ARG(obj_type *, arg, pred, lisp_val_as_obj, index)
 
 #define REF_INT_ARG(arg, index) \
-  REF_TYPED_ARG(long, arg, lisp_val_is_int, lisp_val_as_int, index)
+  REF_TYPED_ARG(lisp_int_t, arg, lisp_val_is_int, lisp_val_as_int, index)
 #define REF_REAL_ARG(arg, index) \
-  REF_TYPED_ARG(double, arg, lisp_val_is_int, lisp_val_as_int, index)
+  REF_TYPED_ARG(lisp_real_t, arg, lisp_val_is_int, lisp_val_as_int, index)
 #define REF_CHAR_ARG(arg, index) \
   REF_TYPED_ARG(lisp_char_t, arg, lisp_val_is_char, lisp_val_as_char, index)
 
@@ -97,11 +97,11 @@
     BUILTIN_RETURN(lisp_val_from_bool(x op y));                              \
   }
 
-#define MAKE_INT_BINARY(name, op) MAKE_NUM_BINARY(int, name, long, op)
-#define MAKE_INT_COMPARE(name, op) MAKE_NUM_COMPARE(int, name, long, op)
+#define MAKE_INT_BINARY(name, op) MAKE_NUM_BINARY(int, name, lisp_int_t, op)
+#define MAKE_INT_COMPARE(name, op) MAKE_NUM_COMPARE(int, name, lisp_int_t, op)
 
-#define MAKE_REAL_BINARY(name, op) MAKE_NUM_BINARY(real, name, double, op)
-#define MAKE_REAL_COMPARE(name, op) MAKE_NUM_COMPARE(real, name, double, op)
+#define MAKE_REAL_BINARY(name, op) MAKE_NUM_BINARY(real, name, lisp_real_t, op)
+#define MAKE_REAL_COMPARE(name, op) MAKE_NUM_COMPARE(real, name, lisp_real_t, op)
 
 #define MAKE_CHAR_COMPARE(name, op) \
   MAKE_NUM_COMPARE(char, name, lisp_char_t, op)
