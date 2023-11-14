@@ -14,13 +14,18 @@ struct lisp_val {
 };
 
 enum ptr_tag {
-  TAG_INT = 1,
   TAG_OBJ = 0,
+  TAG_INT = 1,
+  TAG_CHAR = 2,
 };
 
-#define TAG_SHIFT 1
-#define TAG_MASK ((uintptr_t)1)
-#define VALUE_MASK (~TAG_MASK)
+#define INT_TAG_SHIFT 1
+#define INT_TAG_MASK ((uintptr_t)1)
+// Store characters in the upper 32-bit word as that can probably be more
+// optimized by the compiler.
+#define CHAR_TAG_SHIFT 32
+#define OBJ_TAG_MASK ((uintptr_t)3)
+#define OBJ_TAG_SHIFT 2
 
 const char *lisp_val_type_name(struct lisp_val v);
 
@@ -101,13 +106,13 @@ typedef bool (*lisp_predicate)(struct lisp_val arg);
 static_assert(TAG_OBJ == 0, "Object tag is non-0");
 
 static inline void *lisp_val_as_obj(struct lisp_val v) {
-  assert((v.tagged_ptr & TAG_MASK) == TAG_OBJ);
+  assert((v.tagged_ptr & OBJ_TAG_MASK) == TAG_OBJ);
   return (void *)v.tagged_ptr;
 }
 
 static inline struct lisp_val lisp_val_from_obj(void *obj) {
   uintptr_t raw = (uintptr_t)obj;
-  assert((raw & TAG_MASK) == 0);
+  assert((raw & OBJ_TAG_MASK) == TAG_OBJ);
   return (struct lisp_val){raw};
 }
 
@@ -183,16 +188,35 @@ static inline struct lisp_val lisp_val_from_int(long n) {
   // TODO Make a runtime error? Just ignore overflow?
   // assert(n >= LISP_INT_MIN);
   // assert(n <= LISP_INT_MAX);
-  return (struct lisp_val){(uintptr_t)(n << TAG_SHIFT) | TAG_INT};
+  return (struct lisp_val){(uintptr_t)(n << INT_TAG_SHIFT) + TAG_INT};
 }
 
 static inline bool lisp_val_is_int(struct lisp_val v) {
-  return (v.tagged_ptr & TAG_MASK) == TAG_INT;
+  return (v.tagged_ptr & INT_TAG_MASK) == TAG_INT;
 }
 
 static inline long lisp_val_as_int(struct lisp_val v) {
   assert(lisp_val_is_int(v));
-  return ((long)v.tagged_ptr) >> TAG_SHIFT;
+  return ((long)v.tagged_ptr) >> INT_TAG_SHIFT;
+}
+
+typedef unsigned char lisp_char_t;
+
+#define LISP_CHAR_MIN 0
+#define LISP_CHAR_MAX UINT8_MAX
+
+/** Single character (only supports 8-bit for now) */
+static inline struct lisp_val lisp_val_from_char(lisp_char_t c) {
+  return (struct lisp_val){((uintptr_t)c << CHAR_TAG_SHIFT) + TAG_CHAR};
+}
+
+static inline bool lisp_val_is_char(struct lisp_val v) {
+  return (v.tagged_ptr & OBJ_TAG_MASK) == TAG_CHAR;
+}
+
+static inline lisp_char_t lisp_val_as_char(struct lisp_val v) {
+  assert(lisp_val_is_char(v));
+  return (lisp_char_t)(v.tagged_ptr >> CHAR_TAG_SHIFT);
 }
 
 /** Double-precision floating point number. */
@@ -201,16 +225,6 @@ bool lisp_val_is_real(struct lisp_val v);
 double lisp_val_as_real(struct lisp_val v);
 
 bool lisp_val_is_number(struct lisp_val v);
-
-typedef unsigned char lisp_char_t;
-
-#define LISP_CHAR_MIN 0
-#define LISP_CHAR_MAX UINT8_MAX
-
-/** Single character (only supports 8-bit for now) */
-struct lisp_val lisp_val_from_char(lisp_char_t c);
-bool lisp_val_is_char(struct lisp_val v);
-lisp_char_t lisp_val_as_char(struct lisp_val v);
 
 /**
  * Mutable cell for storing a single value.

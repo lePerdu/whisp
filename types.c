@@ -13,7 +13,7 @@
 #include "memory.h"
 #include "symbol.h"
 
-#define REQUIRED_ALIGN (TAG_MASK + 1)
+#define REQUIRED_ALIGN (OBJ_TAG_MASK + 1)
 
 static_assert(alignof(struct lisp_obj) >= REQUIRED_ALIGN,
               "Alignment not big enough for tagged pointers");
@@ -32,13 +32,6 @@ void lisp_visit_none(struct lisp_val object, visit_callback cb, void *ctx) {
 
 void lisp_destroy_none(struct lisp_val object) { (void)object; }
 
-static const struct lisp_vtable INT_VTABLE = {
-    .alloc_type = LISP_ALLOC_CONST,
-    .name = "int",
-    .visit_children = lisp_visit_none,
-    .destroy = lisp_destroy_none,
-};
-
 static const struct lisp_vtable NIL_VTABLE = {
     .alloc_type = LISP_ALLOC_CONST,
     .name = "nil",
@@ -46,11 +39,27 @@ static const struct lisp_vtable NIL_VTABLE = {
     .destroy = lisp_destroy_none,
 };
 
+static const struct lisp_vtable INT_VTABLE = {
+    .alloc_type = LISP_ALLOC_CONST,
+    .name = "int",
+    .visit_children = lisp_visit_none,
+    .destroy = lisp_destroy_none,
+};
+
+static const struct lisp_vtable CHAR_VTABLE = {
+    .alloc_type = LISP_ALLOC_CONST,
+    .name = "char",
+    .visit_children = lisp_visit_none,
+    .destroy = lisp_destroy_none,
+};
+
 const struct lisp_vtable *lisp_val_vtable(struct lisp_val v) {
-  if ((v.tagged_ptr & TAG_MASK) == TAG_INT) {
-    return &INT_VTABLE;
-  } else if (v.tagged_ptr == LISP_VAL_NIL.tagged_ptr) {
+  if (lisp_val_is_nil(v)) {
     return &NIL_VTABLE;
+  } else if (lisp_val_is_int(v)) {
+    return &INT_VTABLE;
+  } else if (lisp_val_is_char(v)) {
+    return &CHAR_VTABLE;
   } else {
     return LISP_VAL_AS(struct lisp_obj, v)->vt;
   }
@@ -126,36 +135,6 @@ double lisp_val_as_real(struct lisp_val v) {
 
 bool lisp_val_is_number(struct lisp_val v) {
   return lisp_val_is_int(v) || lisp_val_is_real(v);
-}
-
-struct lisp_char {
-  struct lisp_obj header;
-  lisp_char_t value;
-};
-
-static const struct lisp_vtable CHAR_VTABLE = {
-    // TODO Figure out a way to avoid heap allocating these?
-    // For strictly 8-bit characters, they could be statically allocated, but
-    // not when e.g. UTF-8 chars are supported
-    .alloc_type = LISP_ALLOC_GC,
-    .name = "char",
-    .visit_children = lisp_visit_none,
-    .destroy = lisp_destroy_none,
-};
-
-struct lisp_val lisp_val_from_char(lisp_char_t c) {
-  struct lisp_char *v = lisp_obj_alloc(&CHAR_VTABLE, sizeof(*v));
-  v->value = c;
-  return lisp_val_from_obj(v);
-}
-
-bool lisp_val_is_char(struct lisp_val v) {
-  return lisp_val_vtable(v) == &CHAR_VTABLE;
-}
-
-lisp_char_t lisp_val_as_char(struct lisp_val v) {
-  assert(lisp_val_is_char(v));
-  return LISP_VAL_AS(struct lisp_char, v)->value;
 }
 
 bool lisp_val_identical(struct lisp_val a, struct lisp_val b) {

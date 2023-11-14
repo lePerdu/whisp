@@ -78,7 +78,7 @@ DEF_BUILTIN(core_real_bits) {
     long int_bits;
     double real_bits;
   } u = {.real_bits = x};
-  BUILTIN_RETURN(lisp_val_from_int(u.int_bits >> TAG_SHIFT));
+  BUILTIN_RETURN(lisp_val_from_int(u.int_bits));
 }
 
 DEF_BUILTIN(core_real_exp) {
@@ -112,7 +112,7 @@ DEF_BUILTIN(core_identical) {
 DEF_BUILTIN(core_object_id) {
   // TODO Should this reject non-pointer values?
   POP_ARG(obj);
-  BUILTIN_RETURN(lisp_val_from_int(obj.tagged_ptr >> TAG_SHIFT));
+  BUILTIN_RETURN(lisp_val_from_int(obj.tagged_ptr >> OBJ_TAG_SHIFT));
 }
 
 DEF_BUILTIN(core_make_cons) {
