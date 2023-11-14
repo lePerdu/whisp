@@ -101,8 +101,23 @@
     (int- (hash-table-capacity ht) 1)
     hash))
 
+;; TODO Should this be part of the hash functions defined above?
+;; Or does it make sense to have it hard-coded inside the hash table?
+(defn! (_ht-rehash x)
+  ;; Source:
+  ;; https://lemire.me/blog/2018/08/15/fast-strongly-universal-64-bit-hashing-everywhere/
+  ;; Adjusted constants and shifts to be 63-bit
+  (let*
+    ((x (bitxor x (bitshift x -32)))
+     (x (int* x 9174307257865047245))
+     (x (bitxor x (bitshift x -33)))
+     (x (int* x 4958104740799310931))
+     (x (bitxor x (bitshift x -32))))
+    x))
+
 (defn! (_ht-hash ht key)
-  ((hash-table-hash-fn ht) key))
+  (_ht-rehash
+    ((hash-table-hash-fn ht) key)))
 
 (defn! (_ht-get-bucket ht hash)
   (array-get (_ht-data ht) (_ht-bucket-index ht hash)))
