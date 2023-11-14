@@ -57,6 +57,10 @@
 
 (def! ** (generic-binary-op int** real**))
 
+;; TODO Better name for this?
+(defn! (real-int? x)
+  (= (real (int x)) x))
+
 (defn! (positive? x) (> x 0))
 (defn! (negative? x) (< x 0))
 (defn! (zero? x) (== x 0))

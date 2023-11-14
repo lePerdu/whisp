@@ -73,7 +73,7 @@
           (loop (inc i)))))))
 
 (defn! (array-copy-sub from into start end into-offset)
-  (if (= start end)
+  (if (int>= start end)
     into
     (do
       (array-set!
@@ -120,7 +120,7 @@
 (defn! (array-for-each f arr . opt-range)
   (let-cons ((start . end) (array-opt-range-or-default opt-range arr))
     (let-named loop ((index start))
-      (if (= index end)
+      (if (int>= index end)
         nil
         (do
           (f (array-get arr index))
@@ -129,8 +129,26 @@
 (defn! (array-for-each-index f arr . opt-range)
   (let-cons ((start . end) (array-opt-range-or-default opt-range arr))
     (let-named loop ((index start))
-      (if (= index end)
+      (if (int>= index end)
         nil
         (do
           (f index (array-get arr index))
           (loop (inc index)))))))
+
+(defn! (array-foldl init f arr . opt-range)
+  (let-cons ((start . end) (array-opt-range-or-default opt-range arr))
+    (let-named loop ((acc init) (index start))
+      (if (int>= index end)
+        acc
+        (loop
+          (f acc (array-get arr index))
+          (inc index))))))
+
+(defn! (array-foldr init f arr . opt-range)
+  (let-cons ((start . end) (array-opt-range-or-default opt-range arr))
+    (let-named loop ((acc init) (index (dec end)))
+      (if (int< index start)
+        acc
+        (loop
+          (f (array-get arr index) acc)
+          (dec index))))))

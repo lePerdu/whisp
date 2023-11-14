@@ -34,6 +34,7 @@ WHISP_LIB_SRC_FILES = \
 	exception.wh \
 	fluid.wh \
 	func.wh \
+	hash-table.wh \
 	list.wh \
 	macros.wh \
 	math.wh \

@@ -11,6 +11,7 @@
 (load "array.wh")
 (load "vector.wh")
 (load "record.wh")
+(load "hash-table.wh")
 (load "fluid.wh")
 (load "exception.wh")
 (load "continuation.wh")

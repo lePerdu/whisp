@@ -1,4 +1,4 @@
-CFLAGS = -O3
+CFLAGS = -O3 -flto
 BUILD = build/release
 
 CONFIGURED_MAKEFILE = $(BUILD)/configured.mk

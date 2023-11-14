@@ -32,3 +32,38 @@
                     (error ~type-error-message)))
                 nil))))
         fields))))
+
+(defmacro! (def-mutable-record! name ctor-symbol pred-symbol . fields)
+  ; TODO Share structure with defrecord!
+  (let*
+    ((name-str (->string name))
+     (marker (gensym name-str))
+     (field-names (map car fields))
+     (type-error-message (string-concat "argument must be of type: " name-str)))
+    `(do
+      (defn! (~ctor-symbol ~@field-names)
+        (array '~marker ~@field-names))
+      (defn! (~pred-symbol value)
+        (and
+          (array? value)
+          (= (array-length value) ~(inc (count fields)))
+          (= (array-get value 0) '~marker)))
+      ~@(map-index
+        (fn (field-desc field-index)
+          (let*
+            ((array-index (inc field-index))
+             (get-field-symbol (cadr field-desc))
+             (set-field-symbol
+              (if (null? (cddr field-desc)) nil (caddr field-desc))))
+            `(do
+              (defn! (~get-field-symbol obj)
+                (if (~pred-symbol obj)
+                  (array-get obj ~array-index)
+                  (error ~type-error-message)))
+              ~(if (not (null? set-field-symbol))
+                `(defn! (~set-field-symbol obj new-value)
+                  (if (~pred-symbol obj)
+                    (array-set! obj ~array-index new-value)
+                    (error ~type-error-message)))
+                nil))))
+        fields))))

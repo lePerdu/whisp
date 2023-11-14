@@ -12,6 +12,7 @@
 (load-library "array.wh")
 (load-library "record.wh")
 (load-library "vector.wh")
+(load-library "hash-table.wh")
 (load-library "fluid.wh")
 (load-library "ports.wh")
 (load-library "exception.wh")

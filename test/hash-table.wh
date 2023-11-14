@@ -1,0 +1,124 @@
+(defgroup! hash-table
+  (defn! (map-numbers-to-strings! ht n)
+    (if (> n 0)
+      (do
+        (hash-table-set! ht n (->string n))
+        (map-numbers-to-strings! ht (dec n)))))
+
+  (defn! (map-strings-to-numbers! ht n)
+    (if (> n 0)
+      (do
+        (hash-table-set! ht (->string n) n)
+        (map-strings-to-numbers! ht (dec n)))))
+
+  (deftest! get-default-value
+    (def! h (make-=-hash-table))
+    (assert-not (hash-table-contains? h 'missing))
+    (assert= 5 (hash-table-get h 'missing 5)))
+
+  (deftest! get-after-set
+    (def! h (make-=-hash-table))
+    (hash-table-set! h 'key 5)
+    (assert (hash-table-contains? h 'key))
+    (assert= 5 (hash-table-get h 'key 'default)))
+
+  (deftest! get-after-multiple-sets
+    (def! h (make-=-hash-table))
+    (hash-table-set! h 'key 5)
+    (hash-table-set! h 'key 6)
+    (assert (hash-table-contains? h 'key))
+    (assert= 6 (hash-table-get h 'key 'default)))
+
+  (defgroup! hash-table-delete!
+    (deftest! delete-missing-is-no-op
+      (def! h (make-=-hash-table))
+      (hash-table-set! h 'key 5)
+      (hash-table-delete! h 'other)
+      (assert (hash-table-contains? h 'key))
+      (assert-not (hash-table-contains? h 'other))
+      (assert= 5 (hash-table-get h 'key 'default))
+      (assert= 1 (hash-table-count h)))
+    (deftest! get-default-value-after-delete
+      (def! h (make-=-hash-table))
+      (hash-table-set! h 'key 5)
+      (hash-table-delete! h 'key)
+      (assert-not (hash-table-contains? h 'key))
+      (assert= 'default (hash-table-get h 'key 'default))
+      (assert= 0 (hash-table-count h)))
+    (deftest! delete-after-multiple-sets
+      (def! h (make-=-hash-table))
+      (hash-table-set! h 'key 5)
+      (hash-table-set! h 'other 6)
+      (hash-table-set! h 'key 7)
+      (hash-table-delete! h 'key)
+      (assert-not (hash-table-contains? h 'key))
+      (assert= 'default (hash-table-get h 'key 'default))
+      (assert= 1 (hash-table-count h))))
+
+  (defgroup! alist<->hash-table
+    (defgroup! alist->hash-table
+      (deftest! create-from-empty-alist
+        (def! h (alist->=-hash-table nil))
+        (assert= 0 (hash-table-count h)))
+      (deftest! hash-table-takes-first-entry-in-alist
+        (def! h (alist->=-hash-table '((1 . "1") (2 . "2") (1 . "3"))))
+        (assert-equal "1" (hash-table-get h 1 'default))))
+    (defgroup! hash-table->alist
+      (deftest! create-from-empty-table
+        (assert= nil (hash-table->alist (make-=-hash-table))))
+      (deftest! deleted-entries-not-included-in-alist
+        (def! h (make-=-hash-table))
+        (hash-table-set! h 1 'one)
+        (hash-table-set! h 2 'two)
+        (hash-table-delete! h 1)
+        (assert-equal '((2 . two)) (hash-table->alist h)))
+      (deftest! multiple-sets-are-single-alist-entry
+        (def! h (make-=-hash-table))
+        (hash-table-set! h 1 'one)
+        (hash-table-set! h 2 'two)
+        (hash-table-set! h 1 'other)
+        (hash-table-set! h 3 'three)
+        (let ((alist (hash-table->alist h)))
+          (do
+            (assert= 3 (count alist))
+            (assert-equal '(1 . other) (assoc 1 alist))
+            (assert-equal '(2 . two) (assoc 2 alist))
+            (assert-equal '(3 . three) (assoc 3 alist)))))))
+
+  (deftest! grows-after-adding-many-elements
+    (def! h (make-=-hash-table))
+    (def! init-cap (hash-table-capacity h))
+    ; Add more than capacity
+    (map-numbers-to-strings! h (inc init-cap))
+    (assert (> (hash-table-capacity h) init-cap)))
+
+  (deftest! works-with-large-number-of-items
+    (def! h (make-equal-hash-table))
+    (map-numbers-to-strings! h 1000)
+    (map-strings-to-numbers! h 1000)
+    (assert= 2000 (hash-table-count h))
+    (assert-equal "587" (hash-table-get h 587 'default))
+    (assert= 398 (hash-table-get h "398" 'default)))
+
+  (deftest! works-with-heterogeneous-keys
+    (def! h (make-equal-hash-table))
+    (hash-table-set! h 'symbol "symbol")
+    (hash-table-set! h "string" 'string)
+    (hash-table-set! h 100 "int")
+    (hash-table-set! h (cons 1 2) "pair")
+    (hash-table-set! h (list (cons 'a "b") 4 3 2 nil) (list "complex" "list"))
+    (hash-table-set! h "100" 'numeric-string)
+
+    (assert= 'numeric-string (hash-table-get h "100" 'default))
+    (assert-equal "int" (hash-table-get h 100 'default))
+    (assert-equal
+      (list "complex" "list")
+      (hash-table-get h
+        (list (cons 'a "b") 4 3 2 nil) 'default))
+    ; Slight modification of the complex key
+    (assert=
+      'default
+      (hash-table-get h (list (cons 'a "b") 4 3 1 nil) 'default))
+    (assert-equal "pair" (hash-table-get h '(1 . 2) 'default))
+    (assert= 'string (hash-table-get h "string" 'default))
+    (assert-equal "symbol" (hash-table-get h 'symbol 'default))))
