@@ -1,19 +1,18 @@
 CFLAGS = -O3 -flto
 BUILD = build/release
 
-CONFIGURED_MAKEFILE = $(BUILD)/configured.mk
+CONFIGURED_MAKEFILE = .configured.mk
 -include $(CONFIGURED_MAKEFILE)
 PREFIX ?= /usr/local
 WHISP_LIB_DIR = $(PREFIX)/lib/whisp
 
-# configure has to be run before building/installing
-GENERATE_CONFIG_TARGET = configure-generate-config
-
 include common.mk
 
-# Save the prefix used at configure time for future "install"s
-configure: configure-generate-config
+# Save the configured settings for future "install"s
+# Also delete existing generated files so they will be re-generated on next build
+configure:
 	printf 'PREFIX = %s\n' $(PREFIX) >$(CONFIGURED_MAKEFILE)
+	$(RM) $(GENERATED_CONFIG)
 
 EXEC_INSTALL = $(PREFIX)/bin/$(EXEC_NAME)
 LIB_INSTALL = $(WHISP_LIB_DIR)

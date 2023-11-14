@@ -49,7 +49,6 @@ WHISP_LIB_SRCS = $(WHISP_LIB_SRC_FILES:%=$(WHISP_LIB_SRCS_DIR)/%)
 
 GENERATED = $(BUILD)/generated
 GENERATED_CONFIG = $(GENERATED)/config.h
-GENERATE_CONFIG_TARGET ?= $(GENERATED_CONFIG)
 
 CFLAGS += -I$(GENERATED)
 
@@ -68,8 +67,8 @@ $(BUILD)/%.o: %.c | $(BUILD) $(GENERATED_CONFIG)
 
 # Extra `echo` to expand `~` in the path.
 # TODO Figure out a cleaner way to do this
-$(GENERATE_CONFIG_TARGET): config.h.in | $(GENERATED)
-	sed "s|%WHISP_LIB_DIR%|$$(echo $(WHISP_LIB_DIR))|" $< >$(GENERATED_CONFIG)
+$(GENERATED_CONFIG): config.h.in | $(GENERATED)
+	sed "s|%WHISP_LIB_DIR%|$$(echo $(WHISP_LIB_DIR))|" $< >$@
 
 $(BIN):
 	mkdir -p $@

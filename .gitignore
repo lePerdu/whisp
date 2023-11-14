@@ -1,5 +1,6 @@
 build/
 bin/
+.configured.mk
 
 # Clangd
 compile_commands.json
