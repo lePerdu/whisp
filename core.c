@@ -69,6 +69,18 @@ MAKE_REAL_BINARY(mul, *);
 // No special handling for floating-point divide
 MAKE_REAL_BINARY(div, /);
 
+DEF_BUILTIN(core_real_bits) {
+  POP_REAL_ARG(x);
+  // Use a union rather than pointer casting to avoid compiler warnings
+  static_assert(sizeof(long) <= sizeof(double),
+                "Cannot safely get bits of real number");
+  union {
+    long int_bits;
+    double real_bits;
+  } u = {.real_bits = x};
+  BUILTIN_RETURN(lisp_val_from_int(u.int_bits >> TAG_SHIFT));
+}
+
 DEF_BUILTIN(core_real_exp) {
   POP_REAL_ARG(x);
   BUILTIN_RETURN(lisp_val_from_real(exp(x)));
@@ -95,6 +107,12 @@ DEF_BUILTIN(core_identical) {
   POP_ARG(b);
   POP_ARG(a);
   BUILTIN_RETURN(lisp_val_from_bool(lisp_val_identical(a, b)));
+}
+
+DEF_BUILTIN(core_object_id) {
+  // TODO Should this reject non-pointer values?
+  POP_ARG(obj);
+  BUILTIN_RETURN(lisp_val_from_int(obj.tagged_ptr >> TAG_SHIFT));
 }
 
 DEF_BUILTIN(core_make_cons) {
@@ -707,6 +725,7 @@ static const struct builtin_config builtins[] = {
     [INTRINSIC_REAL_GT] = {"real>", core_real_gt, 2, false},
     [INTRINSIC_REAL_GTE] = {"real>=", core_real_gte, 2, false},
     [INTRINSIC_REAL_EQ] = {"real=", core_real_eq, 2, false},
+    [INTRINSIC_REAL_BITS] = {"real-bits", core_real_bits, 1, false},
 
     [INTRINSIC_REAL_EXP] = {"e**", core_real_exp, 2, false},
     [INTRINSIC_REAL_LOG] = {"log", core_real_log, 2, false},
@@ -718,11 +737,7 @@ static const struct builtin_config builtins[] = {
     // - equal?: structural comparison, working for strings and lists
     // TODO Make equality checks variadic (this one and others)?
     [INTRINSIC_IDENTICAL] = {"=", core_identical, 2, false},
-    [INTRINSIC_STRING_TO_SYMBOL] = {"string->symbol", core_string_to_symbol, 1,
-                                    false},
-    [INTRINSIC_STRING_TO_INT] = {"string->int", core_string_to_int, 1, false},
-    [INTRINSIC_STRING_TO_REAL] = {"string->real", core_string_to_real, 1,
-                                  false},
+    [INTRINSIC_OBJECT_ID] = {"object-id", core_object_id, 1, false},
     [INTRINSIC_IS_SYMBOL] = {"symbol?", core_is_symbol, 1, false},
     [INTRINSIC_IS_FUNCTION] = {"fn?", core_is_function, 1, false},
     [INTRINSIC_FUNCTION_NAME] = {"fn-name", core_function_name, 1, false},
@@ -750,6 +765,11 @@ static const struct builtin_config builtins[] = {
     [INTRINSIC_STRING_GET] = {"string-get", core_string_get, 2, false},
     [INTRINSIC_STRING_CONCAT] = {"string-concat", core_string_concat, 0, true},
     [INTRINSIC_TO_STRING] = {"->string", core_to_string, 1, false},
+    [INTRINSIC_STRING_TO_SYMBOL] = {"string->symbol", core_string_to_symbol, 1,
+                                    false},
+    [INTRINSIC_STRING_TO_INT] = {"string->int", core_string_to_int, 1, false},
+    [INTRINSIC_STRING_TO_REAL] = {"string->real", core_string_to_real, 1,
+                                  false},
     [INTRINSIC_WRITE_TO_STRING] = {"write->string", core_write_to_string, 1,
                                    false},
 
