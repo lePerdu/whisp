@@ -60,15 +60,6 @@
     (let ((first (car l)))
       (if (p first) first (find p (cdr l))))))
 
-;; Like find, but using buitin equality checking
-;; TODO Use equal?
-(defn! (contains x l)
-  ; Can't use find because there wouldn't be a way to distinguish between nil
-  ; and not found
-  (if (null? l)
-    false
-    (or (= first (car l)) (contains x (cdr l)))))
-
 ;; TODO Use equal?
 (defn! (remove x l)
   (filter (fn (item) (not (= x item))) l))
@@ -100,17 +91,40 @@
     nil
     (cons x (repeat x (int- n 1)))))
 
-(defn! (assq key l)
+(defn! (opt-arg-or-default opt-arg-list default)
   (cond
-    ((null? l) nil)
-    ((= key (caar l)) (car l))
-    (else (assq key (cdr l)))))
+    ((null? opt-arg-list) default)
+    ((null? (cdr opt-arg-list)) (car opt-arg-list))
+    (else (error "too many arguments"))))
 
-(defn! (assoc key l)
+(defn! (member-with x l compare)
+  ; Can't use find because there wouldn't be a way to distinguish between nil
+  ; and not found
   (cond
     ((null? l) nil)
-    ((equal? key (caar l)) (car l))
-    (else (assoc key (cdr l)))))
+    ((compare x (car l)) l)
+    (else (member-with x (cdr l) compare))))
+
+(defn! (member= x l) (member-with x l =))
+(defn! (member== x l) (member-wih x l ==))
+
+(defn! (member x l . opt-compare)
+  (let ((compare (opt-arg-or-default opt-compare equal?)))
+    (member-with x l compare)))
+
+(defn! (acons key value alist) (cons (cons key value) alist))
+
+(defn! (assoc-with key l compare)
+  (cond
+    ((null? l) nil)
+    ((compare key (caar l)) (car l))
+    (else (assoc-with key (cdr l) compare))))
+
+(defn! (assoc= key l) (assoc-with key l =))
+(defn! (assoc== key l) (assoc-with key l ==))
+(defn! (assoc key l . opt-compare)
+  (let ((compare (opt-arg-or-default opt-compare equal?)))
+    (assoc-with key l compare)))
 
 (defn! (merge a b less)
   (cond

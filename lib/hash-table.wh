@@ -255,6 +255,5 @@
 (defn! (hash-table->alist ht)
   (hash-table-fold
     nil
-    (fn (alist key value)
-      (cons (cons key value) alist))
+    (fn (alist key value) (acons key value alist))
     ht))
