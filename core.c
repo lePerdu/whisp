@@ -321,7 +321,7 @@ DEF_BUILTIN(core_reset) {
 
 DEF_BUILTIN_PRED(core_is_array, lisp_val_is_array);
 
-DEF_BUILTIN(core_make_array) {
+DEF_BUILTIN(core_array_alloc) {
   POP_INT_ARG(length);
 
   if (length >= 0) {
@@ -779,7 +779,7 @@ static const struct builtin_config builtins[] = {
     [INTRINSIC_RESET] = {"reset!", core_reset, 2, false},
 
     [INTRINSIC_IS_ARRAY] = {"array?", core_is_array, 1, false},
-    [INTRINSIC_MAKE_ARRAY] = {"make-array", core_make_array, 1, false},
+    [INTRINSIC_ALLOC_ARRAY] = {"array-alloc", core_array_alloc, 1, false},
     [INTRINSIC_ARRAY_LENGTH] = {"array-length", core_array_length, 1, false},
     [INTRINSIC_ARRAY_GET] = {"array-get", core_array_get, 2, false},
     [INTRINSIC_ARRAY_SET] = {"array-set!", core_array_set, 3, false},

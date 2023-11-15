@@ -1,7 +1,7 @@
-(def! empty-array (make-array 0))
+(def! empty-array (array-alloc 0))
 
 (defn! (list->array elems)
-  (let ((arr (make-array (count elems))))
+  (let ((arr (array-alloc (count elems))))
     (do
       (for-each-index
         (fn (x index) (array-set! arr index x))
@@ -61,13 +61,13 @@
 (defn! (array-copy-helper arr start end)
   (array-copy-sub
     arr
-    (make-array (int- end start))
+    (array-alloc (int- end start))
     start
     end
     (int- 0 start)))
 
 (defn! (array-map f arr)
-  (let* ((n (array-length arr)) (new (make-array n)))
+  (let* ((n (array-length arr)) (new (array-alloc n)))
     (let-named loop ((i 0))
       (if (= i n)
         new
@@ -89,7 +89,7 @@
 (defn! (array-append arr value)
   (let*
     ((old-len (array-length arr))
-     (new-arr (make-array (inc old-len))))
+     (new-arr (array-alloc (inc old-len))))
     (let-named loop ((i 0))
       (if (= i old-len)
         (do
@@ -106,7 +106,7 @@
         (fn (acc sub-arr)
           (int+ acc (array-length sub-arr)))
         arrays))
-     (new-arr (make-array total-len)))
+     (new-arr (array-alloc total-len)))
     (let-named loop ((offset 0) (arrays arrays))
       (let-if-cons ((sub-arr . rest) arrays)
         (let ((sub-arr-len (array-length sub-arr)))
@@ -155,3 +155,20 @@
       (loop
         (f (array-get arr index) acc)
         (dec index)))))
+
+(defn-with-array-range! array-fill! (arr fill) arr start end
+  array-fill-helper!)
+(defn! (array-fill-helper! arr fill start end)
+  (array-for-each-index
+    (fn (index _) (array-set! arr index fill))
+    arr
+    start
+    end))
+
+(defn-case! make-array
+  ((length) (array-alloc length))
+  ((length fill)
+    (let ((arr (array-alloc length)))
+      (do
+        (array-fill! arr fill)
+        arr))))

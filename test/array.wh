@@ -142,4 +142,14 @@
       (array-map int a)
       (assert= 3 (array-get a 2)))
     (deftest! f-not-called-for-empty-array
-      (array-map (fn (x) (error "should not be called")) (make-array 0)))))
+      (array-map (fn (x) (error "should not be called")) (make-array 0))))
+
+  (defgroup! array-fill!
+    (deftest! empty-array
+      (def! a (array))
+      (array-fill! a 5)
+      (assert-array-equal (array) a))
+    (deftest! non-empty-array
+      (def! a (array 1 2 3 4 5))
+      (array-fill! a #\a)
+      (assert-array-equal (array #\a #\a #\a #\a #\a) a))))
