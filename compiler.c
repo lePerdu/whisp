@@ -1367,21 +1367,17 @@ static enum compile_res compile_let(struct compiler_ctx *ctx,
   // Allow `def!` inside `let`
   ctx->begin_pos = true;
 
-  if (ctx->tail_pos) {
-    return compile_non_top_level(ctx, ast);
-  } else {
-    if (compile_non_top_level(ctx, ast) == COMP_FAILED) {
-      return COMP_FAILED;
-    }
-
+  enum compile_res res;
+  res = compile_non_top_level(ctx, ast);
+  // Only need to emit cleanup instructions for non-tail calls
+  if (!ctx->tail_pos && res == COMP_SUCCESS) {
     int to_remove = ctx->local_count - outer_local_count;
-    if (emit_skip_delete(ctx, 1, to_remove) == COMP_FAILED) {
-      return COMP_FAILED;
-    }
-    ctx->local_count = outer_local_count;
-
-    return COMP_SUCCESS;
+    res = emit_skip_delete(ctx, 1, to_remove);
   }
+
+  // Always reset locals count
+  ctx->local_count = outer_local_count;
+  return res;
 }
 
 static enum compile_res compile_quote(struct compiler_ctx *ctx,
