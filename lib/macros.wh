@@ -219,6 +219,22 @@
   `(call-with-escape-continuation
     (fn (~esc-cont-name) ~body)))
 
+(defmacro! (for bindings stop-and-return . body)
+  (let
+    ((loop-sym (gensym))
+     (init-exprs (map (fn (b) (take 2 b)) bindings))
+     (step-exprs
+       (map
+         (fn (b)
+           (if (null? (cddr b)) (car b) (caddr b)))
+         bindings))
+     (test-expr (car stop-and-return))
+     (return-exprs (cdr stop-and-return)))
+  `(let-named ~loop-sym ~init-exprs
+    (if ~test-expr
+      (do ~@return-exprs)
+      (do ~@body (~loop-sym ~@step-exprs))))))
+
 (defn! (macroexpand-1 ast)
   ; Use escape cont to avoid repeating the `false` branch of all the conditions
   (let/ec return

@@ -185,6 +185,31 @@
           0
           (+ n (rec (dec n))))))))
 
+  (defgroup! for
+    (deftest! no-body
+      (assert= 55
+        (for ((i 1 (inc i)) (total 0 (+ total i)))
+            ((> i 10) total))))
+    (deftest! binding-without-step-remains-constant
+      (assert= 10
+        (for ((cell (atom 0)) (i 1 (inc i)))
+            ((> i 10) @cell)
+          (reset! cell i))))
+    (deftest! multiple-return-exprs
+      (def! a (atom 0))
+      (assert= 5
+        (for ((i 1 (inc i)))
+            ((>= i 10) (reset! a i) 5)))
+      (assert= 10 @a))
+    (deftest! multiple-body-exprs
+      (def! a (atom 10))
+      (assert= 5
+        (for ((i 10 (dec i)))
+            ((< i 0) 5)
+          (- 5 4)
+          (reset! a i)))
+      (assert= 0 @a)))
+
   (defgroup! quasiquote
     (deftest! backtick-syntax
       (assert-equal (list 'quasiquote 3) '`3))
