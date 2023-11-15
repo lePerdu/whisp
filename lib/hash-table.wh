@@ -73,10 +73,9 @@
 ;; Round capacity to the nearest power of 2
 (defn! (round-capacity orig)
   ; TODO Is there some bit magic to make this more efficient?
-  (let-named loop ((pow2 *hash-table-min-capacity*))
-    (if (>= pow2 orig)
-      pow2
-      (loop (bitshift pow2 1)))))
+  (for
+    ((pow2 *hash-table-min-capacity* (bitshift pow2 1)))
+    ((>= pow2 orig) pow2)))
 
 (defn! (make-hash-table hash-fn equal-fn . opt-capacity)
   (let*

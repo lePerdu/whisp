@@ -4,17 +4,12 @@
   (let ((arr (array-alloc (count elems))))
     (do
       (for-each-index
-        (fn (x index) (array-set! arr index x))
+        (fn (index x) (array-set! arr index x))
         elems)
       arr)))
 
 (defn! (array->list arr)
-  (let-named loop ((acc nil) (index (dec (array-length arr))))
-    (if (= index -1)
-      acc
-      (loop
-        (cons (array-get arr index) acc)
-        (dec index)))))
+  (array-foldr nil cons arr))
 
 ; TODO Include in equal?
 (defn! (array-equal? a b)
@@ -48,14 +43,12 @@
 
 ; TODO Define as primitive? Then it can be a simple memcpy
 (defn! (array-copy-sub from into start end into-offset)
-  (if (int>= start end)
-    into
-    (do
-      (array-set!
-        into
-        (int+ start into-offset)
-        (array-get from start))
-      (array-copy-sub from into (inc start) end into-offset))))
+  (for ((index start (inc index)))
+      ((int>= index end) into)
+    (array-set!
+      into
+      (int+ index into-offset)
+      (array-get from index))))
 
 (defn-with-array-range! array-copy (arr) arr start end array-copy-helper)
 (defn! (array-copy-helper arr start end)
@@ -68,12 +61,9 @@
 
 (defn! (array-map f arr)
   (let* ((n (array-length arr)) (new (array-alloc n)))
-    (let-named loop ((i 0))
-      (if (= i n)
-        new
-        (do
-          (array-set! new i (f (array-get arr i)))
-          (loop (inc i)))))))
+    (for ((i 0 (inc i)))
+        ((= i n) new)
+      (array-set! new i (f (array-get arr i))))))
 
 ; Persistent set (returns a new array)
 (defn! (array-set arr i value)
@@ -90,14 +80,11 @@
   (let*
     ((old-len (array-length arr))
      (new-arr (array-alloc (inc old-len))))
-    (let-named loop ((i 0))
-      (if (= i old-len)
-        (do
-          (array-set! new-arr i value)
-          new-arr)
-        (do
-          (array-set! new-arr i (array-get arr i))
-          (loop (inc i)))))))
+    (for ((i 0 (inc i)))
+        ((= i old-len)
+         (array-set! new-arr i value)
+         new-arr)
+      (array-set! new-arr i (array-get arr i)))))
 
 (defn! (array-concat . arrays)
   (let*
@@ -119,42 +106,32 @@
 (defn-with-array-range! array-for-each (f arr) arr start end
   array-for-each-helper)
 (defn! (array-for-each-helper f arr start end)
-  (let-named loop ((index start))
-    (if (int>= index end)
-      nil
-      (do
-        (f (array-get arr index))
-        (loop (inc index))))))
+  (for ((i start (inc i)))
+      ((int>= i end))
+    (f (array-get arr i))))
 
 (defn-with-array-range! array-for-each-index (f arr) arr start end
   array-for-each-index-helper)
 (defn! (array-for-each-index-helper f arr start end)
-  (let-named loop ((index start))
-    (if (int>= index end)
-      nil
-      (do
-        (f index (array-get arr index))
-        (loop (inc index))))))
+  (for ((i start (inc i)))
+      ((int>= i end))
+    (f i (array-get arr i))))
 
 (defn-with-array-range! array-foldl (init f arr) arr start end
   array-foldl-helper)
 (defn! (array-foldl-helper init f arr start end)
-  (let-named loop ((acc init) (index start))
-    (if (int>= index end)
-      acc
-      (loop
-        (f acc (array-get arr index))
-        (inc index)))))
+  (for
+    ((i start (inc i))
+     (acc init (f acc (array-get arr i))))
+    ((int>= i end) acc)))
 
 (defn-with-array-range! array-foldr (init f arr) arr start end
   array-foldr-helper)
 (defn! (array-foldr-helper init f arr start end)
-  (let-named loop ((acc init) (index (dec end)))
-    (if (int< index start)
-      acc
-      (loop
-        (f (array-get arr index) acc)
-        (dec index)))))
+  (for
+    ((i (dec end) (dec i))
+     (acc init (f (array-get arr i) acc)))
+    ((int< i start) acc)))
 
 (defn-with-array-range! array-fill! (arr fill) arr start end
   array-fill-helper!)

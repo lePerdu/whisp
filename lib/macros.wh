@@ -222,7 +222,8 @@
 (defmacro! (for bindings stop-and-return . body)
   (let
     ((loop-sym (gensym))
-     (init-exprs (map (fn (b) (take 2 b)) bindings))
+     (init-exprs
+       (map (fn (b) (list (car b) (cadr b))) bindings))
      (step-exprs
        (map
          (fn (b)

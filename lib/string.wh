@@ -30,12 +30,10 @@
 
 (defn! (substring-helper str start end)
   ; TODO Bounds checking
-  (let-named loop ((acc "") (index start))
-    (if (int>= index end)
-      acc
-      (loop
-        (string-concat acc (->string (string-get str index)))
-        (inc index)))))
+  (for
+    ((index start (inc index))
+     (acc "" (string-concat acc (->string (string-get str index)))))
+    ((int>= index end) acc)))
 
 (defn-with-string-range! string-index (s pred) s start end string-index-helper)
 (defn! (string-index-helper s pred start end)
@@ -87,37 +85,29 @@
 (defn-with-string-range! string-for-each (f s) s start end
   string-for-each-helper)
 (defn! (string-for-each-helper f s start end)
-  (let-named loop ((index start))
-    (if (< index end)
-      (do
-        (f (string-get s index))
-        (loop (inc index))))))
+  (for ((index start (inc index)))
+      ((int>= index end))
+    (f (string-get s index))))
 
 (defn-with-string-range! string-for-each-index (f s) s start end
   string-for-each-index-helper)
 (defn! (string-for-each-index-helper f s start end)
-  (let-named loop ((index start))
-    (if (< index end)
-      (do
-        (f index (string-get s index))
-        (loop (inc index))))))
+  (for ((index start (inc index)))
+      ((int>= index end))
+    (f index (string-get s index))))
 
 (defn-with-string-range! string-foldl (init f s) s start end
   string-foldl-helper)
 (defn! (string-foldl-helper init f s start end)
-  (let-named loop ((acc init) (index start))
-    (if (>= index end)
-      acc
-      (loop
-        (f acc (string-get s index))
-        (inc index)))))
+  (for
+    ((index start (inc index))
+     (acc init (f acc (string-get s index))))
+    ((int>= index end) acc)))
 
 (defn-with-string-range! string-foldr (init f s) s start end
   string-foldr-helper)
 (defn! (string-foldr-helper init f s start end)
-  (let-named loop ((acc init) (index (dec end)))
-    (if (< index start)
-      acc
-      (loop
-        (f (string-get s index) acc)
-        (dec index)))))
+  (for
+    ((index (dec end) (dec index))
+     (acc init (f (string-get s index) acc)))
+    ((int< index start) acc)))

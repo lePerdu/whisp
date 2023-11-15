@@ -160,21 +160,22 @@
   (foldl empty-vector vector-append lst))
 
 (defn! (vector->list v)
-  (let-named loop ((acc nil) (index (dec (vector-length v))))
-    (if (= index -1)
-      acc
-      (loop
-        (cons (vector-get v index) acc)
-        (dec index)))))
+  (vector-foldr nil cons v))
 
 (defn! (vector . elems) (list->vector elems))
 
-(defn! (vector-fold init f v)
+(defn! (vector-foldl init f v)
   (let ((end-index (vector-length v)))
-    (let-named loop ((acc init) (index 0))
-      (if (= index end-index)
-        acc
-        (loop (f acc (vector-get v index)) (inc index))))))
+    (for
+      ((index 0 (inc index))
+       (acc init (f acc (vector-get v index))))
+      ((= index end-index) acc))))
+
+(defn! (vector-foldr init f v)
+  (for
+    ((index (dec (vector-length v)) (dec index))
+     (acc init (f (vector-get v index) acc)))
+    ((= index -1) acc)))
 
 (defn! (vector-concat . vs)
   (if (null? vs)
@@ -183,7 +184,7 @@
     ; reconstructing it
     (foldl
       (car vs)
-      (fn (v1 v2) (vector-fold v1 vector-append v2))
+      (fn (v1 v2) (vector-foldl v1 vector-append v2))
       (cdr vs))))
 
 ; TODO More efficient tree structure copying?
@@ -191,7 +192,7 @@
 ; so the extra work done to figure out where to insert things is unnecessary
 
 (defn! (vector-map f v)
-  (vector-fold
+  (vector-foldl
     empty-vector
     (fn (acc x) (vector-append acc (f x)))
     v))
@@ -209,27 +210,21 @@
 (defn-with-vector-range! vector-sub (v) v start end
   vector-sub-helper)
 (defn! (vector-sub-helper v start end)
-  (let-named loop ((acc empty-vector) (index start))
-    (if (= index end)
-      acc
-      (loop (vector-append acc (vector-get v index)) (inc index)))))
+  (for
+    ((index start (inc index))
+     (acc empty-vector (vector-append acc (vector-get v index))))
+    ((int>= index end) acc)))
 
 (defn-with-vector-range! vector-for-each (f v) v start end
   vector-for-each-helper)
 (defn! (vector-for-each-helper f v start end)
-  (let-named loop ((index start))
-    (if (= index end)
-      nil
-      (do
-        (f (vector-get v index))
-        (loop (inc index))))))
+  (for ((index start (inc index)))
+      ((int>= index end))
+    (f (vector-get v index))))
 
 (defn-with-vector-range! vector-for-each-index (f v) v start end
   vector-for-each-index-helper)
 (defn! (vector-for-each-index-helper f v start end)
-  (let-named loop ((index start))
-    (if (= index end)
-      nil
-      (do
-        (f index (vector-get v index))
-        (loop (inc index))))))
+  (for ((index start (inc index)))
+      ((int>= index end))
+    (f index (vector-get v index))))

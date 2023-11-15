@@ -27,16 +27,13 @@
     (if (null? l)
       nil
       (cons
-        (f (car l) index)
+        (f index (car l))
         (loop (inc index) (cdr l))))))
 
 (defn! (for-each-index f l)
-  (let-named loop ((index 0) (l l))
-    (if (null? l)
-      nil
-      (do
-        (f (car l) index)
-        (loop (inc index) (cdr l))))))
+  (for ((index 0 (inc index)) (l l (cdr l)))
+      ((null? l))
+    (f index (car l))))
 
 (defn! (filter p l)
   (if (null? l)

@@ -14,7 +14,7 @@
           (= (array-length value) ~(inc (count fields)))
           (= (array-get value 0) '~marker)))
       ~@(map-index
-        (fn (field-desc field-index)
+        (fn (field-index field-desc)
           (let*
             ((array-index (inc field-index))
              (get-field-symbol (cadr field-desc))
@@ -49,7 +49,7 @@
           (= (array-length value) ~(inc (count fields)))
           (= (array-get value 0) '~marker)))
       ~@(map-index
-        (fn (field-desc field-index)
+        (fn (field-index field-desc)
           (let*
             ((array-index (inc field-index))
              (get-field-symbol (cadr field-desc))
