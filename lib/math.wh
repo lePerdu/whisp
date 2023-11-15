@@ -47,13 +47,12 @@
 (def! >= (generic-nary-compare int>= real>=))
 (def! == (generic-nary-compare int= real=))
 
-(defn! (int** b n) (do
-  (defn! (iter a b n)
+(defn! (int** b n)
+  (let-named iter ((a 1) (b b) (n n))
     (cond
       ((= n 0) a)
       ((even? n) (iter a (square b) (int/ n 2)))
-      (else (iter (int* a b) b (int- n 1)))))
-  (iter 1 b n)))
+      (else (iter (int* a b) b (int- n 1))))))
 
 (def! ** (generic-binary-op int** real**))
 

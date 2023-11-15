@@ -32,13 +32,12 @@
 
 (defn! (make-parameter initial)
   (let ((param-fluid (make-fluid initial)))
-    (fn args
-      ; If any argument is passed, returns the fluid directly.
+    (fn-case
+      (() (fluid-get param-fluid))
+      ; If an argument is passed, returns the fluid directly.
       ; Otherwise, returns the current value
       ; (users should only call with no arguments)
-      (if (null? args)
-        (fluid-get param-fluid)
-        param-fluid))))
+      ((_) param-fluid))))
 
 (defmacro! (parameterize bindings body)
   (let-if-cons ((binding . rest) bindings)

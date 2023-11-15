@@ -106,32 +106,32 @@
           (array)
           (array)))))
 
-  (defgroup! array-sub
+  (defgroup! array-copy
     (deftest! extract-start-to-middle
       (def! a (array 1 2 3 4 5))
-      (assert-array-equal (array 1 2) (array-sub a 0 2)))
+      (assert-array-equal (array 1 2) (array-copy a 0 2)))
     (deftest! extract-middle-to-end
       (def! a (array 1 2 3 4 5))
-      (assert-array-equal (array 4 5) (array-sub a 3 5)))
+      (assert-array-equal (array 4 5) (array-copy a 3 5)))
     (deftest! extract-middle-to-middle
       (def! a (array 1 2 3 4 5))
-      (assert-array-equal (array 2 3 4) (array-sub a 1 4)))
+      (assert-array-equal (array 2 3 4) (array-copy a 1 4)))
     (deftest! extract-empty-in-middle
       (def! a (array 1 2 3 4 5))
-      (assert-array-equal (array) (array-sub a 2 2)))
+      (assert-array-equal (array) (array-copy a 2 2)))
     (deftest! extract-whole-array
       (def! a (array 1 2 3 4 5))
-      (assert-array-equal (array 1 2 3 4 5) (array-sub a 0 5)))
+      (assert-array-equal (array 1 2 3 4 5) (array-copy a 0 5)))
     (deftest! does-not-modify-existing-array
       (def! a (array 1 2 3 4 5))
-      (array-sub a 1 3)
+      (array-copy a 1 3)
       (assert-array-equal (array 1 2 3 4 5) a))
     (deftest! default-whole-range
       (def! a (array 1 2 3 4 5))
-      (assert-array-equal (array 1 2 3 4 5) (array-sub a)))
+      (assert-array-equal (array 1 2 3 4 5) (array-copy a)))
     (deftest! default-to-end
       (def! a (array 1 2 3 4 5))
-      (assert-array-equal (array 3 4 5) (array-sub a 2))))
+      (assert-array-equal (array 3 4 5) (array-copy a 2))))
 
   (defgroup! array-map
     (deftest! applies-to-all-elemenst

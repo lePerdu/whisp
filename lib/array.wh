@@ -36,6 +36,36 @@
 
 ;; Persistent operations which return new array instead of mutating
 
+;; Helper for functions with optional bounds
+(defmacro! (defn-with-array-range! name req-args array-arg start-arg end-arg delegate)
+  `(defn-case! ~name
+    (~req-args
+      (~delegate ~@req-args 0 (array-length ~array-arg)))
+    ((~@req-args ~start-arg)
+      (~delegate ~@req-args ~start-arg (array-length ~array-arg)))
+    ((~@req-args ~start-arg ~end-arg)
+      (~delegate ~@req-args ~start-arg ~end-arg))))
+
+; TODO Define as primitive? Then it can be a simple memcpy
+(defn! (array-copy-sub from into start end into-offset)
+  (if (int>= start end)
+    into
+    (do
+      (array-set!
+        into
+        (int+ start into-offset)
+        (array-get from start))
+      (array-copy-sub from into (inc start) end into-offset))))
+
+(defn-with-array-range! array-copy (arr) arr start end array-copy-helper)
+(defn! (array-copy-helper arr start end)
+  (array-copy-sub
+    arr
+    (make-array (int- end start))
+    start
+    end
+    (int- 0 start)))
+
 (defn! (array-map f arr)
   (let* ((n (array-length arr)) (new (make-array n)))
     (let-named loop ((i 0))
@@ -44,9 +74,6 @@
         (do
           (array-set! new i (f (array-get arr i)))
           (loop (inc i)))))))
-
-; TODO Define as primitive? Then it can be a simple alloc + memcpy
-(defn! (array-copy arr) (array-map identity arr))
 
 ; Persistent set (returns a new array)
 (defn! (array-set arr i value)
@@ -72,16 +99,6 @@
           (array-set! new-arr i (array-get arr i))
           (loop (inc i)))))))
 
-(defn! (array-copy-sub from into start end into-offset)
-  (if (int>= start end)
-    into
-    (do
-      (array-set!
-        into
-        (int+ start into-offset)
-        (array-get from start))
-      (array-copy-sub from into (inc start) end into-offset))))
-
 (defn! (array-concat . arrays)
   (let*
     ((total-len
@@ -99,56 +116,42 @@
             (loop (int+ offset sub-arr-len) rest)))
         new-arr))))
 
-(defn! (array-opt-range-or-default opt-range-list arr)
-  (cond
-    ((null? opt-range-list)
-      (cons 0 (array-length arr)))
-    ((null? (cdr opt-range-list))
-      (cons (car opt-range-list) (array-length arr)))
-    ((null? (cddr opt-range-list))
-      (cons (car opt-range-list) (cadr opt-range-list)))))
+(defn-with-array-range! array-for-each (f arr) arr start end
+  array-for-each-helper)
+(defn! (array-for-each-helper f arr start end)
+  (let-named loop ((index start))
+    (if (int>= index end)
+      nil
+      (do
+        (f (array-get arr index))
+        (loop (inc index))))))
 
-(defn! (array-sub arr . opt-range)
-  (let-cons ((start . end) (array-opt-range-or-default opt-range arr))
-    (array-copy-sub
-      arr
-      (make-array (int- end start))
-      start
-      end
-      (int- 0 start))))
+(defn-with-array-range! array-for-each-index (f arr) arr start end
+  array-for-each-index-helper)
+(defn! (array-for-each-index-helper f arr start end)
+  (let-named loop ((index start))
+    (if (int>= index end)
+      nil
+      (do
+        (f index (array-get arr index))
+        (loop (inc index))))))
 
-(defn! (array-for-each f arr . opt-range)
-  (let-cons ((start . end) (array-opt-range-or-default opt-range arr))
-    (let-named loop ((index start))
-      (if (int>= index end)
-        nil
-        (do
-          (f (array-get arr index))
-          (loop (inc index)))))))
+(defn-with-array-range! array-foldl (init f arr) arr start end
+  array-foldl-helper)
+(defn! (array-foldl-helper init f arr start end)
+  (let-named loop ((acc init) (index start))
+    (if (int>= index end)
+      acc
+      (loop
+        (f acc (array-get arr index))
+        (inc index)))))
 
-(defn! (array-for-each-index f arr . opt-range)
-  (let-cons ((start . end) (array-opt-range-or-default opt-range arr))
-    (let-named loop ((index start))
-      (if (int>= index end)
-        nil
-        (do
-          (f index (array-get arr index))
-          (loop (inc index)))))))
-
-(defn! (array-foldl init f arr . opt-range)
-  (let-cons ((start . end) (array-opt-range-or-default opt-range arr))
-    (let-named loop ((acc init) (index start))
-      (if (int>= index end)
-        acc
-        (loop
-          (f acc (array-get arr index))
-          (inc index))))))
-
-(defn! (array-foldr init f arr . opt-range)
-  (let-cons ((start . end) (array-opt-range-or-default opt-range arr))
-    (let-named loop ((acc init) (index (dec end)))
-      (if (int< index start)
-        acc
-        (loop
-          (f (array-get arr index) acc)
-          (dec index))))))
+(defn-with-array-range! array-foldr (init f arr) arr start end
+  array-foldr-helper)
+(defn! (array-foldr-helper init f arr start end)
+  (let-named loop ((acc init) (index (dec end)))
+    (if (int< index start)
+      acc
+      (loop
+        (f (array-get arr index) acc)
+        (dec index)))))

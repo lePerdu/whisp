@@ -2,22 +2,18 @@
 (defn! (map-if f x)
   (if x (f x)))
 
-(defmacro! (and . conds)
-  (cond
-    ((null? conds) true)
-    ((null? (cdr conds)) (car conds))
-    (else
-      `(if ~(car conds) (and ~@(cdr conds)) false))))
-(defmacro! (or . conds)
-  (cond
-    ((null? conds) false)
-    ((null? (cdr conds)) (car conds))
-    (else
-      (let ((temp-sym (gensym)))
-        `(let ((~temp-sym ~(car conds)))
-          (if ~temp-sym
-            ~temp-sym
-            (or ~@(cdr conds))))))))
+(defmacro-case! and
+  (() true)
+  ((single) single)
+  ((first . rest)
+    `(if ~first (and ~@rest) false)))
+(defmacro-case! or
+  (() false)
+  ((single) single)
+  ((first . rest)
+    (let ((temp-sym (gensym)))
+      `(let ((~temp-sym ~first))
+        (if ~temp-sym ~temp-sym (or ~@rest))))))
 ; TODO Is there a good return value for xor besides true/false?
 (defmacro! (xor . conds)
   (if (null? conds)

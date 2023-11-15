@@ -53,13 +53,6 @@
         (cons mapped (filter-map f rest))
         (filter-map f rest)))))
 
-(defn! (find p l)
-  (if (null? l)
-    ; TODO Throw error instead of returning nil?
-    nil
-    (let ((first (car l)))
-      (if (p first) first (find p (cdr l))))))
-
 ;; TODO Use equal?
 (defn! (remove x l)
   (filter (fn (item) (not (= x item))) l))
@@ -91,26 +84,18 @@
     nil
     (cons x (repeat x (int- n 1)))))
 
-(defn! (opt-arg-or-default opt-arg-list default)
-  (cond
-    ((null? opt-arg-list) default)
-    ((null? (cdr opt-arg-list)) (car opt-arg-list))
-    (else (error "too many arguments"))))
-
-(defn! (member-with x l compare)
-  ; Can't use find because there wouldn't be a way to distinguish between nil
-  ; and not found
+(defn! (member-with x l pred?)
   (cond
     ((null? l) nil)
-    ((compare x (car l)) l)
-    (else (member-with x (cdr l) compare))))
+    ((pred? x (car l)) l)
+    (else (member-with x (cdr l) pred?))))
 
 (defn! (member= x l) (member-with x l =))
 (defn! (member== x l) (member-wih x l ==))
 
-(defn! (member x l . opt-compare)
-  (let ((compare (opt-arg-or-default opt-compare equal?)))
-    (member-with x l compare)))
+(defn-case! member
+  ((x l) (member-with x l equal?))
+  ((x l pred?) (member-with x l pred?)))
 
 (defn! (acons key value alist) (cons (cons key value) alist))
 
@@ -122,9 +107,9 @@
 
 (defn! (assoc= key l) (assoc-with key l =))
 (defn! (assoc== key l) (assoc-with key l ==))
-(defn! (assoc key l . opt-compare)
-  (let ((compare (opt-arg-or-default opt-compare equal?)))
-    (assoc-with key l compare)))
+(defn-case! assoc
+  ((key l) (assoc-with key l equal?))
+  ((key l pred?) (associ-with key l pred?)))
 
 (defn! (merge a b less)
   (cond

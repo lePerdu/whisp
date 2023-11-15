@@ -3,18 +3,13 @@
 
 (defn! (string-null? s) (= (string-count s) 0))
 
-(defn! (string->list str) (do
-  (defn! (rec acc index)
-    (if (= index 0)
-      acc
-      (let ((i (dec index)))
-        (rec (cons (string-get str i) acc) i))))
-  (rec nil (string-count str))))
-
 (defn! (char->string chr)
   (if (char? chr)
     (->string chr)
     (error "char->string: must be of type char")))
+
+(defn! (string->list str)
+  (string-foldr nil cons str))
 
 ; TODO These are very inefficient as non-builtins since they allocate a lot of
 ; intermediate strings
@@ -22,48 +17,40 @@
 (defn! (list->string lst)
   (apply string-concat (map char->string lst)))
 
-(defn! (substring str . opt-start-end) (do
-  (def! n-extra (count opt-start-end))
+(defmacro! (defn-with-string-range! name req-args string-arg start-arg end-arg delegate)
+  `(defn-case! ~name
+    (~req-args
+      (~delegate ~@req-args 0 (string-count ~string-arg)))
+    ((~@req-args ~start-arg)
+      (~delegate ~@req-args ~start-arg (string-count ~string-arg)))
+    ((~@req-args ~start-arg ~end-arg)
+      (~delegate ~@req-args ~start-arg ~end-arg))))
 
-  (def! start
-    (if (>= n-extra 1)
-      (car opt-start-end)
-      0))
-  (def! end
-    (if (>= n-extra 2)
-      (cadr opt-start-end)
-      (string-count str)))
+(defn-with-string-range! substring (s) s start end substring-helper)
 
+(defn! (substring-helper str start end)
   ; TODO Bounds checking
-  (defn! (rec acc index)
-    (if (= index end)
+  (let-named loop ((acc "") (index start))
+    (if (int>= index end)
       acc
-      (rec
+      (loop
         (string-concat acc (->string (string-get str index)))
-        (inc index))))
+        (inc index)))))
 
-  (if (> n-extra 2)
-    (error "substring: too many arguments"))
-  (rec "" start)))
-
+(defn-with-string-range! string-index (s pred) s start end string-index-helper)
 (defn! (string-index-helper s pred start end)
   (cond
     ((= start end) nil)
     ((pred (string-get s start)) start)
     (else (string-index-helper s pred (inc start) end))))
 
-(defn! (string-index s pred)
-  (string-index-helper s pred 0 (string-count s)))
-
+(defn-with-string-range! string-rindex (s pred) s start end string-rindex-helper)
 (defn! (string-rindex-helper s pred start end)
   (let ((end-index (dec end)))
     (cond
       ((= start end) nil)
       ((pred (string-get s end-index)) end-index)
       (else (string-rindex-helper s pred start end-index)))))
-
-(defn! (string-rindex s pred)
-  (string-rindex-helper s pred 0 (string-count s)))
 
 (defn! (char-blank? c)
   (or
@@ -97,45 +84,40 @@
       (let ((end (string-rindex-or-start s char-non-blank?)))
         (substring s start (inc end))))))
 
-(defn! (string-opt-range-or-default opt-range-list s)
-  (cond
-    ((null? opt-range-list)
-      (cons 0 (string-count s)))
-    ((null? (cdr opt-range-list))
-      (cons (car opt-range-list) (string-count s)))
-    ((null? (cddr opt-range-list))
-      (cons (car opt-range-list) (cadr opt-range-list)))))
+(defn-with-string-range! string-for-each (f s) s start end
+  string-for-each-helper)
+(defn! (string-for-each-helper f s start end)
+  (let-named loop ((index start))
+    (if (< index end)
+      (do
+        (f (string-get s index))
+        (loop (inc index))))))
 
-(defn! (string-for-each f s . opt-range)
-  (let-cons ((start . end) (string-opt-range-or-default opt-range s))
-    (let-named loop ((index start))
-      (if (< index end)
-        (do
-          (f (string-get s index))
-          (loop (inc index)))))))
+(defn-with-string-range! string-for-each-index (f s) s start end
+  string-for-each-index-helper)
+(defn! (string-for-each-index-helper f s start end)
+  (let-named loop ((index start))
+    (if (< index end)
+      (do
+        (f index (string-get s index))
+        (loop (inc index))))))
 
-(defn! (string-for-each-index f s . opt-range)
-  (let-cons ((start . end) (string-opt-range-or-default opt-range s))
-    (let-named loop ((index start))
-      (if (< index end)
-        (do
-          (f index (string-get s index))
-          (loop (inc index)))))))
+(defn-with-string-range! string-foldl (init f s) s start end
+  string-foldl-helper)
+(defn! (string-foldl-helper init f s start end)
+  (let-named loop ((acc init) (index start))
+    (if (>= index end)
+      acc
+      (loop
+        (f acc (string-get s index))
+        (inc index)))))
 
-(defn! (string-foldl init f s . opt-range)
-  (let-cons ((start . end) (string-opt-range-or-default opt-range s))
-    (let-named loop ((acc init) (index start))
-      (if (>= index end)
-        acc
-        (loop
-          (f acc (string-get s index))
-          (inc index))))))
-
-(defn! (string-foldr init f s . opt-range)
-  (let-cons ((start . end) (string-opt-range-or-default opt-range s))
-    (let-named loop ((acc init) (index (dec end)))
-      (if (< index start)
-        acc
-        (loop
-          (f (string-get s index) acc)
-          (dec index))))))
+(defn-with-string-range! string-foldr (init f s) s start end
+  string-foldr-helper)
+(defn! (string-foldr-helper init f s start end)
+  (let-named loop ((acc init) (index (dec end)))
+    (if (< index start)
+      acc
+      (loop
+        (f (string-get s index) acc)
+        (dec index)))))

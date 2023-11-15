@@ -113,7 +113,7 @@
 (defn! (_array-pop-or-nil arr)
   (if (= (array-length arr) 1)
     nil
-    (array-sub arr 0 (dec (array-length arr)))))
+    (array-copy arr 0 (dec (array-length arr)))))
 
 (defn! (vector-pop v)
   (let*
@@ -196,36 +196,40 @@
     (fn (acc x) (vector-append acc (f x)))
     v))
 
-(defn! (vector-opt-range-or-default opt-range-list v)
-  (cond
-    ((null? opt-range-list)
-      (cons 0 (vector-length v)))
-    ((null? (cdr opt-range-list))
-      (cons (car opt-range-list) (vector-length v)))
-    ((null? (cddr opt-range-list))
-      (cons (car opt-range-list) (cadr opt-range-list)))))
+;; Helper for functions with optional bounds
+(defmacro! (defn-with-vector-range! name req-args vector-arg start-arg end-arg delegate)
+  `(defn-case! ~name
+    (~req-args
+      (~delegate ~@req-args 0 (vector-length ~vector-arg)))
+    ((~@req-args ~start-arg)
+      (~delegate ~@req-args ~start-arg (vector-length ~vector-arg)))
+    ((~@req-args ~start-arg ~end-arg)
+      (~delegate ~@req-args ~start-arg ~end-arg))))
 
-(defn! (vector-sub v . opt-range)
-  (let-cons ((start . end) (vector-opt-range-or-default opt-range v))
-    (let-named loop ((acc empty-vector) (index start))
-      (if (= index end)
-        acc
-        (loop (vector-append acc (vector-get v index)) (inc index))))))
+(defn-with-vector-range! vector-sub (v) v start end
+  vector-sub-helper)
+(defn! (vector-sub-helper v start end)
+  (let-named loop ((acc empty-vector) (index start))
+    (if (= index end)
+      acc
+      (loop (vector-append acc (vector-get v index)) (inc index)))))
 
-(defn! (vector-for-each f v . opt-range)
-  (let-cons ((start . end) (vector-opt-range-or-default opt-range v))
-    (let-named loop ((index start))
-      (if (= index end)
-        nil
-        (do
-          (f (vector-get v index))
-          (loop (inc index)))))))
+(defn-with-vector-range! vector-for-each (f v) v start end
+  vector-for-each-helper)
+(defn! (vector-for-each-helper f v start end)
+  (let-named loop ((index start))
+    (if (= index end)
+      nil
+      (do
+        (f (vector-get v index))
+        (loop (inc index))))))
 
-(defn! (vector-for-each-index f v . opt-range)
-  (let-cons ((start . end) (vector-opt-range-or-default opt-range v))
-    (let-named loop ((index start))
-      (if (= index end)
-        nil
-        (do
-          (f index (vector-get v index))
-          (loop (inc index)))))))
+(defn-with-vector-range! vector-for-each-index (f v) v start end
+  vector-for-each-index-helper)
+(defn! (vector-for-each-index-helper f v start end)
+  (let-named loop ((index start))
+    (if (= index end)
+      nil
+      (do
+        (f index (vector-get v index))
+        (loop (inc index))))))

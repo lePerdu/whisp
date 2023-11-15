@@ -8,27 +8,23 @@
     ((null? (cdr vararg-list)) (car vararg-list))
     (else (error "too many arguments"))))
 
-(defmacro! (defn-with-default-port! name-args port-with-default body)
-  (let
-    ((rest-args (gensym))
-     (port-arg (car port-with-default))
-     (default-port-val (cadr port-with-default)))
-    `(defn! (~@name-args . ~rest-args)
-      (let ((~port-arg (check-opt-arg ~rest-args ~default-port-val)))
-        ~body))))
+(defmacro! (defn-with-default-port! name req-args port-arg default-param body)
+  `(defn-case! ~name
+    (~req-args (~name ~@req-args (~default-param)))
+    ((~@req-args ~port-arg) ~body)))
 
 ;; Input
 
-(defn-with-default-port! (read-char) (port current-input-port)
+(defn-with-default-port! read-char () port current-input-port
   (input-file-read-char port))
 
-(defn-with-default-port! (peek-char) (port current-input-port)
+(defn-with-default-port! peek-char () port current-input-port
   (input-file-peek-char port))
 
-(defn-with-default-port! (read-string n) (port current-input-port)
+(defn-with-default-port! read-string (n) port current-input-port
   (input-file-read-string port n))
 
-(defn-with-default-port! (read-line) (port current-input-port)
+(defn-with-default-port! read-line () port current-input-port
   (input-file-read-line port))
 
 (defn! (input-port? port) (input-file? port))
@@ -36,13 +32,13 @@
 
 ;; Output
 
-(defn-with-default-port! (write-char c) (port current-output-port)
+(defn-with-default-port! write-char (c) port current-output-port
   (output-file-write-char port c))
 
-(defn-with-default-port! (write-string s) (port current-output-port)
+(defn-with-default-port! write-string (s) port current-output-port
   (output-file-write-string port s))
 
-(defn-with-default-port! (flush-output-port) (port current-output-port)
+(defn-with-default-port! flush-output-port () port current-output-port
   (output-file-flush port))
 
 (defn! (output-port? port) (output-file? port))
@@ -94,10 +90,10 @@
 
 ;; Printing
 
-(defn-with-default-port! (newline) (port current-output-port)
+(defn-with-default-port! newline () port current-output-port
   (write-char #\newline port))
 
-(defn-with-default-port! (display x) (port current-output-port)
+(defn-with-default-port! display (x) port current-output-port
   (write-string (->string x) port))
 
 (defn! (print . args)
