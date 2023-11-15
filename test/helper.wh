@@ -71,7 +71,7 @@
             (fn (failed)
               (do
                 (println (test-entry-name (test-failure-entry failed)) ":")
-                (println (test-failure-error failed))
+                (println (exception->string (test-failure-error failed)))
                 (print-backtrace (test-failure-backtrace failed))
                 (println)))
             failing-tests-with-results)
