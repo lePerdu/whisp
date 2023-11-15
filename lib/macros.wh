@@ -154,6 +154,63 @@
     ((~name (fn ~(map car bindings) ~body)))
     (~name ~@(map cadr bindings))))
 
+; () -> (nil . nil)
+; (a b) -> ((a b) . nil)
+; (a b . c) -> ((a b) . c)
+(defn! (fn-case-split-arg-list arg-list)
+  (cond
+    ((null? arg-list) '(nil . nil))
+    ((cons? arg-list)
+      (let-cons ((proper . rest) (fn-case-split-arg-list (cdr arg-list)))
+        (cons (cons (car arg-list) proper) rest)))
+    (else
+      (cons nil arg-list))))
+
+(defn! (fn-case-bind-args args-sym req-args rest-arg expr)
+  (if (null? req-args)
+    (if (null? rest-arg)
+      expr
+      `(let ((~rest-arg ~args-sym)) ~expr))
+    `(let ((~(car req-args) (car ~args-sym)) (~args-sym (cdr ~args-sym)))
+      ~(fn-case-bind-args args-sym (cdr req-args) rest-arg expr))))
+
+(defn! (fn-case-branch-to-cond args-sym arg-count-sym branch)
+  (let-cons ((req-args . rest-arg) (fn-case-split-arg-list (car branch)))
+    (let
+      ((req-arg-count (count req-args))
+       (expr (cadr branch))
+       (comparator (if (null? rest-arg) 'int= 'int>=)))
+      `((~comparator ~arg-count-sym ~req-arg-count)
+        ~(fn-case-bind-args args-sym req-args rest-arg (cadr branch))))))
+
+(defmacro! (fn-case . branches)
+  (let
+    ((args-sym (gensym "args"))
+     (args-count-sym (gensym "args-count")))
+  ; TODO Find lowest required arg count and make those args
+  ; non-variadic to avoid allocating cons cells for those args
+  `(fn ~args-sym
+    (let ((~args-count-sym (count ~args-sym)))
+      (cond
+        ~@(map
+          (fn (branch)
+            (fn-case-branch-to-cond
+              args-sym args-count-sym branch))
+          branches)
+        ; TODO Distinguish between not enough and too many args
+        (else (error "fn-case: no matching argument count")))))))
+
+; TODO Change syntax of `defn!` so that it better matches this
+; (function name outside parens)?
+; - (defn! (f x y) ...)
+; - (defn-case! f ((x y) ...))
+; TODO Make defn!/defmacro! support both versions?
+(defmacro! (defn-case! name . branches)
+  `(def! ~name (fn-case ~@branches)))
+
+(defmacro! (defmacro-case! name . branches)
+  `(defsyntax! ~name (fn-case ~@branches)))
+
 ; Easier-to-use versions of call-with-escape-continuation
 
 (def! call/ec call-with-escape-continuation)

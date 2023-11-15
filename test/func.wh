@@ -33,6 +33,77 @@
       (defn! (f a b . rest) (+ a b (count rest)))
       (assert= 6 (f 1 2 'a (list 90 91) "123"))))
 
+  (defgroup! fn-case
+    ; TODO Decide which of these are intentional behavior
+    (deftest! single-pattern-works-like-fn
+      (def! f (fn-case
+        ((a b) (list "two" a b))))
+      (assert-error (f 1))
+      (assert-equal '("two" abc 123) (f 'abc 123))
+      (assert-error (f 1 2 3)))
+    (deftest! zero-to-3-args
+      (def! f (fn-case
+        (() "zero")
+        ((a) (list "one" a))
+        ; Share arg names
+        ((a b) (list "two" a b))
+        ; Different arg names
+        ((x y z) (list "three" x y z))))
+      (assert-equal "zero" (f))
+      (assert-equal '("one" 1) (f 1))
+      (assert-equal '("two" 2 1) (f 2 1))
+      (assert-equal '("three" three 2 1) (f 'three (+ 1 1) 1))
+      (assert-error (f 1 2 3 4)))
+    (deftest! skip-arg-count
+      (def! f (fn-case
+        ((a) (list "one" a))
+        ((c b a) (list "three" c b a))))
+      (assert-equal '("one" x) (f 'x))
+      (assert-error (f 1 2))
+      (assert-equal '("three" 1 2 3) (f 1 2 3)))
+    (deftest! single-variadic-pattern
+      (def! f (fn-case
+        ((first . rest) (list rest 'before first))))
+      (assert-error (f))
+      (assert-equal '(nil before 1) (f 1))
+      (assert-equal '((2) before 1) (f 1 2))
+      (assert-equal '((2 3 4 5) before a) (f 'a 2 3 4 5)))
+    (deftest! simple-or-variadic-pattern
+      (def! f (fn-case
+        ((a b) (list "two" a b))
+        ((a . rest) (list "more" a rest))))
+      (assert-equal '("more" 1 nil) (f 1))
+      (assert-equal '("two" 1 2) (f 1 2))
+      (assert-equal '("more" 1 (2 3)) (f 1 2 3)))
+    (deftest! simple-or-variadic-pattern-of-same-required-count
+      (def! f (fn-case
+        ((a b) (list "two" a b))
+        ((a b . rest) (list "more" a b rest))))
+      (assert-equal '("two" 1 2) (f 1 2))
+      (assert-equal '("more" 1 2 (3 4 5)) (f 1 2 3 4 5)))
+    (deftest! matches-shorter-variadic-match-if-later
+      (def! f (fn-case
+        ((a b . rest) (list "many" a b rest))
+        ; Not very useful, as it only matches a single argument, but
+        ; might as well check that it behaves correctly
+        (fewer (list "few" fewer))))
+      (assert-equal '("few" (single)) (f 'single))
+      (assert-equal '("many" 1 2 nil) (f 1 2))
+      (assert-equal '("many" 1 2 (3 4 5)) (f 1 2 3 4 5)))
+    (deftest! arg-names-from-other-branches-not-bound
+      (def! f
+        ; Bind them first to check if bound by fn-case
+        (let ((a 'a) (b 'b) (c 'c) (d 'd))
+          (fn-case
+            ((a b) (list 'first a b c d))
+            ((b) (list 'second a b c d))
+            ((d c b a) (list 'third a b c d))
+            ((a b c . d) (list 'fourth a b c d)))))
+      (assert-equal '(second a 1 c d) (f 1))
+      (assert-equal '(first 1 2 c d) (f 1 2))
+      (assert-equal '(third 4 3 2 1) (f 1 2 3 4))
+      (assert-equal '(fourth 1 2 3 (4 5 6)) (f 1 2 3 4 5 6))))
+
   (defgroup! fn-name
     (deftest! anonymous-function-name-is-nil
       (assert= nil (fn-name (fn () 1))))
