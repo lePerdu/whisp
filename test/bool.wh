@@ -136,4 +136,35 @@
     (deftest! returns-else-if-none-matching
       (assert= 3 (cond (false 1) (false 2) (else 3))))
     (deftest! short-circuits-on-matching
-      (assert= 1 (cond (true 1) (true (error "does not short-circuit")))))))
+      (assert= 1 (cond (true 1) (true (error "does not short-circuit"))))))
+
+  (defgroup! case
+    (deftest! empty-returns-nil
+      (assert= nil (case 1)))
+    (deftest! returns-nil-if-none-matching
+      (assert= nil (case 1 ((2 3) 'small) ((4 5) 'large))))
+    (deftest! returns-first-matching-number
+      (assert= 'binary
+        (case (- 5 4)
+          ((2 3) 'small)
+          ((0 1) 'binary)
+          ((1 0) 'also-binary))))
+    (deftest! returns-first-matching-symbol
+      (assert= 2
+        (case (cadr '(one two three))
+          ((one ones) 1)
+          ((two twos) (int/ 4 2))
+          (else 'none))))
+    (deftest! returns-else-if-none-matching
+      (assert= 99
+        (case 'missing
+          ((y yes) 1)
+          ((n no) 0)
+          (else (- 100 1)))))
+    (deftest! does-not-run-non-matching-branches
+      (assert= 1
+        (case (+ 0 1)
+          ((2 3) (error "executed non-matching-branch"))
+          ((0 1) 1)
+          ((4 5) (error "executed non-matching branch"))
+          (else (error "executed non-matching branch")))))))

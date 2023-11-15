@@ -70,6 +70,21 @@
         expr1
         `(if ~cond1 ~expr1 ~(cons 'cond (cdr branches)))))))
 
+; TODO Validate structure
+(defmacro! (case expr . branches)
+  (let*
+    ((val-sym (gensym))
+     (case-branch-to-cond (fn (branch)
+       (cond
+         ((list? (car branch))
+           `((member= ~val-sym '~(car branch)) ~@(cdr branch)))
+         ((= 'else (car branch))
+           `(else ~@(cdr branch)))
+         (else
+           (syntax-error "branches must be of the form ((matches ...) expr)"))))))
+    `(let ((~val-sym ~expr))
+      (cond ~@(map case-branch-to-cond branches)))))
+
 ; Version of let which extracts values from a cons cell
 ; TODO Allow more than 1 pattern
 ; TODO Allow nested / more complex patterns
