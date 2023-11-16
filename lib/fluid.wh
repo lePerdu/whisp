@@ -4,9 +4,8 @@
 ; By itself, it can't be wrapped in functions as it would only apply to the
 ; wrapper function.
 (defn! (with-dynamic-state new-state thunk)
-  (do
-    (set-dynamic-state! new-state)
-    (thunk)))
+  (set-dynamic-state! new-state)
+  (thunk))
 
 ; "Fluid"-based wrapper on dynamic-state. All dynamic state operations
 ; should go through these

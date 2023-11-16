@@ -1,14 +1,13 @@
 (def! *prompt* "> ")
 
 (defn! (repl-handle-exception ex)
-  (do
-    (println "exception:" (exception->string ex))
-    (print-backtrace (backtrace))))
+  (println "exception:" (exception->string ex))
+  (print-backtrace (backtrace)))
 
 (defn! (eval-print line)
   (cond
     ((eof-object? line)
-      (do (newline) (exit)))
+      (newline) (exit))
     ((string-null? (string-trim line)) nil)
     (else
       (let*
@@ -18,10 +17,9 @@
         (println result-string)))))
 
 (defn! (repl)
-  (do
-    (print *prompt*)
-    (flush-output-port)
-    (guard
-      (ex (else (repl-handle-exception ex)))
-      (eval-print (read-line)))
-    (repl)))
+  (print *prompt*)
+  (flush-output-port)
+  (guard
+    (ex (else (repl-handle-exception ex)))
+    (eval-print (read-line)))
+  (repl))

@@ -129,9 +129,8 @@
 (def! *hash-table-tombstone* (gensym "hash-table-tombstone"))
 
 (defn! (_he-mark-deleted entry)
-  (do
-    (_he-set-hash! entry 0)
-    (_he-set-key! entry *hash-table-tombstone*)))
+  (_he-set-hash! entry 0)
+  (_he-set-key! entry *hash-table-tombstone*))
 
 (defn! (_he-occupied? entry)
   (not
@@ -185,11 +184,10 @@
     *hash-table-tombstone*))
 
 (defn! (_ht-grow-and-insert! ht entry)
-  (do
-    (if (_ht-should-grow ht)
-      (_ht-grow! ht))
-    (_ht-insert! ht entry)
-    (_ht-set-count! ht (inc (hash-table-count ht)))))
+  (if (_ht-should-grow ht)
+    (_ht-grow! ht))
+  (_ht-insert! ht entry)
+  (_ht-set-count! ht (inc (hash-table-count ht))))
 
 (defn! (_ht-should-grow ht)
   (>
@@ -200,13 +198,12 @@
   (let*
     ((old-data (_ht-data ht))
      (new-data (make-array (bitshift (array-length old-data) 1))))
-    (do
-      (_ht-set-data! ht new-data)
-      (array-for-each
-        (fn (entry)
-          (if (_he-occupied? entry)
-            (_ht-insert! ht entry)))
-        old-data))))
+    (_ht-set-data! ht new-data)
+    (array-for-each
+      (fn (entry)
+        (if (_he-occupied? entry)
+          (_ht-insert! ht entry)))
+      old-data)))
 
 (defn! (_ht-insert! ht entry)
   (let ((index (_ht-find-open-index ht (_he-hash entry))))
@@ -250,12 +247,11 @@
 
 (defn! (alist->hash-table hash-fn equal-fn alist)
   (let ((ht (make-hash-table hash-fn equal-fn (count alist))))
-    (do
-      (for-each
-        (fn (item)
-          (hash-table-set-if-missing! ht (car item) (cdr item)))
-        alist)
-      ht)))
+    (for-each
+      (fn (item)
+        (hash-table-set-if-missing! ht (car item) (cdr item)))
+      alist)
+    ht))
 
 (defn! (alist->=-hash-table alist)
   (alist->hash-table =-hash = alist))

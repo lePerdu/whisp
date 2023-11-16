@@ -284,15 +284,6 @@ static enum compile_res compile_non_tail(struct compiler_ctx *ctx,
   return res;
 }
 
-static enum compile_res compile_non_top_level(struct compiler_ctx *ctx,
-                                              struct lisp_val ast) {
-  bool outer_top_level = ctx->top_level;
-  ctx->top_level = false;
-  enum compile_res res = compile(ctx, ast);
-  ctx->top_level = outer_top_level;
-  return res;
-}
-
 static struct lisp_closure *compile_chunk_to_closure(struct code_chunk *code) {
   return lisp_closure_create(code, 0);
 }
@@ -1194,18 +1185,7 @@ static enum compile_res compile_fn(struct compiler_ctx *ctx,
     return COMP_FAILED;
   }
   struct lisp_val params = args_cons->car;
-
-  args_cons = lisp_val_cast(lisp_val_is_cons, args_cons->cdr);
-  if (args_cons == NULL) {
-    compiler_raise(ctx, "fn: not enough args");
-    return COMP_FAILED;
-  }
-  struct lisp_val func_ast = args_cons->car;
-
-  if (!lisp_val_is_nil(args_cons->cdr)) {
-    compiler_raise(ctx, "fn: too many args");
-    return COMP_FAILED;
-  }
+  struct lisp_val exprs = args_cons->cdr;
 
   struct compiler_ctx *func_ctx = compiler_ctx_create_inner(ctx);
   if (ctx->binding_name != NULL) {
@@ -1219,7 +1199,7 @@ static enum compile_res compile_fn(struct compiler_ctx *ctx,
     goto DONE;
   }
 
-  res = compile(func_ctx, func_ast);
+  res = compile_do(func_ctx, exprs);
   if (res == COMP_FAILED) {
     goto DONE;
   }
@@ -1345,17 +1325,7 @@ static enum compile_res compile_let(struct compiler_ctx *ctx,
   }
 
   struct lisp_val bindings = args_cons->car;
-  args_cons = lisp_val_cast(lisp_val_is_cons, args_cons->cdr);
-  if (args_cons == NULL) {
-    compiler_raise(ctx, "let: not enough args");
-    return COMP_FAILED;
-  }
-
-  struct lisp_val ast = args_cons->car;
-  if (!lisp_val_is_nil(args_cons->cdr)) {
-    compiler_raise(ctx, "let: too many args");
-    return COMP_FAILED;
-  }
+  struct lisp_val exprs = args_cons->cdr;
 
   // Save stack state to restore it (i.e. clear the locals) after the let
   uint8_t outer_local_count = ctx->local_count;
@@ -1366,9 +1336,11 @@ static enum compile_res compile_let(struct compiler_ctx *ctx,
 
   // Allow `def!` inside `let`
   ctx->begin_pos = true;
+  bool outer_top_level = ctx->top_level;
+  ctx->top_level = false;
 
   enum compile_res res;
-  res = compile_non_top_level(ctx, ast);
+  res = compile_do(ctx, exprs);
   // Only need to emit cleanup instructions for non-tail calls
   if (!ctx->tail_pos && res == COMP_SUCCESS) {
     int to_remove = ctx->local_count - outer_local_count;
@@ -1377,6 +1349,7 @@ static enum compile_res compile_let(struct compiler_ctx *ctx,
 
   // Always reset locals count
   ctx->local_count = outer_local_count;
+  ctx->top_level = outer_top_level;
   return res;
 }
 

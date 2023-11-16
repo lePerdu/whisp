@@ -107,32 +107,30 @@
   ; TODO Use extended GCD to find this without division?
   (int* a (int/ b (gcd a b))))
 
-(defn! (prime? n) (do
+(defn! (prime? n)
   (defn! (find-divisor test)
     (cond
       ((int> (square test) n) n)
       ((divides? test n) test)
       (else (find-divisor (inc test)))))
-  (= n (find-divisor 2))))
+  (= n (find-divisor 2)))
 
-(defn! (factorial n) (do
-  (defn! (fact-iter acc n)
+(defn! (factorial n)
+  (let-named iter ((acc 1) (n n))
     (if (int= n 0)
       acc
-      (fact-iter (int* acc n) (int- n 1))))
-  (fact-iter 1 n)))
+      (iter (int* acc n) (int- n 1)))))
 
-(defn! (fib n) (do
-  (defn! (fib-iter a b n)
+(defn! (fib n)
+  (let-named iter ((a 0) (b 1) (n n))
     (if (= n 0)
       b
-      (fib-iter (int+ a b) a (int- n 1))))
-  (fib-iter 0 1 n)))
+      (iter (int+ a b) a (int- n 1)))))
 
 ; Epsilon value for floating-point functions
 (def! *epsilon* 1e-9)
 
-(defn! (sqrt x) (do
+(defn! (sqrt x)
   (defn! (good-enough? guess)
     (let ((g2 (square guess)))
       (< (abs (/ (- g2 x) g2)) *epsilon*)))
@@ -143,6 +141,6 @@
       (sqrt-iter (improve guess))))
   (if (< x 0)
     (error "sqrt: cannot be negative")
-    (sqrt-iter (real x)))))
+    (sqrt-iter (real x))))
 
 (load-library "ratio.wh")

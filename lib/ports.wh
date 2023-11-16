@@ -50,9 +50,8 @@
   (or (input-port? port) (output-port? port)))
 
 (defn! (close-port port)
-  (do
-    (if (input-port? port) (close-input-port port))
-    (if (output-port? port) (close-output-port port))))
+  (if (input-port? port) (close-input-port port))
+  (if (output-port? port) (close-output-port port)))
 
 ;; Auto-closing
 
@@ -60,10 +59,11 @@
   (with-exception-handler
     ; TODO How should this interact with escape continuations?
     ; Currently, it just forbids/ignores them
-    (fn (err) (do (cleanup) (raise err)))
+    (fn (err) (cleanup) (raise err))
     (fn ()
       (let ((return (proc)))
-        (do (cleanup) return)))))
+        (cleanup)
+        return))))
 
 (defn! (call-with-port port proc)
   (call-with-cleanup-handler
@@ -97,17 +97,16 @@
   (write-string (->string x) port))
 
 (defn! (print . args)
-  (if (null? args)
-    nil
-    (do
-      ; Print first without space
-      (display (car args))
-      (for-each
-        (fn (x) (do (display " ") (display x)))
-        (cdr args)))))
+  (when (not (null? args))
+    ; Print first without space
+    (display (car args))
+    (for-each
+      (fn (x) (display " ") (display x))
+      (cdr args))))
 
 (defn! (println . args)
-  (do (apply print args) (newline)))
+  (apply print args)
+  (newline))
 
 ;; Misc file operations
 

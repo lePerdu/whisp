@@ -1,14 +1,14 @@
 (defsyntax! defmacro!
-  (fn (pattern body)
+  (fn (pattern . body)
     (cons 'defsyntax!
       (cons (car pattern)
-        (cons (cons 'fn (cons (cdr pattern) (cons body nil)))
+        (cons (cons 'fn (cons (cdr pattern) body))
           nil)))))
 
-(defmacro! (defn! pattern body)
+(defmacro! (defn! pattern . body)
   (cons 'def!
     (cons (car pattern)
-      (cons (cons 'fn (cons (cdr pattern) (cons body nil)))
+      (cons (cons 'fn (cons (cdr pattern) body))
         nil))))
 
 (defn! (inc x) (int+ x 1))

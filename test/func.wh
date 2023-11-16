@@ -14,7 +14,14 @@
       ; Wrap in eval so the test compiles
       (assert-error (eval '(fn (a 1) a)))
       (assert-error (eval '(fn (a (b c)) a)))
-      (assert-error (eval '(fn (a . 1) a)))))
+      (assert-error (eval '(fn (a . 1) a))))
+    (deftest! accepts-no-expr
+      ; TODO Guarantee return value?
+      (fn ()))
+    (deftest! accepts-multiple-exprs
+      (def! a (atom 0))
+      (assert= 6 ((fn () (reset! a 5) 6)))
+      (assert= 5 @a)))
 
   (defgroup! variadic-fn
     (deftest! accepts-0-args
@@ -41,6 +48,13 @@
       (assert-error (f 1))
       (assert-equal '("two" abc 123) (f 'abc 123))
       (assert-error (f 1 2 3)))
+    (deftest! accepts-no-expr
+      ; TODO Guarantee return value?
+      (fn-case (())))
+    (deftest! accepts-multiple-exprs
+      (def! a (atom 0))
+      (assert= 6 ((fn-case (() (reset! a 5) 6))))
+      (assert= 5 @a))
     (deftest! zero-to-3-args
       (def! f (fn-case
         (() "zero")

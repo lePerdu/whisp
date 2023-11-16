@@ -34,21 +34,18 @@
 
 ;; Run a test, returning any error encountered, or nil on success
 (defn! (run-test test)
-  (do
-    (print "RUNNING" (test-entry-name test))
-    (print " ... ")
-    (flush-output-port)
-    (guard
-      (err
-        (else
-          (do
-            (println "FAIL")
-            (make-test-failure test err (backtrace)))))
-      (do
-        ((test-entry-func test))
-        (println "PASS")
-        ; Return nil to indicate no error
-        nil))))
+  (print "RUNNING" (test-entry-name test))
+  (print " ... ")
+  (flush-output-port)
+  (guard
+    (err
+      (else
+        (println "FAIL")
+        (make-test-failure test err (backtrace))))
+    ((test-entry-func test))
+    (println "PASS")
+    ; Return nil to indicate no error
+    nil))
 
 (defn! (run-all-tests)
   (let*
@@ -57,25 +54,23 @@
      (total-count (count @*all-tests*))
      (fail-count (count failing-tests-with-results))
      (pass-count (- total-count fail-count)))
-    (do
-      ; TODO Clear out tests?
-      (newline)
-      (println "TESTS RAN:" total-count)
-      (println "PASSED:" pass-count)
-      (println "FAILED:" fail-count)
-      (if (null? failing-tests-with-results)
-        (println "ALL TESTS PASSED!")
-        (do
-          (println "FAILING TESTS:")
-          (for-each
-            (fn (failed)
-              (do
-                (println (test-entry-name (test-failure-entry failed)) ":")
-                (println (exception->string (test-failure-error failed)))
-                (print-backtrace (test-failure-backtrace failed))
-                (println)))
-            failing-tests-with-results)
-          (error 'test-suite-failed))))))
+    ; TODO Clear out tests?
+    (newline)
+    (println "TESTS RAN:" total-count)
+    (println "PASSED:" pass-count)
+    (println "FAILED:" fail-count)
+    (if (null? failing-tests-with-results)
+      (println "ALL TESTS PASSED!")
+      (do
+        (println "FAILING TESTS:")
+        (for-each
+          (fn (failed)
+            (println (test-entry-name (test-failure-entry failed)) ":")
+            (println (exception->string (test-failure-error failed)))
+            (print-backtrace (test-failure-backtrace failed))
+            (println))
+          failing-tests-with-results)
+        (error 'test-suite-failed)))))
 
 ; Assertion helpers
 
@@ -109,5 +104,5 @@
   `(assert (equal? ~expected ~actual) 'expected ~expected 'got ~actual))
 
 (defmacro! (assert-error expr)
-  `(if (guard (err (else false)) (do ~expr true))
+  `(if (guard (err (else false)) ~expr true)
     (assert-make-error '~expr (list 'expected-error))))

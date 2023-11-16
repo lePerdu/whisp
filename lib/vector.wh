@@ -49,21 +49,20 @@
 
 ; Persistent set (returns a new vector)
 (defn! (vector-set v i value)
-  (do
-    (defn! (trie-set level node)
-      (let ((cur-index (_vector-level-index i level)))
-        (array-set
-          node
-          cur-index
-          (if (= level 0)
-            value
-            (trie-set
-              (_vector-dec-bits level)
-              (array-get node cur-index))))))
-    (if (not (_vector-check-bounds v i))
-      (error "vector-get: index out of bounds"))
-    (_vector-root-set
-      v (trie-set (_vector-shift v) (_vector-root v)))))
+  (defn! (trie-set level node)
+    (let ((cur-index (_vector-level-index i level)))
+      (array-set
+        node
+        cur-index
+        (if (= level 0)
+          value
+          (trie-set
+            (_vector-dec-bits level)
+            (array-get node cur-index))))))
+  (if (not (_vector-check-bounds v i))
+    (error "vector-get: index out of bounds"))
+  (_vector-root-set
+    v (trie-set (_vector-shift v) (_vector-root v))))
 
 (defn! (make-new-branch shift single-elem)
   ; TODO Make iterative?
@@ -73,42 +72,41 @@
       (array (rec (int- level *vector-trie-bits*))))))
 
 (defn! (vector-append v value)
-  (do
-    (def! len (vector-length v))
-    (defn! (last-child-full? node level)
-      (=
-        (_vector-level-index len level)
-        (bitand (array-length node) *vector-trie-mask*)))
-    (defn! (trie-append shift node)
-      (if (last-child-full? node shift)
-        (array-append
+  (def! len (vector-length v))
+  (defn! (last-child-full? node level)
+    (=
+      (_vector-level-index len level)
+      (bitand (array-length node) *vector-trie-mask*)))
+  (defn! (trie-append shift node)
+    (if (last-child-full? node shift)
+      (array-append
+        node
+        (make-new-branch shift value))
+      (let ((last-index (dec (array-length node))))
+        (array-set
           node
-          (make-new-branch shift value))
-        (let ((last-index (dec (array-length node))))
-          (array-set
-            node
-            last-index
-            (trie-append
-              (int- shift *vector-trie-bits*)
-              (array-get node last-index))))))
+          last-index
+          (trie-append
+            (int- shift *vector-trie-bits*)
+            (array-get node last-index))))))
 
-    (let*
-      ((root (_vector-root v))
-       (shift (_vector-shift v))
-       (root-full?
-        (and
-          (= (array-length root) *vector-trie-width*)
-          (last-child-full? root shift))))
-      (if root-full?
-        (let ((new-shift (_vector-inc-bits shift)))
-          (_build-vector
-            (inc len)
-            new-shift
-            (array root (make-new-branch new-shift value))))
+  (let*
+    ((root (_vector-root v))
+     (shift (_vector-shift v))
+     (root-full?
+      (and
+        (= (array-length root) *vector-trie-width*)
+        (last-child-full? root shift))))
+    (if root-full?
+      (let ((new-shift (_vector-inc-bits shift)))
         (_build-vector
           (inc len)
-          shift
-          (trie-append shift root))))))
+          new-shift
+          (array root (make-new-branch new-shift value))))
+      (_build-vector
+        (inc len)
+        shift
+        (trie-append shift root)))))
 
 (defn! (_array-pop-or-nil arr)
   (if (= (array-length arr) 1)

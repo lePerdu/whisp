@@ -2,11 +2,10 @@
 
 (defn! (list->array elems)
   (let ((arr (array-alloc (count elems))))
-    (do
-      (for-each-index
-        (fn (index x) (array-set! arr index x))
-        elems)
-      arr)))
+    (for-each-index
+      (fn (index x) (array-set! arr index x))
+      elems)
+    arr))
 
 (defn! (array->list arr)
   (array-foldr nil cons arr))
@@ -68,9 +67,8 @@
 ; Persistent set (returns a new array)
 (defn! (array-set arr i value)
   (let ((copy (array-copy arr)))
-    (do
-      (array-set! copy i value)
-      copy)))
+    (array-set! copy i value)
+    copy))
 
 (defn! (array-update arr i f)
   (array-set arr i (f (array-get arr i))))
@@ -97,10 +95,9 @@
     (let-named loop ((offset 0) (arrays arrays))
       (let-if-cons ((sub-arr . rest) arrays)
         (let ((sub-arr-len (array-length sub-arr)))
-          (do
-            (array-copy-sub
-              sub-arr new-arr 0 sub-arr-len offset)
-            (loop (int+ offset sub-arr-len) rest)))
+          (array-copy-sub
+            sub-arr new-arr 0 sub-arr-len offset)
+          (loop (int+ offset sub-arr-len) rest))
         new-arr))))
 
 (defn-with-array-range! array-for-each (f arr) arr start end
@@ -146,6 +143,5 @@
   ((length) (array-alloc length))
   ((length fill)
     (let ((arr (array-alloc length)))
-      (do
-        (array-fill! arr fill)
-        arr))))
+      (array-fill! arr fill)
+      arr)))

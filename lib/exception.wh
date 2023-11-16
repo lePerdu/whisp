@@ -56,9 +56,8 @@
 (defn! (raise ex)
   (call-with-popped-exception-handler
     (fn (handler)
-      (do
-        (handler ex)
-        (raise ex)))))
+      (handler ex)
+      (raise ex))))
 
 (defn! (error message . irritants)
   (raise (make-condition 'error message irritants)))
@@ -66,7 +65,7 @@
 ; Combinations of guard, cond, and call/ec to easily match on an error
 ; NOTE By design in scheme, this does not continue to errors raised with
 ; `raise-continuable`. Maybe that could change here?
-(defmacro! (guard conditions body)
+(defmacro! (guard conditions . body)
   (let-cons ((binding . branches) conditions)
     (let
       ((escape-sym (gensym)))
@@ -79,7 +78,7 @@
                 ; Always raise a new error so that the original
                 ; `raise-continuable` is not returned to.
                 (else (raise-continuable ~binding)))))
-          (fn () ~body))))))
+          (fn () ~@body))))))
 
 (defn! (print-backtrace bt)
   (let-named pbt-loop ((index 0) (bt bt) (prev-fn nil) (rep-count 1))
@@ -106,9 +105,8 @@
 (defn! (print-backtrace-and-abort ex)
   (let
     ((message (exception->string ex)))
-    (do
-      (println "uncaught exception:" message)
-      (print-backtrace (backtrace))
-      (abort "uncaught exception"))))
+    (println "uncaught exception:" message)
+    (print-backtrace (backtrace))
+    (abort "uncaught exception")))
 
 (reset! *global-exception-handler* print-backtrace-and-abort)

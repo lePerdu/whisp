@@ -1,15 +1,13 @@
 (defgroup! hash-table
   (defn! (map-numbers-to-strings! ht n)
-    (if (> n 0)
-      (do
-        (hash-table-set! ht n (->string n))
-        (map-numbers-to-strings! ht (dec n)))))
+    (when (> n 0)
+      (hash-table-set! ht n (->string n))
+      (map-numbers-to-strings! ht (dec n))))
 
   (defn! (map-strings-to-numbers! ht n)
-    (if (> n 0)
-      (do
-        (hash-table-set! ht (->string n) n)
-        (map-strings-to-numbers! ht (dec n)))))
+    (when (> n 0)
+      (hash-table-set! ht (->string n) n)
+      (map-strings-to-numbers! ht (dec n))))
 
   (deftest! get-default-value
     (def! h (make-=-hash-table))
@@ -79,11 +77,10 @@
         (hash-table-set! h 1 'other)
         (hash-table-set! h 3 'three)
         (let ((alist (hash-table->alist h)))
-          (do
-            (assert= 3 (count alist))
-            (assert-equal '(1 . other) (assoc 1 alist))
-            (assert-equal '(2 . two) (assoc 2 alist))
-            (assert-equal '(3 . three) (assoc 3 alist)))))))
+          (assert= 3 (count alist))
+          (assert-equal '(1 . other) (assoc 1 alist))
+          (assert-equal '(2 . two) (assoc 2 alist))
+          (assert-equal '(3 . three) (assoc 3 alist))))))
 
   (deftest! grows-after-adding-many-elements
     (def! h (make-=-hash-table))

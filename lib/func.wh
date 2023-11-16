@@ -32,7 +32,6 @@
     ((start-time (runtime))
      (result (apply f args))
      (end-time (runtime)))
-    (do
-      (println "time:" (- end-time start-time))
-      result)))
+    (println "time:" (- end-time start-time))
+    result))
 

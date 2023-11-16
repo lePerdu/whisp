@@ -8,7 +8,7 @@
 (defmacro! (comment . ignore) '(do))
 
 (defsyntax! quasiquote
-  (let () (do
+  (let ()
     (defn! (process-unquote-args args)
       (if (cons? args)
         (if (null? (cdr args))
@@ -40,35 +40,41 @@
               (list 'cons (qq first) (qq rest)))))
         (list 'quote ast)))
 
-    qq)))
+    qq))
 
-(defmacro! (let* bindings ast)
-  (do
-    (defn! (helper bindings ast)
-      (if (null? bindings)
-        ast
-        `(let (~(car bindings))
-          ~(helper (cdr bindings) ast))))
-    (if (null? bindings)
-      ; Special case for no bindings so that it still generates a new scope
-      `(let () ~ast)
-      (helper bindings ast))))
+(defmacro! (let* bindings . body)
+  (if (null? bindings)
+    ; Special case for no bindings so that it still generates a new scope
+    `(let () ~@body)
+    `(let (~(car bindings))
+      (let* ~(cdr bindings) ~@body))))
 
 ; TODO Validate structure
 (defmacro! (cond . branches)
+  (defn! (cond-make-branch condition exprs rest)
+    (if (null? exprs)
+      ; Return the value of the condition
+      (let ((test-sym (gensym)))
+        `(let ((~test-sym ~condition))
+          (if ~test-sym ~test-sym (cond ~@rest))))
+      `(if ~condition
+        (do ~@exprs)
+        (cond ~@rest))))
+
+  (defn! (cond-make-else exprs)
+    (if (null? exprs)
+      (syntax-error "cond: else branch must have at least 1 expression")
+      `(do ~@exprs)))
+
   (if (null? branches)
     nil
     (let*
-      ((branch1 (car branches))
-       ; Is there a better way to validate in the middle of a let without
-       ; nesting lets and adding a bunch of indentation?
-       (_ (if (not (= (count branch1) 2))
-        (syntax-error "branches must be of the form (condition expr)")))
-       (cond1 (car branch1))
-       (expr1 (car (cdr branch1))))
-      (if (= cond1 'else)
-        expr1
-        `(if ~cond1 ~expr1 ~(cons 'cond (cdr branches)))))))
+      ((branch (car branches))
+       (condition (car branch))
+       (exprs (cdr branch)))
+      (if (= condition 'else)
+        (cond-make-else exprs)
+        (cond-make-branch condition exprs (cdr branches))))))
 
 ; TODO Validate structure
 (defmacro! (case expr . branches)
@@ -81,15 +87,19 @@
          ((= 'else (car branch))
            `(else ~@(cdr branch)))
          (else
-           (syntax-error "branches must be of the form ((matches ...) expr)"))))))
+           (syntax-error "branches must be of the form ((matches ...) expr ...)"))))))
     `(let ((~val-sym ~expr))
       (cond ~@(map case-branch-to-cond branches)))))
+
+(defmacro! (when condition . body)
+  `(if ~condition
+    (do ~@body)))
 
 ; Version of let which extracts values from a cons cell
 ; TODO Allow more than 1 pattern
 ; TODO Allow nested / more complex patterns
 ; (let-cons ((first . rest) (list 1 2 3)) expr) -> first=1, rest=(list 2 3)
-(defmacro! (let-cons binding body)
+(defmacro! (let-cons binding . body)
   ; TODO Check structure
   (let
     ((bind-pair (car binding))
@@ -99,7 +109,7 @@
       (let
        ((~(car bind-pair) (car ~cons-sym))
         (~(cdr bind-pair) (cdr ~cons-sym)))
-       ~body))))
+       ~@body))))
 
 (defmacro! (let-if binding if-true . opt-if-nil)
   (let
@@ -140,18 +150,17 @@
          ~if-cons)
         ~if-nil))))
 
-(defmacro! (letrec* bindings body)
+(defmacro! (letrec* bindings . body)
   `(let ()
-    (do
-      ~@(map (fn (b) (cons 'def! b)) bindings)
-      ; TODO Add a nested (let () ...) to isolate the bindings?
-      ~body)))
+    ~@(map (fn (b) (cons 'def! b)) bindings)
+    ; TODO Add a nested (let () ...) to isolate the bindings?
+    ~@body))
 
 ; "Named let" from scheme
 ; TODO Change name? Keep as separate from the basic let?
-(defmacro! (let-named name bindings body)
+(defmacro! (let-named name bindings . body)
   `(letrec*
-    ((~name (fn ~(map car bindings) ~body)))
+    ((~name (fn ~(map car bindings) ~@body)))
     (~name ~@(map cadr bindings))))
 
 ; () -> (nil . nil)
@@ -166,22 +175,22 @@
     (else
       (cons nil arg-list))))
 
-(defn! (fn-case-bind-args args-sym req-args rest-arg expr)
+(defn! (fn-case-bind-args args-sym req-args rest-arg exprs)
   (if (null? req-args)
     (if (null? rest-arg)
-      expr
-      `(let ((~rest-arg ~args-sym)) ~expr))
+      `(do ~@exprs)  ; Wrap in do to properly handle multiple expressions
+      `(let ((~rest-arg ~args-sym)) ~@exprs))
     `(let ((~(car req-args) (car ~args-sym)) (~args-sym (cdr ~args-sym)))
-      ~(fn-case-bind-args args-sym (cdr req-args) rest-arg expr))))
+      ~(fn-case-bind-args args-sym (cdr req-args) rest-arg exprs))))
 
 (defn! (fn-case-branch-to-cond args-sym arg-count-sym branch)
   (let-cons ((req-args . rest-arg) (fn-case-split-arg-list (car branch)))
     (let
       ((req-arg-count (count req-args))
-       (expr (cadr branch))
+       (exprs (cdr branch))
        (comparator (if (null? rest-arg) 'int= 'int>=)))
       `((~comparator ~arg-count-sym ~req-arg-count)
-        ~(fn-case-bind-args args-sym req-args rest-arg (cadr branch))))))
+        ~(fn-case-bind-args args-sym req-args rest-arg exprs)))))
 
 (defmacro! (fn-case . branches)
   (let
@@ -215,9 +224,9 @@
 
 (def! call/ec call-with-escape-continuation)
 
-(defmacro! (let/ec esc-cont-name body)
+(defmacro! (let/ec esc-cont-name . body)
   `(call-with-escape-continuation
-    (fn (~esc-cont-name) ~body)))
+    (fn (~esc-cont-name) ~@body)))
 
 (defmacro! (for bindings stop-and-return . body)
   (let
@@ -239,13 +248,12 @@
 (defn! (macroexpand-1 ast)
   ; Use escape cont to avoid repeating the `false` branch of all the conditions
   (let/ec return
-    (do
-      (let-if-cons ((head . args) ast)
-        (if (symbol? head)
-          (let-if (resolved (macro-fn head))
-            (if (list? args)
-              (return (apply resolved args))))))
-      ast)))
+    (let-if-cons ((head . args) ast)
+      (if (symbol? head)
+        (let-if (resolved (macro-fn head))
+          (if (list? args)
+            (return (apply resolved args))))))
+    ast))
 
 (defn! (macroexpand ast)
   (let ((expanded (macroexpand-1 ast)))

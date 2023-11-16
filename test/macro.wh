@@ -70,36 +70,36 @@
   (deftest! macros-expanded-in-inner-scope
     (defmacro! (twice expr) (list 'do expr expr))
 
-    (defn! (f) (do
+    (defn! (f)
       (def! a (atom 0))
       (twice (swap! a inc))
-      @a))
+      @a)
     (assert= 2 (f)))
 
   (deftest! macros-expanded-in-scope
-    (defn! (f) (do
+    (defn! (f)
       (defmacro! (twice expr) (list 'do expr expr))
       (def! a (atom 0))
       (twice (swap! a inc))
-      @a))
+      @a)
     (assert= 2 (f)))
 
   (deftest! macros-shadowed-in-scope
     (defmacro! (twice expr) (list 'do expr expr))
 
-    (defn! (f) (do
+    (defn! (f)
       ; Bad definition of twice
       (defmacro! (twice expr) (list 'do expr))
       (def! a (atom 0))
       (twice (swap! a inc))
-      @a))
+      @a)
     (assert= 1 (f)))
 
   (deftest! macros-not-expanded-in-outer-scope
     (def! a (atom 0))
-    (defn! (f) (do
+    (defn! (f)
       (defmacro! (twice expr) (list 'do expr expr))
-      nil))
+      nil)
     (f)
 
     (assert-error (twice (swap! a inc)))))
@@ -120,11 +120,11 @@
       (assert= 5
         ; Wrap in eval since it's a compiler test
         ; Wrap in `let` to ensure the new scope
-        (eval '(let ()
-          (do
+        (eval
+          '(let ()
             (comment "stuff")
             (def! a 5)
-            a))))))
+            a)))))
 
   (defgroup! let-cons
     (deftest! extracts-first

@@ -11,7 +11,8 @@
       (assert-error
         (with-exception-handler
           (fn (err)
-            (do (swap! a inc) "ignored"))
+            (swap! a inc)
+            "ignored")
           (fn () (raise "base error"))))
       ; Make sure the handler ran
       (assert= 1 @a))
