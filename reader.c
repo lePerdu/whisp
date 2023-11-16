@@ -256,7 +256,7 @@ static void reader_error_cur_token(struct reader *r, const char *message) {
   reader_error_at(r, message, r->token.start_pos);
 }
 
-static bool is_lisp_space(char c) { return isspace(c) || c == ','; }
+static bool is_lisp_space(char c) { return isspace(c); }
 
 static bool is_atom_char(char c) {
   switch (c) {
