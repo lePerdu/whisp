@@ -1,12 +1,12 @@
 ;; Hash functions for the common cases
 
-(defn! (=-hash obj)
+(defn! =-hash (obj)
   (object-id obj))
 
 (def! *string-hash-factor* 31)
 (def! *string-hash-max-length* 32)
 
-(defn! (string-hash s)
+(defn! string-hash (s)
   (let* ((len (string-count s)) (end (min len *string-hash-max-length*)))
     (string-foldl
       len
@@ -18,12 +18,12 @@
 
 (def! *cons-hash-factor* 31)
 
-(defn! (cons-hash hash-fn cell)
+(defn! cons-hash (hash-fn cell)
   (let ((car-hash (hash-fn (car cell))) (cdr-hash (hash-fn (cdr cell))))
     ; TODO Something more sophisticated?
     (int+ (int* car-hash *cons-hash-factor*) cdr-hash)))
 
-(defn! (equal-hash obj)
+(defn! equal-hash (obj)
   (cond
     ((int? obj) obj)
     ((real? obj) (real-bits obj))
@@ -35,7 +35,7 @@
 ;; Hash function for numeric comparisons
 ;; Real values representing integers hash to the same value as the
 ;; corresponding integer value would
-(defn! (==-hash num)
+(defn! ==-hash (num)
   (cond
     ((int? num) num)
     ((real? num)
@@ -61,7 +61,7 @@
   (key _he-key _he-set-key!)
   (value _he-value _he-set-value!))
 
-(defn! (opt-or-default opt-arg-list default)
+(defn! opt-or-default (opt-arg-list default)
   (cond
     ((null? opt-arg-list) default)
     ((null? (cdr opt-arg-list)) (car opt-arg-list))
@@ -71,38 +71,38 @@
 (def! *hash-table-default-capacity* 8)
 
 ;; Round capacity to the nearest power of 2
-(defn! (round-capacity orig)
+(defn! round-capacity (orig)
   ; TODO Is there some bit magic to make this more efficient?
   (for
     ((pow2 *hash-table-min-capacity* (bitshift pow2 1)))
     ((>= pow2 orig) pow2)))
 
-(defn! (make-hash-table hash-fn equal-fn . opt-capacity)
+(defn! make-hash-table (hash-fn equal-fn . opt-capacity)
   (let*
     ((raw-cap (opt-or-default opt-capacity *hash-table-default-capacity*))
      (rounded-cap (round-capacity raw-cap)))
     (_build-hash-table hash-fn equal-fn 0 (make-array rounded-cap))))
 
-(defn! (make-=-hash-table . opt-capacity)
+(defn! make-=-hash-table opt-capacity
   (apply* make-hash-table =-hash = opt-capacity))
 
-(defn! (make-equal-hash-table . opt-capacity)
+(defn! make-equal-hash-table opt-capacity
   (apply* make-hash-table equal-hash equal? opt-capacity))
 
-(defn! (make-==-hash-table . opt-capacity)
+(defn! make-==-hash-table opt-capacity
   (apply* make-hash-tabel ==-hash == opt-capacity))
 
-(defn! (hash-table-capacity ht)
+(defn! hash-table-capacity (ht)
   (array-length (_ht-data ht)))
 
-(defn! (_ht-bucket-index ht hash)
+(defn! _ht-bucket-index (ht hash)
   (bitand
     (int- (hash-table-capacity ht) 1)
     hash))
 
 ;; TODO Should this be part of the hash functions defined above?
 ;; Or does it make sense to have it hard-coded inside the hash table?
-(defn! (_ht-rehash x)
+(defn! _ht-rehash (x)
   ;; Source:
   ;; https://lemire.me/blog/2018/08/15/fast-strongly-universal-64-bit-hashing-everywhere/
   ;; Adjusted constants and shifts to be 63-bit
@@ -114,39 +114,39 @@
      (x (bitxor x (bitshift x -32))))
     x))
 
-(defn! (_ht-hash ht key)
+(defn! _ht-hash (ht key)
   (_ht-rehash
     ((hash-table-hash-fn ht) key)))
 
-(defn! (_ht-get-bucket ht hash)
+(defn! _ht-get-bucket (ht hash)
   (array-get (_ht-data ht) (_ht-bucket-index ht hash)))
 
-(defn! (_he-matches ht entry hash key)
+(defn! _he-matches (ht entry hash key)
   (and
     (= (_he-hash entry) hash)
     ((hash-table-equal-fn ht) (_he-key entry) key)))
 
 (def! *hash-table-tombstone* (gensym "hash-table-tombstone"))
 
-(defn! (_he-mark-deleted entry)
+(defn! _he-mark-deleted (entry)
   (_he-set-hash! entry 0)
   (_he-set-key! entry *hash-table-tombstone*))
 
-(defn! (_he-occupied? entry)
+(defn! _he-occupied? (entry)
   (not
     (or (null? entry) (= (_he-key entry) *hash-table-tombstone*))))
 
-(defn! (hash-table-contains? ht key)
+(defn! hash-table-contains? (ht key)
   (not
     (= *hash-table-tombstone* (hash-table-get ht key *hash-table-tombstone*))))
 
-(defn! (hash-table-get ht key default)
+(defn! hash-table-get (ht key default)
   (let ((hash (_ht-hash ht key)))
     (let-if (entry (_ht-find-entry ht hash key))
       (_he-value entry)
       default)))
 
-(defn! (_ht-find-entry ht hash key)
+(defn! _ht-find-entry (ht hash key)
   (let*
     ((data (_ht-data ht))
      (capacity (array-length data))
@@ -162,10 +162,10 @@
                 nil
                 (loop new-index)))))))))
 
-(defn! (hash-table-set! ht key value)
+(defn! hash-table-set! (ht key value)
   (hash-table-update! ht key (fn (_) value) nil))
 
-(defn! (hash-table-update! ht key updater default)
+(defn! hash-table-update! (ht key updater default)
   (let ((hash (_ht-hash ht key)))
     (let-if (entry (_ht-find-entry ht hash key))
       (_he-set-value! entry
@@ -173,7 +173,7 @@
       (_ht-grow-and-insert! ht
         (_make-hash-entry hash key (updater default))))))
 
-(defn! (hash-table-set-if-missing! ht key value)
+(defn! hash-table-set-if-missing! (ht key value)
   (hash-table-update!
     ht
     key
@@ -183,18 +183,18 @@
         current))
     *hash-table-tombstone*))
 
-(defn! (_ht-grow-and-insert! ht entry)
+(defn! _ht-grow-and-insert! (ht entry)
   (if (_ht-should-grow ht)
     (_ht-grow! ht))
   (_ht-insert! ht entry)
   (_ht-set-count! ht (inc (hash-table-count ht))))
 
-(defn! (_ht-should-grow ht)
+(defn! _ht-should-grow (ht)
   (>
     (bitshift (int* (hash-table-count ht) 3) -1)
     (hash-table-capacity ht)))
 
-(defn! (_ht-grow! ht)
+(defn! _ht-grow! (ht)
   (let*
     ((old-data (_ht-data ht))
      (new-data (make-array (bitshift (array-length old-data) 1))))
@@ -205,11 +205,11 @@
           (_ht-insert! ht entry)))
       old-data)))
 
-(defn! (_ht-insert! ht entry)
+(defn! _ht-insert! (ht entry)
   (let ((index (_ht-find-open-index ht (_he-hash entry))))
     (array-set! (_ht-data ht) index entry)))
 
-(defn! (_ht-find-open-index ht hash)
+(defn! _ht-find-open-index (ht hash)
   (let*
     ((data (_ht-data ht))
      (capacity (array-length data))
@@ -222,21 +222,21 @@
             (error "hash-table: no open indices")
             (loop new-index)))))))
 
-(defn! (hash-table-delete! ht key)
+(defn! hash-table-delete! (ht key)
   (let ((hash (_ht-hash ht key)))
     (let-if (entry (_ht-find-entry ht hash key))
       (do
         (_he-mark-deleted entry)
         (_ht-set-count! ht (dec (hash-table-count ht)))))))
 
-(defn! (hash-table-for-each f ht)
+(defn! hash-table-for-each (f ht)
   (array-for-each
     (fn (entry)
       (if (_he-occupied? entry)
         (f (_he-key entry) (_he-value entry))))
     (_ht-data ht)))
 
-(defn! (hash-table-fold init f ht)
+(defn! hash-table-fold (init f ht)
   (array-foldl
     init
     (fn (acc entry)
@@ -245,7 +245,7 @@
         acc))
     (_ht-data ht)))
 
-(defn! (alist->hash-table hash-fn equal-fn alist)
+(defn! alist->hash-table (hash-fn equal-fn alist)
   (let ((ht (make-hash-table hash-fn equal-fn (count alist))))
     (for-each
       (fn (item)
@@ -253,16 +253,16 @@
       alist)
     ht))
 
-(defn! (alist->=-hash-table alist)
+(defn! alist->=-hash-table (alist)
   (alist->hash-table =-hash = alist))
 
-(defn! (alist->==-hash-table alist)
+(defn! alist->==-hash-table (alist)
   (alist->hash-table ==-hash == alist))
 
-(defn! (alist->equal-hash-table alist)
+(defn! alist->equal-hash-table (alist)
   (alist->hash-table equal-hash equal? alist))
 
-(defn! (hash-table->alist ht)
+(defn! hash-table->alist (ht)
   (hash-table-fold
     nil
     (fn (alist key value) (acons key value alist))

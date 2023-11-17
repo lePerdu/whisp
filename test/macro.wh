@@ -1,7 +1,7 @@
 ; Old behavior was different when macros are defined on top-level,
 ; so keep them here to detect such bugs
-(defmacro! (replace-with-2 . args) 2)
-(defmacro! (noop-macro arg) arg)
+(defmacro! replace-with-2 args 2)
+(defmacro! noop-macro (arg) arg)
 
 (defgroup! macro-expansion
   (deftest! simple-macro-replaced
@@ -68,28 +68,28 @@
     (assert-equal (list 'replace-with-2 'abc) '(replace-with-2 abc)))
 
   (deftest! macros-expanded-in-inner-scope
-    (defmacro! (twice expr) (list 'do expr expr))
+    (defmacro! twice (expr) (list 'do expr expr))
 
-    (defn! (f)
+    (defn! f ()
       (def! a (atom 0))
       (twice (swap! a inc))
       @a)
     (assert= 2 (f)))
 
   (deftest! macros-expanded-in-scope
-    (defn! (f)
-      (defmacro! (twice expr) (list 'do expr expr))
+    (defn! f ()
+      (defmacro! twice (expr) (list 'do expr expr))
       (def! a (atom 0))
       (twice (swap! a inc))
       @a)
     (assert= 2 (f)))
 
   (deftest! macros-shadowed-in-scope
-    (defmacro! (twice expr) (list 'do expr expr))
+    (defmacro! twice (expr) (list 'do expr expr))
 
-    (defn! (f)
+    (defn! f ()
       ; Bad definition of twice
-      (defmacro! (twice expr) (list 'do expr))
+      (defmacro! twice (expr) (list 'do expr))
       (def! a (atom 0))
       (twice (swap! a inc))
       @a)
@@ -97,8 +97,8 @@
 
   (deftest! macros-not-expanded-in-outer-scope
     (def! a (atom 0))
-    (defn! (f)
-      (defmacro! (twice expr) (list 'do expr expr))
+    (defn! f ()
+      (defmacro! twice (expr) (list 'do expr expr))
       nil)
     (f)
 

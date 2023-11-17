@@ -1,33 +1,33 @@
-(defn! (identity x) x)
+(defn! identity (x) x)
 
 ; Allow forms like (apply f a b (list c d)) -> (f a b c d)
 ; TODO Is re-defining buitins good practice or well-defined?
-(defn! (apply* f . args)
+(defn! apply* (f . args)
   (apply f (apply list* args)))
 
 ; ((bind f a b) c) -> (f a b c)
-(defn! (bind f . args)
+(defn! bind (f . args)
   (fn other-args
     (apply f (concat args other-args))))
 
-(defn! (compose . funcs)
+(defn! compose funcs
   ; TODO What's more efficient?
   ; - Create a single compound closure
   ; - Create a closure which calls fold
   (fn (x) (foldr x (fn (f acc) (f acc)) funcs)))
 
-(defn! (pipe x . funcs)
+(defn! pipe (x . funcs)
   (if (null? funcs)
     x
     (apply* pipe ((car funcs) x) (cdr funcs))))
 
-(defmacro! (fn-named name args body)
-  `(let ((~name (fn ~args ~body)))
+(defmacro! fn-named (name args . body)
+  `(let ((~name (fn ~args ~@body)))
     ~name))
 
 ; TODO Move these somewhere else?
 
-(defn! (time f . args)
+(defn! time (f . args)
   (let
     ((start-time (runtime))
      (result (apply f args))

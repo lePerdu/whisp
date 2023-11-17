@@ -1,54 +1,54 @@
 (defsyntax! defmacro!
-  (fn (pattern . body)
+  (fn (name args . body)
     (cons 'defsyntax!
-      (cons (car pattern)
-        (cons (cons 'fn (cons (cdr pattern) body))
+      (cons name
+        (cons (cons 'fn (cons args body))
           nil)))))
 
-(defmacro! (defn! pattern . body)
+(defmacro! defn! (name args . body)
   (cons 'def!
-    (cons (car pattern)
-      (cons (cons 'fn (cons (cdr pattern) body))
+    (cons name
+      (cons (cons 'fn (cons args body))
         nil))))
 
-(defn! (inc x) (int+ x 1))
-(defn! (dec x) (int- x 1))
+(defn! inc (x) (int+ x 1))
+(defn! dec (x) (int- x 1))
 
 ; TODO Generate these with a macro
-(defn! (cadr lst) (car (cdr lst)))
-(defn! (cdar lst) (cdr (car lst)))
-(defn! (caar lst) (car (car lst)))
-(defn! (cddr lst) (cdr (cdr lst)))
-(defn! (caddr lst) (car (cddr lst)))
+(defn! cadr (lst) (car (cdr lst)))
+(defn! cdar (lst) (cdr (car lst)))
+(defn! caar (lst) (car (car lst)))
+(defn! cddr (lst) (cdr (cdr lst)))
+(defn! caddr (lst) (car (cddr lst)))
 
-(defn! (list . args) args)
+(defn! list args args)
 
-(defn! (list? l)
+(defn! list? (l)
   (if (cons? l)
     (list? (cdr l))
     (null? l)))
 
-(defn! (foldl init f l)
+(defn! foldl (init f l)
   (if (null? l)
     init
     (foldl (f init (car l)) f (cdr l))))
 
-(defn! (foldr init f l)
+(defn! foldr (init f l)
   (if (null? l)
     init
     (f (car l) (foldr init f (cdr l)))))
 
-(defn! (count l)
+(defn! count (l)
   (foldl 0 (fn (acc _) (int+ acc 1)) l))
 
-(defn! (map f l)
+(defn! map (f l)
   ; Using foldr makes map run in reverse order. That's not inherently wrong
   ; (the function shouldn't be stateful), but could be unexpected.
   (if (null? l)
     nil
     (cons (f (car l)) (map f (cdr l)))))
 
-(defn! (concat . lists)
+(defn! concat lists
   ; Can't use foldr since this needs to handle the last list specially
   (if (null? lists)
     nil
@@ -56,27 +56,27 @@
       (car lists)
       (foldr (apply concat (cdr lists)) cons (car lists)))))
 
-(defn! (concat-map f l)
+(defn! concat-map (f l)
   (if (null? l)
     nil
     (concat (f (car l)) (concat-map f (cdr l)))))
 
 ; Misc functions used in early macro definitions
 
-(defn! (swap! a f . args)
+(defn! swap! (a f . args)
   ; TODO Define as primitive? Doesn't really need to be one unless parallelism
   ; is possible
   (reset! a (apply f (cons @a args))))
 
-(defn! (true? x) (if x true false))
-(defn! (false? x) (if x false true))
+(defn! true? (x) (if x true false))
+(defn! false? (x) (if x false true))
 (def! not false?)
 
 ; Preliminary definition of error until exception handling functionality is in place
-(defn! (error message . irritants) (abort message))
+(defn! error (message . irritants) (abort message))
 
 ; TODO Should this be more sophisticated?
-(defn! (syntax-error message) (abort message))
+(defn! syntax-error (message) (abort message))
 
 ; TODO Proper, native support for this
 (def! gensym

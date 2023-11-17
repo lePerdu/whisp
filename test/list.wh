@@ -135,7 +135,7 @@
       (assert= 10000 (count (repeat 5 10000)))))
 
   (defgroup! sort
-    (defn! (compare-never a b) (error "comparison should not be called"))
+    (defn! compare-never (a b) (error "comparison should not be called"))
 
     (deftest! empty-list-is-sorted
       (assert= nil (sort nil compare-never)))

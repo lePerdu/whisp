@@ -1,12 +1,12 @@
-(defn! (number? x) (or (int? x) (real? x)))
+(defn! number? (x) (or (int? x) (real? x)))
 
-(defn! (generic-binary-op int-op real-op)
+(defn! generic-binary-op (int-op real-op)
   (fn (x y)
     (if (and (int? x) (int? y))
       (int-op x y)
       (real-op (real x) (real y)))))
 
-(defn! (generic-nary-op init int-op real-op)
+(defn! generic-nary-op (init int-op real-op)
   (fn args
     (foldl init (generic-binary-op int-op real-op) args)))
 
@@ -14,7 +14,7 @@
 (def! * (generic-nary-op 1 int* real*))
 
 ; Special handling for sub and div since they double as unary operators
-(defn! (generic-unary-or-nary-op init int-op real-op)
+(defn! generic-unary-or-nary-op (init int-op real-op)
   (let ((binary-op (generic-binary-op int-op real-op)))
     (fn (first . rest)
       (if (null? rest)
@@ -24,13 +24,13 @@
 (def! - (generic-unary-or-nary-op 0 int- real-))
 (def! / (generic-unary-or-nary-op 1 int/ real/))
 
-(defn! (compare-seq compare first rest)
+(defn! compare-seq (compare first rest)
   (cond
     ((null? rest) true)
     ((compare first (car rest)) (compare-seq compare (car rest) (cdr rest)))
     (else false)))
 
-(defn! (generic-nary-compare int-op real-op)
+(defn! generic-nary-compare (int-op real-op)
   (let
     ((binary-compare (generic-binary-op int-op real-op)))
     (fn args
@@ -39,7 +39,7 @@
 ; TODO Define as primitive
 ; TODO Define for reals as well?
 ; TODO Negative handling?
-(defn! (rem x y) (int- x (int* (int/ x y) y)))
+(defn! rem (x y) (int- x (int* (int/ x y) y)))
 
 (def! < (generic-nary-compare int< real<))
 (def! <= (generic-nary-compare int<= real<=))
@@ -47,7 +47,7 @@
 (def! >= (generic-nary-compare int>= real>=))
 (def! == (generic-nary-compare int= real=))
 
-(defn! (int** b n)
+(defn! int** (b n)
   (let-named iter ((a 1) (b b) (n n))
     (cond
       ((= n 0) a)
@@ -57,14 +57,14 @@
 (def! ** (generic-binary-op int** real**))
 
 ;; TODO Better name for this?
-(defn! (real-int? x)
+(defn! real-int? (x)
   (= (real (int x)) x))
 
-(defn! (positive? x) (> x 0))
-(defn! (negative? x) (< x 0))
-(defn! (zero? x) (== x 0))
+(defn! positive? (x) (> x 0))
+(defn! negative? (x) (< x 0))
+(defn! zero? (x) (== x 0))
 
-(defn! (minimum l)
+(defn! minimum (l)
   (if (null? l)
     (error "minimum: must have at least 1 element")
     (foldl
@@ -72,7 +72,7 @@
       (fn (x y) (if (<= x y) x y))
       (cdr l))))
 
-(defn! (maximum l)
+(defn! maximum (l)
   (if (null? l)
     (error "maximum: must have at least 1 element")
     (foldl
@@ -80,48 +80,48 @@
       (fn (x y) (if (>= x y) x y))
       (cdr l))))
 
-(defn! (min . xs) (minimum xs))
-(defn! (max . xs) (maximum xs))
+(defn! min xs (minimum xs))
+(defn! max xs (maximum xs))
 
-(defn! (sum l) (apply + l))
-(defn! (product l) (apply * l))
+(defn! sum (l) (apply + l))
+(defn! product (l) (apply * l))
 
-(defn! (square x) (* x x))
-(defn! (cube x) (* x x x))
-(defn! (abs x) (if (negative? x) (- x) x))
+(defn! square (x) (* x x))
+(defn! cube (x) (* x x x))
+(defn! abs (x) (if (negative? x) (- x) x))
 
-(defn! (average . xs) (/ (apply + xs) (count xs)))
+(defn! average xs (/ (apply + xs) (count xs)))
 
-(defn! (divides? a b) (= (rem b a) 0))
+(defn! divides? (a b) (= (rem b a) 0))
 
-(defn! (even? x) (divides? 2 x))
-(defn! (odd? x) (not (even? x)))
+(defn! even? (x) (divides? 2 x))
+(defn! odd? (x) (not (even? x)))
 
 ; TODO Negative handling?
-(defn! (gcd a b)
+(defn! gcd (a b)
   (if (= b 0)
     a
     (gcd b (rem a b))))
 
-(defn! (lcm a b)
+(defn! lcm (a b)
   ; TODO Use extended GCD to find this without division?
   (int* a (int/ b (gcd a b))))
 
-(defn! (prime? n)
-  (defn! (find-divisor test)
+(defn! prime? (n)
+  (defn! find-divisor (test)
     (cond
       ((int> (square test) n) n)
       ((divides? test n) test)
       (else (find-divisor (inc test)))))
   (= n (find-divisor 2)))
 
-(defn! (factorial n)
+(defn! factorial (n)
   (let-named iter ((acc 1) (n n))
     (if (int= n 0)
       acc
       (iter (int* acc n) (int- n 1)))))
 
-(defn! (fib n)
+(defn! fib (n)
   (let-named iter ((a 0) (b 1) (n n))
     (if (= n 0)
       b
@@ -130,12 +130,12 @@
 ; Epsilon value for floating-point functions
 (def! *epsilon* 1e-9)
 
-(defn! (sqrt x)
-  (defn! (good-enough? guess)
+(defn! sqrt (x)
+  (defn! good-enough? (guess)
     (let ((g2 (square guess)))
       (< (abs (/ (- g2 x) g2)) *epsilon*)))
-  (defn! (improve guess) (/ (+ guess (/ x guess)) 2.0))
-  (defn! (sqrt-iter guess)
+  (defn! improve (guess) (/ (+ guess (/ x guess)) 2.0))
+  (defn! sqrt-iter (guess)
     (if (good-enough? guess)
       guess
       (sqrt-iter (improve guess))))

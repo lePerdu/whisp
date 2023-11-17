@@ -1,17 +1,17 @@
 (def! empty-array (array-alloc 0))
 
-(defn! (list->array elems)
+(defn! list->array (elems)
   (let ((arr (array-alloc (count elems))))
     (for-each-index
       (fn (index x) (array-set! arr index x))
       elems)
     arr))
 
-(defn! (array->list arr)
+(defn! array->list (arr)
   (array-foldr nil cons arr))
 
 ; TODO Include in equal?
-(defn! (array-equal? a b)
+(defn! array-equal? (a b)
   (let ((a-len (array-length a)))
     (and
       (= a-len (array-length b))
@@ -23,15 +23,15 @@
 
 ; TODO More generic array-compare?
 
-(defn! (array . elems) (list->array elems))
+(defn! array elems (list->array elems))
 
-(defn! (array-update! arr i f)
+(defn! array-update! (arr i f)
   (array-set! arr i (f (array-get arr i))))
 
 ;; Persistent operations which return new array instead of mutating
 
 ;; Helper for functions with optional bounds
-(defmacro! (defn-with-array-range! name req-args array-arg start-arg end-arg delegate)
+(defmacro! defn-with-array-range! (name req-args array-arg start-arg end-arg delegate)
   `(defn-case! ~name
     (~req-args
       (~delegate ~@req-args 0 (array-length ~array-arg)))
@@ -41,7 +41,7 @@
       (~delegate ~@req-args ~start-arg ~end-arg))))
 
 ; TODO Define as primitive? Then it can be a simple memcpy
-(defn! (array-copy-sub from into start end into-offset)
+(defn! array-copy-sub (from into start end into-offset)
   (for ((index start (inc index)))
       ((int>= index end) into)
     (array-set!
@@ -50,7 +50,7 @@
       (array-get from index))))
 
 (defn-with-array-range! array-copy (arr) arr start end array-copy-helper)
-(defn! (array-copy-helper arr start end)
+(defn! array-copy-helper (arr start end)
   (array-copy-sub
     arr
     (array-alloc (int- end start))
@@ -58,23 +58,23 @@
     end
     (int- 0 start)))
 
-(defn! (array-map f arr)
+(defn! array-map (f arr)
   (let* ((n (array-length arr)) (new (array-alloc n)))
     (for ((i 0 (inc i)))
         ((= i n) new)
       (array-set! new i (f (array-get arr i))))))
 
 ; Persistent set (returns a new array)
-(defn! (array-set arr i value)
+(defn! array-set (arr i value)
   (let ((copy (array-copy arr)))
     (array-set! copy i value)
     copy))
 
-(defn! (array-update arr i f)
+(defn! array-update (arr i f)
   (array-set arr i (f (array-get arr i))))
 
 ; Persistent append
-(defn! (array-append arr value)
+(defn! array-append (arr value)
   (let*
     ((old-len (array-length arr))
      (new-arr (array-alloc (inc old-len))))
@@ -84,7 +84,7 @@
          new-arr)
       (array-set! new-arr i (array-get arr i)))))
 
-(defn! (array-concat . arrays)
+(defn! array-concat arrays
   (let*
     ((total-len
       (foldl 0
@@ -102,21 +102,21 @@
 
 (defn-with-array-range! array-for-each (f arr) arr start end
   array-for-each-helper)
-(defn! (array-for-each-helper f arr start end)
+(defn! array-for-each-helper (f arr start end)
   (for ((i start (inc i)))
       ((int>= i end))
     (f (array-get arr i))))
 
 (defn-with-array-range! array-for-each-index (f arr) arr start end
   array-for-each-index-helper)
-(defn! (array-for-each-index-helper f arr start end)
+(defn! array-for-each-index-helper (f arr start end)
   (for ((i start (inc i)))
       ((int>= i end))
     (f i (array-get arr i))))
 
 (defn-with-array-range! array-foldl (init f arr) arr start end
   array-foldl-helper)
-(defn! (array-foldl-helper init f arr start end)
+(defn! array-foldl-helper (init f arr start end)
   (for
     ((i start (inc i))
      (acc init (f acc (array-get arr i))))
@@ -124,7 +124,7 @@
 
 (defn-with-array-range! array-foldr (init f arr) arr start end
   array-foldr-helper)
-(defn! (array-foldr-helper init f arr start end)
+(defn! array-foldr-helper (init f arr start end)
   (for
     ((i (dec end) (dec i))
      (acc init (f (array-get arr i) acc)))
@@ -132,7 +132,7 @@
 
 (defn-with-array-range! array-fill! (arr fill) arr start end
   array-fill-helper!)
-(defn! (array-fill-helper! arr fill start end)
+(defn! array-fill-helper! (arr fill start end)
   (array-for-each-index
     (fn (index _) (array-set! arr index fill))
     arr

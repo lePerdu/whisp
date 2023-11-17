@@ -16,7 +16,7 @@
         1
         (k 2))))))
   (deftest! escape-from-nested-function-call
-    (defn! (use-escape k) (k (+ 1 2)))
+    (defn! use-escape (k) (k (+ 1 2)))
     (assert= 3 (call/ec (fn (k) (use-escape k)))))
   (deftest! escape-from-inner-call/ec
     (assert= 3

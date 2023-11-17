@@ -2,13 +2,13 @@
 (def! current-output-port (make-parameter *stdout-port*))
 (def! current-error-port (make-parameter *stderr-port*))
 
-(defn! (check-opt-arg vararg-list get-default)
+(defn! check-opt-arg (vararg-list get-default)
   (cond
     ((null? vararg-list) (get-default))
     ((null? (cdr vararg-list)) (car vararg-list))
     (else (error "too many arguments"))))
 
-(defmacro! (defn-with-default-port! name req-args port-arg default-param body)
+(defmacro! defn-with-default-port! (name req-args port-arg default-param body)
   `(defn-case! ~name
     (~req-args (~name ~@req-args (~default-param)))
     ((~@req-args ~port-arg) ~body)))
@@ -27,8 +27,8 @@
 (defn-with-default-port! read-line () port current-input-port
   (input-file-read-line port))
 
-(defn! (input-port? port) (input-file? port))
-(defn! (close-input-port port) (close-input-file port))
+(defn! input-port? (port) (input-file? port))
+(defn! close-input-port (port) (close-input-file port))
 
 ;; Output
 
@@ -41,21 +41,21 @@
 (defn-with-default-port! flush-output-port () port current-output-port
   (output-file-flush port))
 
-(defn! (output-port? port) (output-file? port))
-(defn! (close-output-port port) (close-output-file port))
+(defn! output-port? (port) (output-file? port))
+(defn! close-output-port (port) (close-output-file port))
 
 ;; Type-agnostic
 
-(defn! (port? port)
+(defn! port? (port)
   (or (input-port? port) (output-port? port)))
 
-(defn! (close-port port)
+(defn! close-port (port)
   (if (input-port? port) (close-input-port port))
   (if (output-port? port) (close-output-port port)))
 
 ;; Auto-closing
 
-(defn! (call-with-cleanup-handler cleanup proc)
+(defn! call-with-cleanup-handler (cleanup proc)
   (with-exception-handler
     ; TODO How should this interact with escape continuations?
     ; Currently, it just forbids/ignores them
@@ -65,24 +65,24 @@
         (cleanup)
         return))))
 
-(defn! (call-with-port port proc)
+(defn! call-with-port (port proc)
   (call-with-cleanup-handler
     (fn () (close-port port))
     (fn () (proc port))))
 
-(defn! (call-with-input-file filename proc)
+(defn! call-with-input-file (filename proc)
   (call-with-port (open-input-file filename) proc))
 
-(defn! (call-with-output-file filename proc)
+(defn! call-with-output-file (filename proc)
   (call-with-port (open-output-file filename) proc))
 
-(defn! (with-input-from-file filename proc)
+(defn! with-input-from-file (filename proc)
   (call-with-input-file
     filename
     (fn (file-port)
       (parameterize ((current-input-port file-port)) (proc)))))
 
-(defn! (with-output-to-file filename proc)
+(defn! with-output-to-file (filename proc)
   (call-with-output-file
     filename
     (fn (file-port)
@@ -96,7 +96,7 @@
 (defn-with-default-port! display (x) port current-output-port
   (write-string (->string x) port))
 
-(defn! (print . args)
+(defn! print args
   (when (not (null? args))
     ; Print first without space
     (display (car args))
@@ -104,20 +104,20 @@
       (fn (x) (display " ") (display x))
       (cdr args))))
 
-(defn! (println . args)
+(defn! println args
   (apply print args)
   (newline))
 
 ;; Misc file operations
 
-(defn! (path-join . parts)
+(defn! path-join parts
   (apply string-concat
     (intersperse (->string *path-separator*) parts)))
 
-(defn! (path-separator? c)
+(defn! path-separator? (c)
   (char= c *path-separator*))
 
-(defn! (path-directory path)
+(defn! path-directory (path)
   (let-if (slash-index (string-rindex path path-separator?))
     (substring path 0 slash-index)
     ; Full path if there is no slash
@@ -127,21 +127,21 @@
 ; if it changes?
 (def! load-path (make-parameter (current-directory)))
 
-(defn! (load filename)
+(defn! load (filename)
   (let*
     ((full-path (path-join (load-path) filename))
      (new-load-path (path-directory full-path)))
     (parameterize ((load-path new-load-path))
       ((compile-file full-path)))))
 
-(defn! (convert-exit-status status)
+(defn! convert-exit-status (status)
   (cond
     ((= status true) 0)
     ((null? status) 1)
     ((int? status) status)
     (else (error "exit: invalid status code" status))))
 
-(defn! (exit . opt-arg)
+(defn! exit opt-arg
   (cond
     ((null? opt-arg) (system-exit 0))
     ((null? (cdr opt-arg)) (system-exit (convert-exit-status (car opt-arg))))

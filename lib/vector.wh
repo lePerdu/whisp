@@ -15,19 +15,19 @@
 
 (def! empty-vector (_build-vector 0 0 (array)))
 
-(defn! (_vector-check-bounds v i)
+(defn! _vector-check-bounds (v i)
   (<= 0 i (dec (vector-length v))))
 
-(defn! (_vector-dec-bits level) (int- level *vector-trie-bits*))
-(defn! (_vector-inc-bits level) (int+ level *vector-trie-bits*))
+(defn! _vector-dec-bits (level) (int- level *vector-trie-bits*))
+(defn! _vector-inc-bits (level) (int+ level *vector-trie-bits*))
 
-(defn! (_vector-level-index i level)
+(defn! _vector-level-index (i level)
   (bitand
     (bitshift i (int- 0 level))
     *vector-trie-mask*))
 
 ; Resolve the underlying array
-(defn! (_vector-find-node v i)
+(defn! _vector-find-node (v i)
   (if (_vector-check-bounds v i)
     (let-named search-iter
       ((level (_vector-shift v)) (node (_vector-root v)))
@@ -38,18 +38,18 @@
           (array-get node (_vector-level-index i level)))))
     (error "vector-get: index out of bounds")))
 
-(defn! (vector-get v i)
+(defn! vector-get (v i)
   (let ((node (_vector-find-node v i)))
     (array-get node (bitand i *vector-trie-mask*))))
 
 ; Destructive set
-(defn! (vector-set! v i value)
+(defn! vector-set! (v i value)
   (let ((node (_vector-find-node v i)))
     (array-set! node (bitand i *vector-trie-mask*) value)))
 
 ; Persistent set (returns a new vector)
-(defn! (vector-set v i value)
-  (defn! (trie-set level node)
+(defn! vector-set (v i value)
+  (defn! trie-set (level node)
     (let ((cur-index (_vector-level-index i level)))
       (array-set
         node
@@ -64,20 +64,20 @@
   (_vector-root-set
     v (trie-set (_vector-shift v) (_vector-root v))))
 
-(defn! (make-new-branch shift single-elem)
+(defn! make-new-branch (shift single-elem)
   ; TODO Make iterative?
   (let-named rec ((level shift))
     (if (= level 0)
       single-elem
       (array (rec (int- level *vector-trie-bits*))))))
 
-(defn! (vector-append v value)
+(defn! vector-append (v value)
   (def! len (vector-length v))
-  (defn! (last-child-full? node level)
+  (defn! last-child-full? (node level)
     (=
       (_vector-level-index len level)
       (bitand (array-length node) *vector-trie-mask*)))
-  (defn! (trie-append shift node)
+  (defn! trie-append (shift node)
     (if (last-child-full? node shift)
       (array-append
         node
@@ -108,12 +108,12 @@
         shift
         (trie-append shift root)))))
 
-(defn! (_array-pop-or-nil arr)
+(defn! _array-pop-or-nil (arr)
   (if (= (array-length arr) 1)
     nil
     (array-copy arr 0 (dec (array-length arr)))))
 
-(defn! (vector-pop v)
+(defn! vector-pop (v)
   (let*
     ((new-len (dec (vector-length v)))
      (shift (_vector-shift v))
@@ -141,7 +141,7 @@
           (array-get new-root 0)))
       (else (_build-vector new-len shift new-root)))))
 
-(defn! (vector-equal? a b)
+(defn! vector-equal? (a b)
   (let ((a-len (vector-length a)))
     (and
       (= a-len (vector-length b))
@@ -154,28 +154,28 @@
 
 ; TODO More efficient tree iteration
 
-(defn! (list->vector lst)
+(defn! list->vector (lst)
   (foldl empty-vector vector-append lst))
 
-(defn! (vector->list v)
+(defn! vector->list (v)
   (vector-foldr nil cons v))
 
-(defn! (vector . elems) (list->vector elems))
+(defn! vector elems (list->vector elems))
 
-(defn! (vector-foldl init f v)
+(defn! vector-foldl (init f v)
   (let ((end-index (vector-length v)))
     (for
       ((index 0 (inc index))
        (acc init (f acc (vector-get v index))))
       ((= index end-index) acc))))
 
-(defn! (vector-foldr init f v)
+(defn! vector-foldr (init f v)
   (for
     ((index (dec (vector-length v)) (dec index))
      (acc init (f (vector-get v index) acc)))
     ((= index -1) acc)))
 
-(defn! (vector-concat . vs)
+(defn! vector-concat vs
   (if (null? vs)
     empty-vector
     ; Easy optimization: use the first vector as a starting point to avoid
@@ -189,14 +189,14 @@
 ; At least for vector-map, the resulting vector will have the same structure,
 ; so the extra work done to figure out where to insert things is unnecessary
 
-(defn! (vector-map f v)
+(defn! vector-map (f v)
   (vector-foldl
     empty-vector
     (fn (acc x) (vector-append acc (f x)))
     v))
 
 ;; Helper for functions with optional bounds
-(defmacro! (defn-with-vector-range! name req-args vector-arg start-arg end-arg delegate)
+(defmacro! defn-with-vector-range! (name req-args vector-arg start-arg end-arg delegate)
   `(defn-case! ~name
     (~req-args
       (~delegate ~@req-args 0 (vector-length ~vector-arg)))
@@ -207,7 +207,7 @@
 
 (defn-with-vector-range! vector-sub (v) v start end
   vector-sub-helper)
-(defn! (vector-sub-helper v start end)
+(defn! vector-sub-helper (v start end)
   (for
     ((index start (inc index))
      (acc empty-vector (vector-append acc (vector-get v index))))
@@ -215,14 +215,14 @@
 
 (defn-with-vector-range! vector-for-each (f v) v start end
   vector-for-each-helper)
-(defn! (vector-for-each-helper f v start end)
+(defn! vector-for-each-helper (f v start end)
   (for ((index start (inc index)))
       ((int>= index end))
     (f (vector-get v index))))
 
 (defn-with-vector-range! vector-for-each-index (f v) v start end
   vector-for-each-index-helper)
-(defn! (vector-for-each-index-helper f v start end)
+(defn! vector-for-each-index-helper (f v start end)
   (for ((index start (inc index)))
       ((int>= index end))
     (f index (vector-get v index))))

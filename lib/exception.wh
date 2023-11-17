@@ -5,7 +5,7 @@
   (message condition-message)
   (irritants condition-irritants))
 
-(defn! (condition->string condition)
+(defn! condition->string (condition)
   (string-concat
     (->string (condition-tag condition))
     ": "
@@ -14,20 +14,20 @@
       ""
       (string-concat ": " (->string (condition-irritants condition))))))
 
-(defn! (exception->string ex)
+(defn! exception->string (ex)
   (if (condition? ex)
     (condition->string ex)
     (->string ex)))
 
 (def! exception-handlers-fluid (make-fluid nil))
 
-(defn! (get-exception-handler-stack)
+(defn! get-exception-handler-stack ()
   (fluid-get exception-handlers-fluid))
 
-(defn! (with-exception-handler-stack new-stack thunk)
+(defn! with-exception-handler-stack (new-stack thunk)
   (with-fluid exception-handlers-fluid new-stack thunk))
 
-(defn! (with-exception-handler handler thunk)
+(defn! with-exception-handler (handler thunk)
   (with-exception-handler-stack
     (cons handler (get-exception-handler-stack))
     thunk))
@@ -35,37 +35,37 @@
 (def! *global-exception-handler*
   (atom (fn (ex) (abort "uncaught exception"))))
 
-(defn! (call-global-exception-handler ex)
+(defn! call-global-exception-handler (ex)
   (with-exception-handler
     ; Make sure the global exception handler aborts on exception to avoid
     ; infinite recursion
     (fn (new-ex) (abort "exception in global exception handler"))
     (fn () (@*global-exception-handler* ex))))
 
-(defn! (call-with-popped-exception-handler thunk)
+(defn! call-with-popped-exception-handler (thunk)
   (let-if-cons ((handler . rest) (get-exception-handler-stack))
     (with-exception-handler-stack
       rest
       (fn () (thunk handler)))
     (thunk call-global-exception-handler)))
 
-(defn! (raise-continuable ex)
+(defn! raise-continuable (ex)
   (call-with-popped-exception-handler
     (fn (handler) (handler ex))))
 
-(defn! (raise ex)
+(defn! raise (ex)
   (call-with-popped-exception-handler
     (fn (handler)
       (handler ex)
       (raise ex))))
 
-(defn! (error message . irritants)
+(defn! error (message . irritants)
   (raise (make-condition 'error message irritants)))
 
 ; Combinations of guard, cond, and call/ec to easily match on an error
 ; NOTE By design in scheme, this does not continue to errors raised with
 ; `raise-continuable`. Maybe that could change here?
-(defmacro! (guard conditions . body)
+(defmacro! guard (conditions . body)
   (let-cons ((binding . branches) conditions)
     (let
       ((escape-sym (gensym)))
@@ -80,7 +80,7 @@
                 (else (raise-continuable ~binding)))))
           (fn () ~@body))))))
 
-(defn! (print-backtrace bt)
+(defn! print-backtrace (bt)
   (let-named pbt-loop ((index 0) (bt bt) (prev-fn nil) (rep-count 1))
     (if (null? bt)
       (println)
@@ -97,12 +97,12 @@
             (pbt-loop (inc index) rest next 1)))))))
 
 ; "Adapter" to handle primitive errors like user-raised ones
-(defn! (primitive-error-handler message)
+(defn! primitive-error-handler (message)
   (raise (make-condition 'primitive-error message nil)))
 
 (set-primitive-error-handler! primitive-error-handler)
 
-(defn! (print-backtrace-and-abort ex)
+(defn! print-backtrace-and-abort (ex)
   (let
     ((message (exception->string ex)))
     (println "uncaught exception:" message)

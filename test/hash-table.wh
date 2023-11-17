@@ -1,10 +1,10 @@
 (defgroup! hash-table
-  (defn! (map-numbers-to-strings! ht n)
+  (defn! map-numbers-to-strings! (ht n)
     (when (> n 0)
       (hash-table-set! ht n (->string n))
       (map-numbers-to-strings! ht (dec n))))
 
-  (defn! (map-strings-to-numbers! ht n)
+  (defn! map-strings-to-numbers! (ht n)
     (when (> n 0)
       (hash-table-set! ht (->string n) n)
       (map-strings-to-numbers! ht (dec n))))

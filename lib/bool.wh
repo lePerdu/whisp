@@ -1,5 +1,5 @@
 ; Apply f if x is non-nil
-(defn! (map-if f x)
+(defn! map-if (f x)
   (if x (f x)))
 
 (defmacro-case! and
@@ -15,7 +15,7 @@
       `(let ((~temp-sym ~first))
         (if ~temp-sym ~temp-sym (or ~@rest))))))
 ; TODO Is there a good return value for xor besides true/false?
-(defmacro! (xor . conds)
+(defmacro! xor conds
   (if (null? conds)
     false
     `(if ~(car conds)
@@ -23,12 +23,12 @@
       (not (or ~@(cdr conds)))
       (xor ~@(cdr conds)))))
 
-(defmacro! (let-cond binding . branches)
+(defmacro! let-cond (binding . branches)
   `(let (~binding)
     (cond ~@branches)))
 
 ; Structural comparison
-(defn! (equal? a b)
+(defn! equal? (a b)
   (or
     ; Integers, symbols, functions, and atoms
     (= a b)

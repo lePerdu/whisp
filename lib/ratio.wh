@@ -1,4 +1,4 @@
-(defn! (ratio numer denom)
+(defn! ratio (numer denom)
   ; TODO Current behavior of gcd handles negatives like so:
   ; (gcd -1 -1) -> -1
   ; (gcd 1 -1) -> -1
@@ -13,21 +13,21 @@
 
 ; Since ratios are normalized, equality is just a structural comparison
 (def! rat= =)
-(defn! (int->rat n) (ratio n 1))
-(defn! (rat->real r) (real/ (real (numer r)) (real (denom r))))
-(defn! (rat->int r) (int/ (numer r) (denom r)))
+(defn! int->rat (n) (ratio n 1))
+(defn! rat->real (r) (real/ (real (numer r)) (real (denom r))))
+(defn! rat->int (r) (int/ (numer r) (denom r)))
 
 ; TODO Integrate into generic operators
-(defn! (rat+ x y)
+(defn! rat+ (x y)
   (ratio
     (int+ (int* (numer x) (denom y)) (int* (numer y) (denom x)))
     (int* (denom x) (denom y))))
-(defn! (rat* x y)
+(defn! rat* (x y)
   (ratio
     (int* (numer x) (numer y))
     (int* (denom x) (denom y))))
-(defn! (rat-inv x) (ratio (denom x) (numer x)))
-(defn! (rat/ x y) (mul-rat x (inv-rat y)))
+(defn! rat-inv (x) (ratio (denom x) (numer x)))
+(defn! rat/ (x y) (mul-rat x (inv-rat y)))
 
-(defn! (rat-print r)
+(defn! rat-print (r)
   (println (numer r) "/" (denom r)))

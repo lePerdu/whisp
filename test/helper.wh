@@ -7,9 +7,9 @@
   (name test-entry-name)
   (func test-entry-func))
 
-(defmacro! (deftest! name . body)
+(defmacro! deftest! (name . body)
   (let ((label (->string name)))
-    `(let ((test-fn (fn-named ~name () ~(cons 'do body))))
+    `(let ((test-fn (fn-named ~name () ~@body)))
       (swap! *all-tests*
         (fn (all-tests)
           (cons
@@ -18,7 +18,7 @@
               test-fn)
             all-tests))))))
 
-(defmacro! (defgroup! name . body)
+(defmacro! defgroup! (name . body)
   (let ((label (->string name)))
     `(let
       ((*test-group-prefix*
@@ -33,7 +33,7 @@
   (backtrace test-failure-backtrace))
 
 ;; Run a test, returning any error encountered, or nil on success
-(defn! (run-test test)
+(defn! run-test (test)
   (print "RUNNING" (test-entry-name test))
   (print " ... ")
   (flush-output-port)
@@ -47,7 +47,7 @@
     ; Return nil to indicate no error
     nil))
 
-(defn! (run-all-tests)
+(defn! run-all-tests ()
   (let*
     ((tests-in-order (reverse @*all-tests*))
      (failing-tests-with-results (filter-map run-test tests-in-order))
@@ -74,35 +74,35 @@
 
 ; Assertion helpers
 
-(defn! (assert-make-error expr metadata)
+(defn! assert-make-error (expr metadata)
   (error (concat (list 'assert-failed expr) metadata)))
 
-(defmacro! (assert expr . extra)
+(defmacro! assert (expr . extra)
   `(if (not ~expr)
     (assert-make-error '~expr ~(cons 'list extra))))
 
-(defmacro! (assert-not expr . extra)
+(defmacro! assert-not (expr . extra)
   `(if ~expr
     (assert-make-error '(not ~expr) ~(cons 'list extra))))
 
-(defmacro! (assert= expected actual)
+(defmacro! assert= (expected actual)
   `(assert (= ~expected ~actual) 'expected ~expected 'got ~actual))
 
-(defmacro! (assert-not= expected actual)
+(defmacro! assert-not= (expected actual)
   `(assert (not (= ~expected ~actual)) 'expected-not ~expected))
 
-(defmacro! (assert== expected actual)
+(defmacro! assert== (expected actual)
   `(assert (== ~expected ~actual) 'expected ~expected 'got ~actual))
 
-(defmacro! (assert-not== expected actual)
+(defmacro! assert-not== (expected actual)
   `(assert (not (== ~expected ~actual)) 'expected-not ~expected))
 
-(defmacro! (assert-not-equal expected actual)
+(defmacro! assert-not-equal (expected actual)
   `(assert (not (equal? ~expected ~actual)) 'expected-not ~expected))
 
-(defmacro! (assert-equal expected actual)
+(defmacro! assert-equal (expected actual)
   `(assert (equal? ~expected ~actual) 'expected ~expected 'got ~actual))
 
-(defmacro! (assert-error expr)
+(defmacro! assert-error (expr)
   `(if (guard (err (else false)) ~expr true)
     (assert-make-error '~expr (list 'expected-error))))

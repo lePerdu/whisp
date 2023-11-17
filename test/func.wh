@@ -25,19 +25,19 @@
 
   (defgroup! variadic-fn
     (deftest! accepts-0-args
-      (defn! (f . args) (count args))
+      (defn! f args (count args))
       (assert= 0 (f)))
     (deftest! accepts-multiple-args
-      (defn! (f . args) (count args))
+      (defn! f args (count args))
       (assert= 4 (f 'a 2 (list 90 91) "123")))
     (deftest! requires-non-variadic-args
-      (defn! (f a b . rest) (+ a b (count rest)))
+      (defn! f (a b . rest) (+ a b (count rest)))
       (assert-error (f 1)))
     (deftest! accepts-0-args-after-required
-      (defn! (f a b . rest) (+ a b (count rest)))
+      (defn! f (a b . rest) (+ a b (count rest)))
       (assert= 3 (f 1 2)))
     (deftest! accepts-multple-args-after-required
-      (defn! (f a b . rest) (+ a b (count rest)))
+      (defn! f (a b . rest) (+ a b (count rest)))
       (assert= 6 (f 1 2 'a (list 90 91) "123"))))
 
   (defgroup! fn-case
@@ -140,22 +140,22 @@
     (deftest! function-name-set-with-fn-named
       (assert= 'my-func (fn-name (fn-named my-func () 1)))))
 
-  (defmacro! (def-apply-tests! group-name apply-fn)
+  (defmacro! def-apply-tests! (group-name apply-fn)
     `(defgroup! ~group-name
       (deftest! apply-no-args
-        (defn! (f) 2)
+        (defn! f () 2)
         (assert= 2 (~apply-fn f nil)))
       (deftest! apply-1-arg
-        (defn! (f x) (+ x 2))
+        (defn! f (x) (+ x 2))
         (assert= 3 (~apply-fn f (list 1))))
       (deftest! apply-to-variadic-function
-        (defn! (f x . rest) (cons rest x))
+        (defn! f (x . rest) (cons rest x))
         (assert-equal (cons (list 2 3) 1) (~apply-fn f (list 1 2 3))))
       (deftest! apply-too-few-args
-       (defn! (f x y) (+ x y))
+       (defn! f (x y) (+ x y))
        (assert-error (~apply-fn f (list 1))))
       (deftest! apply-too-many-args
-       (defn! (f x) (+ x 2))
+       (defn! f (x) (+ x 2))
        (assert-error (~apply-fn f (list 1 2))))))
 
   (def-apply-tests! apply apply)
@@ -164,16 +164,16 @@
     (def-apply-tests! works-like-apply-with-1-arg apply*)
 
     (deftest! apply-1-arg-and-empty-list
-      (defn! (f x) (+ x 2))
+      (defn! f (x) (+ x 2))
       (assert= 3 (apply* f 1 nil)))
     (deftest! apply-1-arg-and-singleton-list
-      (defn! (f x y) (+ x y))
+      (defn! f (x y) (+ x y))
       (assert= 3 (apply* f 1 (list 2))))
     (deftest! apply-2-args-and-empty-list
-      (defn! (f x y) (+ x y))
+      (defn! f (x y) (+ x y))
       (assert= 3 (apply* f 1 2 nil)))
     (deftest! apply-too-many-total-args
-      (defn! (f x y) (+ x y))
+      (defn! f (x y) (+ x y))
       (assert-error (apply* f 1 (list 2 3)))))
 
   (defgroup! compose

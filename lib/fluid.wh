@@ -3,7 +3,7 @@
 ; Wrapper around set-dynamic-state! to make it useable with abstractions.
 ; By itself, it can't be wrapped in functions as it would only apply to the
 ; wrapper function.
-(defn! (with-dynamic-state new-state thunk)
+(defn! with-dynamic-state (new-state thunk)
   (set-dynamic-state! new-state)
   (thunk))
 
@@ -19,17 +19,17 @@
 
 ; TODO Enforce types?
 
-(defn! (with-fluid fluid value thunk)
+(defn! with-fluid (fluid value thunk)
   (with-dynamic-state
     (cons (cons fluid value) (dynamic-state))
     thunk))
 
-(defn! (fluid-get fluid)
+(defn! fluid-get (fluid)
   (let-if (pair (assoc= fluid (dynamic-state)))
     (cdr pair)
     (_fluid-initial fluid)))
 
-(defn! (make-parameter initial)
+(defn! make-parameter (initial)
   (let ((param-fluid (make-fluid initial)))
     (fn-case
       (() (fluid-get param-fluid))
@@ -38,11 +38,11 @@
       ; (users should only call with no arguments)
       ((_) param-fluid))))
 
-(defmacro! (parameterize bindings body)
+(defmacro! parameterize (bindings . body)
   (let-if-cons ((binding . rest) bindings)
     `(with-fluid
       (~(car binding) nil)  ; Call with argument to extract the raw fluid
       ~(cadr binding)
       (fn ()
-        (parameterize ~rest ~body)))
-    `(let () ~body)))
+        (parameterize ~rest ~@body)))
+    `(let () ~@body)))

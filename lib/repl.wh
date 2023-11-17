@@ -1,10 +1,10 @@
 (def! *prompt* "> ")
 
-(defn! (repl-handle-exception ex)
+(defn! repl-handle-exception (ex)
   (println "exception:" (exception->string ex))
   (print-backtrace (backtrace)))
 
-(defn! (eval-print line)
+(defn! eval-print (line)
   (cond
     ((eof-object? line)
       (newline) (exit))
@@ -16,7 +16,7 @@
          (result-string (write->string result)))
         (println result-string)))))
 
-(defn! (repl)
+(defn! repl ()
   (print *prompt*)
   (flush-output-port)
   (guard

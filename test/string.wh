@@ -9,16 +9,16 @@
     (deftest! text-string-is-not-null
       (assert-not (string-null? "abc"))))
 
-  (defmacro! (assert-mapping a->b b->a a b)
+  (defmacro! assert-mapping (a->b b->a a b)
     ; Note: this evaluates arguments multiple times
     ; (that's probably good for testing, but might hit some edge cases)
     `(do
       (assert-equal ~a (~b->a ~b))
       (assert-equal ~b (~a->b ~a))))
   ; TODO These trigger compile errors when they are put directly inside `defgroup!`
-  (defmacro! (assert-int-conv str-val int-val)
+  (defmacro! assert-int-conv (str-val int-val)
     `(assert-mapping string->int ->string ~str-val ~int-val))
-  (defmacro! (assert-real-conv str-val real-val)
+  (defmacro! assert-real-conv (str-val real-val)
     `(assert-mapping string->real ->string ~str-val ~real-val))
 
   (defgroup! int<->string

@@ -9,7 +9,7 @@
 	  (parameterize ((radix 16)) (radix))))
   (deftest! outer-scope-function-uses-dynamic-value
     (def! radix (make-parameter 10))
-    (defn! (twice-radix) (* 2 (radix)))
+    (defn! twice-radix () (* 2 (radix)))
 	(assert=
 	  32
 	  (parameterize ((radix 16)) (twice-radix))))

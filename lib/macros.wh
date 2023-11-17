@@ -5,18 +5,18 @@
 ; Easy way to comment out a bunch of expressions
 ; It does still have to return a value, so has to be used at top-level or in a
 ; do block
-(defmacro! (comment . ignore) '(do))
+(defmacro! comment ignore '(do))
 
 (defsyntax! quasiquote
   (let ()
-    (defn! (process-unquote-args args)
+    (defn! process-unquote-args (args)
       (if (cons? args)
         (if (null? (cdr args))
           (car args)
           (syntax-error "unquote: too many arguments"))
         (syntax-error "unquote: not enough arguments")))
 
-    (defn! (is-splice-unquote-form form)
+    (defn! is-splice-unquote-form (form)
       (if (cons? form)
         (if (= (car form) 'splice-unquote)
           (if (cons? (cdr form))
@@ -27,7 +27,7 @@
 
     (def! get-splice-unquote-arg cadr)
 
-    (defn! (qq ast)
+    (defn! qq (ast)
       (if (cons? ast)
         (let ((first (car ast)) (rest (cdr ast)))
           (if (= first 'unquote)
@@ -42,7 +42,7 @@
 
     qq))
 
-(defmacro! (let* bindings . body)
+(defmacro! let* (bindings . body)
   (if (null? bindings)
     ; Special case for no bindings so that it still generates a new scope
     `(let () ~@body)
@@ -50,8 +50,8 @@
       (let* ~(cdr bindings) ~@body))))
 
 ; TODO Validate structure
-(defmacro! (cond . branches)
-  (defn! (cond-make-branch condition exprs rest)
+(defmacro! cond branches
+  (defn! cond-make-branch (condition exprs rest)
     (if (null? exprs)
       ; Return the value of the condition
       (let ((test-sym (gensym)))
@@ -61,7 +61,7 @@
         (do ~@exprs)
         (cond ~@rest))))
 
-  (defn! (cond-make-else exprs)
+  (defn! cond-make-else (exprs)
     (if (null? exprs)
       (syntax-error "cond: else branch must have at least 1 expression")
       `(do ~@exprs)))
@@ -77,7 +77,7 @@
         (cond-make-branch condition exprs (cdr branches))))))
 
 ; TODO Validate structure
-(defmacro! (case expr . branches)
+(defmacro! case (expr . branches)
   (let*
     ((val-sym (gensym))
      (case-branch-to-cond (fn (branch)
@@ -91,7 +91,7 @@
     `(let ((~val-sym ~expr))
       (cond ~@(map case-branch-to-cond branches)))))
 
-(defmacro! (when condition . body)
+(defmacro! when (condition . body)
   `(if ~condition
     (do ~@body)))
 
@@ -99,7 +99,7 @@
 ; TODO Allow more than 1 pattern
 ; TODO Allow nested / more complex patterns
 ; (let-cons ((first . rest) (list 1 2 3)) expr) -> first=1, rest=(list 2 3)
-(defmacro! (let-cons binding . body)
+(defmacro! let-cons (binding . body)
   ; TODO Check structure
   (let
     ((bind-pair (car binding))
@@ -111,7 +111,7 @@
         (~(cdr bind-pair) (cdr ~cons-sym)))
        ~@body))))
 
-(defmacro! (let-if binding if-true . opt-if-nil)
+(defmacro! let-if (binding if-true . opt-if-nil)
   (let
     ((bind-sym (car binding))
      (bind-expr (cadr binding))
@@ -131,7 +131,7 @@
 ; Version of let-cons which allows an "else" branch if the binding is nil
 ; TODO Allow more than 1 pattern
 ; TODO Allow nested / more complex patterns
-(defmacro! (let-if-cons binding if-cons . opt-if-nil)
+(defmacro! let-if-cons (binding if-cons . opt-if-nil)
   ; TODO Check structure
   (let
     ((if-nil
@@ -150,7 +150,7 @@
          ~if-cons)
         ~if-nil))))
 
-(defmacro! (letrec* bindings . body)
+(defmacro! letrec* (bindings . body)
   `(let ()
     ~@(map (fn (b) (cons 'def! b)) bindings)
     ; TODO Add a nested (let () ...) to isolate the bindings?
@@ -158,7 +158,7 @@
 
 ; "Named let" from scheme
 ; TODO Change name? Keep as separate from the basic let?
-(defmacro! (let-named name bindings . body)
+(defmacro! let-named (name bindings . body)
   `(letrec*
     ((~name (fn ~(map car bindings) ~@body)))
     (~name ~@(map cadr bindings))))
@@ -166,7 +166,7 @@
 ; () -> (nil . nil)
 ; (a b) -> ((a b) . nil)
 ; (a b . c) -> ((a b) . c)
-(defn! (fn-case-split-arg-list arg-list)
+(defn! fn-case-split-arg-list (arg-list)
   (cond
     ((null? arg-list) '(nil . nil))
     ((cons? arg-list)
@@ -175,7 +175,7 @@
     (else
       (cons nil arg-list))))
 
-(defn! (fn-case-bind-args args-sym req-args rest-arg exprs)
+(defn! fn-case-bind-args (args-sym req-args rest-arg exprs)
   (if (null? req-args)
     (if (null? rest-arg)
       `(do ~@exprs)  ; Wrap in do to properly handle multiple expressions
@@ -183,7 +183,7 @@
     `(let ((~(car req-args) (car ~args-sym)) (~args-sym (cdr ~args-sym)))
       ~(fn-case-bind-args args-sym (cdr req-args) rest-arg exprs))))
 
-(defn! (fn-case-branch-to-cond args-sym arg-count-sym branch)
+(defn! fn-case-branch-to-cond (args-sym arg-count-sym branch)
   (let-cons ((req-args . rest-arg) (fn-case-split-arg-list (car branch)))
     (let
       ((req-arg-count (count req-args))
@@ -192,7 +192,7 @@
       `((~comparator ~arg-count-sym ~req-arg-count)
         ~(fn-case-bind-args args-sym req-args rest-arg exprs)))))
 
-(defmacro! (fn-case . branches)
+(defmacro! fn-case branches
   (let
     ((args-sym (gensym "args"))
      (args-count-sym (gensym "args-count")))
@@ -211,24 +211,24 @@
 
 ; TODO Change syntax of `defn!` so that it better matches this
 ; (function name outside parens)?
-; - (defn! (f x y) ...)
+; - (defn! f (x y) ...)
 ; - (defn-case! f ((x y) ...))
 ; TODO Make defn!/defmacro! support both versions?
-(defmacro! (defn-case! name . branches)
+(defmacro! defn-case! (name . branches)
   `(def! ~name (fn-case ~@branches)))
 
-(defmacro! (defmacro-case! name . branches)
+(defmacro! defmacro-case! (name . branches)
   `(defsyntax! ~name (fn-case ~@branches)))
 
 ; Easier-to-use versions of call-with-escape-continuation
 
 (def! call/ec call-with-escape-continuation)
 
-(defmacro! (let/ec esc-cont-name . body)
+(defmacro! let/ec (esc-cont-name . body)
   `(call-with-escape-continuation
     (fn (~esc-cont-name) ~@body)))
 
-(defmacro! (for bindings stop-and-return . body)
+(defmacro! for (bindings stop-and-return . body)
   (let
     ((loop-sym (gensym))
      (init-exprs
@@ -245,7 +245,7 @@
       (do ~@return-exprs)
       (do ~@body (~loop-sym ~@step-exprs))))))
 
-(defn! (macroexpand-1 ast)
+(defn! macroexpand-1 (ast)
   ; Use escape cont to avoid repeating the `false` branch of all the conditions
   (let/ec return
     (let-if-cons ((head . args) ast)
@@ -255,7 +255,7 @@
             (return (apply resolved args))))))
     ast))
 
-(defn! (macroexpand ast)
+(defn! macroexpand (ast)
   (let ((expanded (macroexpand-1 ast)))
     (if (= expanded ast)
       expanded

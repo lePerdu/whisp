@@ -2,27 +2,27 @@
 ; (list* 1 2 (list 3 4)) -> (1 2 3 4)
 ; (list* 1 2 3) -> (1 2 . 3)
 ; (list* 3) -> 3
-(defn! (list* first . rest)
+(defn! list* (first . rest)
   (if (null? rest)
     first
     (cons first (apply list* rest))))
 
-(defn! (nth index lst)
+(defn! nth (index lst)
   (if (= index 0)
     (car lst)
     (nth (int- index 1) (cdr lst))))
 
-(defn! (reverse lst)
+(defn! reverse (lst)
   (foldl nil (fn (acc x) (cons x acc)) lst))
 
-(defn! (for-each f l)
+(defn! for-each (f l)
   (if (null? l)
     nil
     (do
       (f (car l))
       (for-each f (cdr l)))))
 
-(defn! (map-index f l)
+(defn! map-index (f l)
   (let-named loop ((index 0) (l l))
     (if (null? l)
       nil
@@ -30,12 +30,12 @@
         (f index (car l))
         (loop (inc index) (cdr l))))))
 
-(defn! (for-each-index f l)
+(defn! for-each-index (f l)
   (for ((index 0 (inc index)) (l l (cdr l)))
       ((null? l))
     (f index (car l))))
 
-(defn! (filter p l)
+(defn! filter (p l)
   (if (null? l)
     nil
     (let-cons ((first . rest) l)
@@ -43,7 +43,7 @@
         (cons first (filter p rest))
         (filter p rest)))))
 
-(defn! (filter-map f l)
+(defn! filter-map (f l)
   (let-if-cons ((first . rest) l)
     (let ((mapped (f first)))
       (if mapped
@@ -51,22 +51,22 @@
         (filter-map f rest)))))
 
 ;; TODO Use equal?
-(defn! (remove x l)
+(defn! remove (x l)
   (filter (fn (item) (not (= x item))) l))
 
-(defn! (take n l)
+(defn! take (n l)
   (if (or (= n 0) (null? l))
     nil
     (cons (car l) (take (int- n 1) (cdr l)))))
 
-(defn! (drop n l)
+(defn! drop (n l)
   (if (or (= n 0) (null? l))
     l
     (drop (int- n 1) (cdr l))))
 
 ; TODO Return a pair or a 2-element list?
 ; It would be more efficient, but less clear
-(defn! (split-at n l)
+(defn! split-at (n l)
   (cond
     ((= n 0) (cons nil l))
     ((null? l) (cons nil nil))
@@ -76,39 +76,39 @@
           (cons (car l) (car split))
           (cdr split))))))
 
-(defn! (repeat x n)
+(defn! repeat (x n)
   (if (= n 0)
     nil
     (cons x (repeat x (int- n 1)))))
 
-(defn! (member-with x l pred?)
+(defn! member-with (x l pred?)
   (cond
     ((null? l) nil)
     ((pred? x (car l)) l)
     (else (member-with x (cdr l) pred?))))
 
-(defn! (member= x l) (member-with x l =))
-(defn! (member== x l) (member-wih x l ==))
+(defn! member= (x l) (member-with x l =))
+(defn! member== (x l) (member-wih x l ==))
 
 (defn-case! member
   ((x l) (member-with x l equal?))
   ((x l pred?) (member-with x l pred?)))
 
-(defn! (acons key value alist) (cons (cons key value) alist))
+(defn! acons (key value alist) (cons (cons key value) alist))
 
-(defn! (assoc-with key l compare)
+(defn! assoc-with (key l compare)
   (cond
     ((null? l) nil)
     ((compare key (caar l)) (car l))
     (else (assoc-with key (cdr l) compare))))
 
-(defn! (assoc= key l) (assoc-with key l =))
-(defn! (assoc== key l) (assoc-with key l ==))
+(defn! assoc= (key l) (assoc-with key l =))
+(defn! assoc== (key l) (assoc-with key l ==))
 (defn-case! assoc
   ((key l) (assoc-with key l equal?))
-  ((key l pred?) (associ-with key l pred?)))
+  ((key l pred?) (assoc-with key l pred?)))
 
-(defn! (merge a b less)
+(defn! merge (a b less)
   (cond
     ((null? a) b)
     ((null? b) a)
@@ -119,7 +119,7 @@
           (cons next-a (merge (cdr a) b less))
           (cons next-b (merge a (cdr b) less)))))))
 
-(defn! (sort l less)
+(defn! sort (l less)
   (let
     ((mid (int/ (count l) 2)))
     (if (= mid 0)
@@ -130,7 +130,7 @@
          (right (cdr halves)))
         (merge (sort left less) (sort right less) less)))))
 
-(defn! (intersperse x l)
+(defn! intersperse (x l)
   (cond
     ((null? l) nil)
     ((null? (cdr l)) l)

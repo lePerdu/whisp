@@ -1,12 +1,12 @@
 (defgroup! vector
-  (defmacro! (assert-vector-not-equal expected actual)
+  (defmacro! assert-vector-not-equal (expected actual)
     `(assert (not (vector-equal? ~expected ~actual)) 'expected-not ~expected))
 
-  (defmacro! (assert-vector-equal expected actual)
+  (defmacro! assert-vector-equal (expected actual)
     `(assert (vector-equal? ~expected ~actual) 'expected ~expected 'got ~actual))
 
   (defgroup! list->vector->list
-    (defn! (round-trip lst)
+    (defn! round-trip (lst)
       (assert-equal lst (vector->list (list->vector lst))))
     (deftest! empty (round-trip nil))
     (deftest! singleton (round-trip (list 1)))

@@ -1,23 +1,23 @@
 ; TODO Should these be the builtins? (they are more useful than display and
 ; newline and more efficient to implement as builtins)
 
-(defn! (string-null? s) (= (string-count s) 0))
+(defn! string-null? (s) (= (string-count s) 0))
 
-(defn! (char->string chr)
+(defn! char->string (chr)
   (if (char? chr)
     (->string chr)
     (error "char->string: must be of type char")))
 
-(defn! (string->list str)
+(defn! string->list (str)
   (string-foldr nil cons str))
 
 ; TODO These are very inefficient as non-builtins since they allocate a lot of
 ; intermediate strings
 
-(defn! (list->string lst)
+(defn! list->string (lst)
   (apply string-concat (map char->string lst)))
 
-(defmacro! (defn-with-string-range! name req-args string-arg start-arg end-arg delegate)
+(defmacro! defn-with-string-range! (name req-args string-arg start-arg end-arg delegate)
   `(defn-case! ~name
     (~req-args
       (~delegate ~@req-args 0 (string-count ~string-arg)))
@@ -28,7 +28,7 @@
 
 (defn-with-string-range! substring (s) s start end substring-helper)
 
-(defn! (substring-helper str start end)
+(defn! substring-helper (str start end)
   ; TODO Bounds checking
   (for
     ((index start (inc index))
@@ -36,46 +36,46 @@
     ((int>= index end) acc)))
 
 (defn-with-string-range! string-index (s pred) s start end string-index-helper)
-(defn! (string-index-helper s pred start end)
+(defn! string-index-helper (s pred start end)
   (cond
     ((= start end) nil)
     ((pred (string-get s start)) start)
     (else (string-index-helper s pred (inc start) end))))
 
 (defn-with-string-range! string-rindex (s pred) s start end string-rindex-helper)
-(defn! (string-rindex-helper s pred start end)
+(defn! string-rindex-helper (s pred start end)
   (let ((end-index (dec end)))
     (cond
       ((= start end) nil)
       ((pred (string-get s end-index)) end-index)
       (else (string-rindex-helper s pred start end-index)))))
 
-(defn! (char-blank? c)
+(defn! char-blank? (c)
   (or
     (char= c #\space)
     (char= c #\tab)
     (char= c #\newline)))
 
-(defn! (char-non-blank? c)
+(defn! char-non-blank? (c)
   (not (char-blank? c)))
 
-(defn! (string-index-or-end s pred)
+(defn! string-index-or-end (s pred)
   (or (string-index s pred) (string-count s)))
 
-(defn! (string-rindex-or-start s pred)
+(defn! string-rindex-or-start (s pred)
   (or (string-rindex s pred) -1))
 
-(defn! (string-trim-left s)
+(defn! string-trim-left (s)
   (let
     ((start (string-index-or-end s char-non-blank?)))
     (substring s start)))
 
-(defn! (string-trim-right s)
+(defn! string-trim-right (s)
   (let
     ((end (string-rindex-or-start s char-non-blank?)))
     (substring s 0 (inc end))))
 
-(defn! (string-trim s)
+(defn! string-trim (s)
   (let ((start (string-index-or-end s char-non-blank?)))
     (if (= start (string-count s))
       ""
@@ -84,21 +84,21 @@
 
 (defn-with-string-range! string-for-each (f s) s start end
   string-for-each-helper)
-(defn! (string-for-each-helper f s start end)
+(defn! string-for-each-helper (f s start end)
   (for ((index start (inc index)))
       ((int>= index end))
     (f (string-get s index))))
 
 (defn-with-string-range! string-for-each-index (f s) s start end
   string-for-each-index-helper)
-(defn! (string-for-each-index-helper f s start end)
+(defn! string-for-each-index-helper (f s start end)
   (for ((index start (inc index)))
       ((int>= index end))
     (f index (string-get s index))))
 
 (defn-with-string-range! string-foldl (init f s) s start end
   string-foldl-helper)
-(defn! (string-foldl-helper init f s start end)
+(defn! string-foldl-helper (init f s start end)
   (for
     ((index start (inc index))
      (acc init (f acc (string-get s index))))
@@ -106,7 +106,7 @@
 
 (defn-with-string-range! string-foldr (init f s) s start end
   string-foldr-helper)
-(defn! (string-foldr-helper init f s start end)
+(defn! string-foldr-helper (init f s start end)
   (for
     ((index (dec end) (dec index))
      (acc init (f (string-get s index) acc)))
