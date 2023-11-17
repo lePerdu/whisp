@@ -139,6 +139,7 @@ static inline void *lisp_val_cast(lisp_predicate pred, struct lisp_val v) {
     struct lisp_atom *: "atom", \
     struct lisp_array *: "array", \
     struct lisp_closure *: "function", \
+    struct str_builder *: "string-builder", \
     struct lisp_file_port *: "port" \
   )
 // clang-format on
@@ -324,8 +325,20 @@ struct str_builder {
   size_t capacity;
 };
 
+/**
+ * Stack-allocated string builder.
+ *
+ * The managed data is GC-preserved until `str_build`.
+ */
 void str_builder_init(struct str_builder *b);
 void str_builder_init_cap(struct str_builder *b, size_t capacity);
+
+/**
+ * Heap-allocated string builder.
+ */
+struct str_builder *str_builder_create();
+bool lisp_val_is_str_builder(struct lisp_val v);
+
 void str_builder_append(struct str_builder *b, char c);
 void str_builder_concat(struct str_builder *b, const struct lisp_string *s);
 void str_builder_concat_cstr(struct str_builder *b, const char *cstr);
@@ -334,21 +347,12 @@ void str_builder_concat_n(struct str_builder *b, const char *buf, size_t n);
 // Functions for low-level inspection/manipulation
 
 void str_builder_ensure_cap(struct str_builder *b, size_t added_size);
-size_t str_builder_remaining_cap(const struct str_builder *b);
+size_t str_builder_remaining_cap(struct str_builder *b);
 void str_builder_include_size(struct str_builder *b, size_t added_size);
 
-static inline char *str_builder_raw_buf(struct str_builder *b) {
-  return b->buf->data;
-}
-
-static inline char *str_builder_raw_buf_end(struct str_builder *b) {
-  return &b->buf->data[b->buf->length];
-}
-
-static inline const struct lisp_string *str_builder_get_str(
-    const struct str_builder *b) {
-  return b->buf;
-}
+char *str_builder_raw_buf(struct str_builder *b);
+char *str_builder_raw_buf_end(struct str_builder *b);
+const struct lisp_string *str_builder_get_str(struct str_builder *b);
 
 /**
  * Append a printf-like format string.
@@ -359,13 +363,6 @@ int str_builder_format(struct str_builder *b, const char *format, ...);
 int str_builder_vformat(struct str_builder *b, const char *format, va_list ap);
 
 struct lisp_string *str_build(struct str_builder *b);
-
-// Utilities for embedding str_builder in a GC-managed object
-// TODO Add more generic support for stack-allocated GC roots
-
-void str_builder_init_no_preserve(struct str_builder *b);
-void str_builder_init_cap_no_preserve(struct str_builder *b, size_t capacity);
-struct lisp_string *str_build_no_preserve(struct str_builder *b);
 
 /** Pair of items. Used to represent lists as well. */
 struct lisp_cons {

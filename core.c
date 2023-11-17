@@ -131,32 +131,6 @@ DEF_BUILTIN(core_cdr) {
   BUILTIN_RETURN(arg->cdr);
 }
 
-/**
- * Unlike other intrinsics, this takes the entire stack as its argument list.
- * That makes it basically only useful wrapped in a builtin function.
- */
-DEF_BUILTIN(core_string_concat) {
-  struct str_builder builder;
-  str_builder_init(&builder);
-
-  unsigned arg_count = vm_stack_size(vm);
-  for (unsigned i = 0; i < arg_count; i++) {
-    struct lisp_val next_arg = vm_from_frame_pointer(vm, i);
-    struct lisp_string *s = lisp_val_cast(lisp_val_is_string, next_arg);
-    if (s == NULL) {
-      vm_raise_func_exception(vm, ERROR_STRING_ARG);
-      goto ERROR;
-    }
-    str_builder_concat(&builder, s);
-  }
-
-  BUILTIN_RETURN_OBJ(str_build(&builder));
-
-ERROR:
-  str_build(&builder);
-  return EV_EXCEPTION;
-}
-
 enum eval_status string_count(struct lisp_val arg, struct lisp_val *result) {
   *result = lisp_val_from_int(LISP_VAL_AS(struct lisp_string, arg)->length);
   return EV_SUCCESS;
@@ -379,6 +353,36 @@ DEF_BUILTIN(core_to_string) {
 DEF_BUILTIN(core_write_to_string) {
   REF_ARG(arg, 0);
   struct lisp_string *str = print_str(arg, true);
+  CLEAR_ARGS(1);
+  BUILTIN_RETURN_OBJ(str);
+}
+
+DEF_BUILTIN(core_make_string_builder) {
+  struct str_builder *b = str_builder_create();
+  BUILTIN_RETURN_OBJ(b);
+}
+
+DEF_BUILTIN_PRED(core_is_string_builder, lisp_val_is_str_builder);
+
+DEF_BUILTIN(core_string_builder_write_char) {
+  POP_CHAR_ARG(ch);
+  REF_OBJ_ARG(struct str_builder, b, lisp_val_is_str_builder, 0);
+  str_builder_append(b, ch);
+  CLEAR_ARGS(1);
+  BUILTIN_RETURN(LISP_VAL_NIL);
+}
+
+DEF_BUILTIN(core_string_builder_write_string) {
+  REF_OBJ_ARG(struct str_builder, b, lisp_val_is_str_builder, 1);
+  REF_OBJ_ARG(struct lisp_string, str, lisp_val_is_string, 0);
+  str_builder_concat(b, str);
+  CLEAR_ARGS(2);
+  BUILTIN_RETURN(LISP_VAL_NIL);
+}
+
+DEF_BUILTIN(core_string_builder_get_string) {
+  REF_OBJ_ARG(struct str_builder, b, lisp_val_is_str_builder, 0);
+  struct lisp_string *str = str_build(b);
   CLEAR_ARGS(1);
   BUILTIN_RETURN_OBJ(str);
 }
@@ -693,159 +697,160 @@ struct builtin_config {
   const char *name;
   intrinsic_fn c_func;
   unsigned req_arg_count;
-  bool is_variadic;
 };
 
 static const struct builtin_config builtins[] = {
-    [INTRINSIC_IS_INTEGER] = {"int?", core_is_integer, 1, false},
-    [INTRINSIC_TO_INT] = {"int", core_to_int, 1, false},
-    [INTRINSIC_INT_ADD] = {"int+", core_int_add, 2, false},
-    [INTRINSIC_INT_SUB] = {"int-", core_int_sub, 2, false},
-    [INTRINSIC_INT_MUL] = {"int*", core_int_mul, 2, false},
-    [INTRINSIC_INT_DIV] = {"int/", core_int_div, 2, false},
-    [INTRINSIC_INT_BITAND] = {"bitand", core_int_bitand, 2, false},
-    [INTRINSIC_INT_BITOR] = {"bitor", core_int_bitor, 2, false},
-    [INTRINSIC_INT_BITXOR] = {"bitxor", core_int_bitxor, 2, false},
-    [INTRINSIC_INT_BITSHIFT] = {"bitshift", core_int_bitshift, 2, false},
+    [INTRINSIC_IS_INTEGER] = {"int?", core_is_integer, 1},
+    [INTRINSIC_TO_INT] = {"int", core_to_int, 1},
+    [INTRINSIC_INT_ADD] = {"int+", core_int_add, 2},
+    [INTRINSIC_INT_SUB] = {"int-", core_int_sub, 2},
+    [INTRINSIC_INT_MUL] = {"int*", core_int_mul, 2},
+    [INTRINSIC_INT_DIV] = {"int/", core_int_div, 2},
+    [INTRINSIC_INT_BITAND] = {"bitand", core_int_bitand, 2},
+    [INTRINSIC_INT_BITOR] = {"bitor", core_int_bitor, 2},
+    [INTRINSIC_INT_BITXOR] = {"bitxor", core_int_bitxor, 2},
+    [INTRINSIC_INT_BITSHIFT] = {"bitshift", core_int_bitshift, 2},
 
-    [INTRINSIC_INT_LT] = {"int<", core_int_lt, 2, false},
-    [INTRINSIC_INT_LTE] = {"int<=", core_int_lte, 2, false},
-    [INTRINSIC_INT_GT] = {"int>", core_int_gt, 2, false},
-    [INTRINSIC_INT_GTE] = {"int>=", core_int_gte, 2, false},
-    [INTRINSIC_INT_EQ] = {"int=", core_int_eq, 2, false},
+    [INTRINSIC_INT_LT] = {"int<", core_int_lt, 2},
+    [INTRINSIC_INT_LTE] = {"int<=", core_int_lte, 2},
+    [INTRINSIC_INT_GT] = {"int>", core_int_gt, 2},
+    [INTRINSIC_INT_GTE] = {"int>=", core_int_gte, 2},
+    [INTRINSIC_INT_EQ] = {"int=", core_int_eq, 2},
 
-    [INTRINSIC_IS_REAL] = {"real?", core_is_real, 1, false},
-    [INTRINSIC_TO_REAL] = {"real", core_to_real, 1, false},
-    [INTRINSIC_REAL_ADD] = {"real+", core_real_add, 2, false},
-    [INTRINSIC_REAL_SUB] = {"real-", core_real_sub, 2, false},
-    [INTRINSIC_REAL_MUL] = {"real*", core_real_mul, 2, false},
-    [INTRINSIC_REAL_DIV] = {"real/", core_real_div, 2, false},
-    [INTRINSIC_REAL_LT] = {"real<", core_real_lt, 2, false},
-    [INTRINSIC_REAL_LTE] = {"real<=", core_real_lte, 2, false},
-    [INTRINSIC_REAL_GT] = {"real>", core_real_gt, 2, false},
-    [INTRINSIC_REAL_GTE] = {"real>=", core_real_gte, 2, false},
-    [INTRINSIC_REAL_EQ] = {"real=", core_real_eq, 2, false},
-    [INTRINSIC_REAL_BITS] = {"real-bits", core_real_bits, 1, false},
+    [INTRINSIC_IS_REAL] = {"real?", core_is_real, 1},
+    [INTRINSIC_TO_REAL] = {"real", core_to_real, 1},
+    [INTRINSIC_REAL_ADD] = {"real+", core_real_add, 2},
+    [INTRINSIC_REAL_SUB] = {"real-", core_real_sub, 2},
+    [INTRINSIC_REAL_MUL] = {"real*", core_real_mul, 2},
+    [INTRINSIC_REAL_DIV] = {"real/", core_real_div, 2},
+    [INTRINSIC_REAL_LT] = {"real<", core_real_lt, 2},
+    [INTRINSIC_REAL_LTE] = {"real<=", core_real_lte, 2},
+    [INTRINSIC_REAL_GT] = {"real>", core_real_gt, 2},
+    [INTRINSIC_REAL_GTE] = {"real>=", core_real_gte, 2},
+    [INTRINSIC_REAL_EQ] = {"real=", core_real_eq, 2},
+    [INTRINSIC_REAL_BITS] = {"real-bits", core_real_bits, 1},
 
-    [INTRINSIC_REAL_EXP] = {"e**", core_real_exp, 2, false},
-    [INTRINSIC_REAL_LOG] = {"log", core_real_log, 2, false},
-    [INTRINSIC_REAL_POW] = {"real**", core_real_pow, 2, false},
+    [INTRINSIC_REAL_EXP] = {"e**", core_real_exp, 2},
+    [INTRINSIC_REAL_LOG] = {"log", core_real_log, 2},
+    [INTRINSIC_REAL_POW] = {"real**", core_real_pow, 2},
 
     // TODO Get consistent set of equality checks. Current setup is:
     // - =: compares by reference. Works for integers and symbols due to how
     // they are implemented
     // - equal?: structural comparison, working for strings and lists
     // TODO Make equality checks variadic (this one and others)?
-    [INTRINSIC_IDENTICAL] = {"=", core_identical, 2, false},
-    [INTRINSIC_OBJECT_ID] = {"object-id", core_object_id, 1, false},
-    [INTRINSIC_IS_SYMBOL] = {"symbol?", core_is_symbol, 1, false},
-    [INTRINSIC_IS_FUNCTION] = {"fn?", core_is_function, 1, false},
-    [INTRINSIC_FUNCTION_NAME] = {"fn-name", core_function_name, 1, false},
+    [INTRINSIC_IDENTICAL] = {"=", core_identical, 2},
+    [INTRINSIC_OBJECT_ID] = {"object-id", core_object_id, 1},
+    [INTRINSIC_IS_SYMBOL] = {"symbol?", core_is_symbol, 1},
+    [INTRINSIC_IS_FUNCTION] = {"fn?", core_is_function, 1},
+    [INTRINSIC_FUNCTION_NAME] = {"fn-name", core_function_name, 1},
     [INTRINSIC_FUNCTION_SOURCE_INFO] = {"fn-source-info",
-                                        core_function_source_info, 1, false},
-    [INTRINSIC_IS_NULL] = {"null?", core_is_null, 1, false},
-    [INTRINSIC_MAKE_CONS] = {"cons", core_make_cons, 2, false},
-    [INTRINSIC_IS_CONS] = {"cons?", core_is_cons, 1, false},
-    [INTRINSIC_CAR] = {"car", core_car, 1, false},
-    [INTRINSIC_CDR] = {"cdr", core_cdr, 1, false},
+                                        core_function_source_info, 1},
+    [INTRINSIC_IS_NULL] = {"null?", core_is_null, 1},
+    [INTRINSIC_MAKE_CONS] = {"cons", core_make_cons, 2},
+    [INTRINSIC_IS_CONS] = {"cons?", core_is_cons, 1},
+    [INTRINSIC_CAR] = {"car", core_car, 1},
+    [INTRINSIC_CDR] = {"cdr", core_cdr, 1},
 
-    [INTRINSIC_IS_CHAR] = {"char?", core_is_char, 1, false},
+    [INTRINSIC_IS_CHAR] = {"char?", core_is_char, 1},
     // TODO Impl char comparisions via char->int?
-    [INTRINSIC_CHAR_LT] = {"char<", core_char_lt, 2, false},
-    [INTRINSIC_CHAR_LTE] = {"char<=", core_char_lte, 2, false},
-    [INTRINSIC_CHAR_GT] = {"char>", core_char_gt, 2, false},
-    [INTRINSIC_CHAR_GTE] = {"char>=", core_char_gte, 2, false},
-    [INTRINSIC_CHAR_EQ] = {"char=", core_char_eq, 2, false},
-    [INTRINSIC_CHAR_TO_INT] = {"char->int", core_char_to_int, 1, false},
-    [INTRINSIC_INT_TO_CHAR] = {"int->char", core_int_to_char, 1, false},
+    [INTRINSIC_CHAR_LT] = {"char<", core_char_lt, 2},
+    [INTRINSIC_CHAR_LTE] = {"char<=", core_char_lte, 2},
+    [INTRINSIC_CHAR_GT] = {"char>", core_char_gt, 2},
+    [INTRINSIC_CHAR_GTE] = {"char>=", core_char_gte, 2},
+    [INTRINSIC_CHAR_EQ] = {"char=", core_char_eq, 2},
+    [INTRINSIC_CHAR_TO_INT] = {"char->int", core_char_to_int, 1},
+    [INTRINSIC_INT_TO_CHAR] = {"int->char", core_int_to_char, 1},
 
-    [INTRINSIC_IS_STRING] = {"string?", core_is_string, 1, false},
-    [INTRINSIC_STRING_EQ] = {"string=", core_string_eq, 2, false},
-    [INTRINSIC_STRING_COUNT] = {"string-count", core_string_count, 1, false},
-    [INTRINSIC_STRING_GET] = {"string-get", core_string_get, 2, false},
-    [INTRINSIC_STRING_CONCAT] = {"string-concat", core_string_concat, 0, true},
-    [INTRINSIC_TO_STRING] = {"->string", core_to_string, 1, false},
-    [INTRINSIC_STRING_TO_SYMBOL] = {"string->symbol", core_string_to_symbol, 1,
-                                    false},
-    [INTRINSIC_STRING_TO_INT] = {"string->int", core_string_to_int, 1, false},
-    [INTRINSIC_STRING_TO_REAL] = {"string->real", core_string_to_real, 1,
-                                  false},
-    [INTRINSIC_WRITE_TO_STRING] = {"write->string", core_write_to_string, 1,
-                                   false},
+    [INTRINSIC_IS_STRING] = {"string?", core_is_string, 1},
+    [INTRINSIC_STRING_EQ] = {"string=", core_string_eq, 2},
+    [INTRINSIC_STRING_COUNT] = {"string-count", core_string_count, 1},
+    [INTRINSIC_STRING_GET] = {"string-get", core_string_get, 2},
+    [INTRINSIC_TO_STRING] = {"->string", core_to_string, 1},
+    [INTRINSIC_STRING_TO_SYMBOL] = {"string->symbol", core_string_to_symbol, 1},
+    [INTRINSIC_STRING_TO_INT] = {"string->int", core_string_to_int, 1},
+    [INTRINSIC_STRING_TO_REAL] = {"string->real", core_string_to_real, 1},
+    [INTRINSIC_WRITE_TO_STRING] = {"write->string", core_write_to_string, 1},
 
-    [INTRINSIC_IS_ATOM] = {"atom?", core_is_atom, 1, false},
-    [INTRINSIC_MAKE_ATOM] = {"atom", core_make_atom, 1, false},
-    [INTRINSIC_DEREF] = {"deref", core_deref, 1, false},
-    [INTRINSIC_RESET] = {"reset!", core_reset, 2, false},
+    [INTRINSIC_MAKE_STRING_BUILDER] = {"make-output-string",
+                                       core_make_string_builder, 0},
+    [INTRINSIC_IS_STRING_BUILDER] = {"output-string?", core_is_string_builder,
+                                     1},
+    [INTRINSIC_STRING_BUILDER_WRITE_CHAR] = {"output-string-write-char",
+                                             core_string_builder_write_char, 2},
+    [INTRINSIC_STRING_BUILDER_WRITE_STRING] = {"output-string-write-string",
+                                               core_string_builder_write_string,
+                                               2},
+    [INTRINSIC_STRING_BUIDER_GET_STRING] = {"output-string-get",
+                                            core_string_builder_get_string, 1},
 
-    [INTRINSIC_IS_ARRAY] = {"array?", core_is_array, 1, false},
-    [INTRINSIC_ALLOC_ARRAY] = {"array-alloc", core_array_alloc, 1, false},
-    [INTRINSIC_ARRAY_LENGTH] = {"array-length", core_array_length, 1, false},
-    [INTRINSIC_ARRAY_GET] = {"array-get", core_array_get, 2, false},
-    [INTRINSIC_ARRAY_SET] = {"array-set!", core_array_set, 3, false},
+    [INTRINSIC_IS_ATOM] = {"atom?", core_is_atom, 1},
+    [INTRINSIC_MAKE_ATOM] = {"atom", core_make_atom, 1},
+    [INTRINSIC_DEREF] = {"deref", core_deref, 1},
+    [INTRINSIC_RESET] = {"reset!", core_reset, 2},
 
-    [INTRINSIC_OPEN_INPUT_FILE] = {"open-input-file", core_open_input_file, 1,
-                                   false},
-    [INTRINSIC_IS_INPUT_FILE] = {"input-file?", core_is_input_file, 1, false},
+    [INTRINSIC_IS_ARRAY] = {"array?", core_is_array, 1},
+    [INTRINSIC_ALLOC_ARRAY] = {"array-alloc", core_array_alloc, 1},
+    [INTRINSIC_ARRAY_LENGTH] = {"array-length", core_array_length, 1},
+    [INTRINSIC_ARRAY_GET] = {"array-get", core_array_get, 2},
+    [INTRINSIC_ARRAY_SET] = {"array-set!", core_array_set, 3},
+
+    [INTRINSIC_OPEN_INPUT_FILE] = {"open-input-file", core_open_input_file, 1},
+    [INTRINSIC_IS_INPUT_FILE] = {"input-file?", core_is_input_file, 1},
     [INTRINSIC_INPUT_FILE_READ_CHAR] = {"input-file-read-char",
-                                        core_input_file_read_char, 1, false},
+                                        core_input_file_read_char, 1},
     [INTRINSIC_INPUT_FILE_PEEK_CHAR] = {"input-file-peek-char",
-                                        core_input_file_peek_char, 1, false},
+                                        core_input_file_peek_char, 1},
     [INTRINSIC_INPUT_FILE_READ_STRING] = {"input-file-read-string",
-                                          core_input_file_read_string, 2,
-                                          false},
+                                          core_input_file_read_string, 2},
     [INTRINSIC_INPUT_FILE_READ_LINE] = {"input-file-read-line",
-                                        core_input_file_read_line, 1, false},
+                                        core_input_file_read_line, 1},
     [INTRINSIC_CLOSE_INPUT_FILE] = {"close-input-file", core_input_file_close,
-                                    1, false},
+                                    1},
 
     [INTRINSIC_OPEN_OUTPUT_FILE] = {"open-output-file", core_open_output_file,
-                                    1, false},
-    [INTRINSIC_IS_OUTPUT_FILE] = {"output-file?", core_is_output_file, 1,
-                                  false},
+                                    1},
+    [INTRINSIC_IS_OUTPUT_FILE] = {"output-file?", core_is_output_file, 1},
     [INTRINSIC_OUTPUT_FILE_WRITE_CHAR] = {"output-file-write-char",
-                                          core_output_file_write_char, 2,
-                                          false},
+                                          core_output_file_write_char, 2},
     [INTRINSIC_OUTPUT_FILE_WRITE_STRING] = {"output-file-write-string",
-                                            core_output_file_write_string, 2,
-                                            false},
+                                            core_output_file_write_string, 2},
     [INTRINSIC_OUTPUT_FILE_FLUSH] = {"output-file-flush",
-                                     core_output_file_flush, 1, false},
+                                     core_output_file_flush, 1},
     [INTRINSIC_CLOSE_OUTPUT_FILE] = {"close-output-file",
-                                     core_output_file_close, 1, false},
+                                     core_output_file_close, 1},
 
-    [INTRINSIC_EOF_OBJECT] = {"eof-object", core_get_eof_object, 0, false},
-    [INTRINSIC_IS_EOF_OBJECT] = {"eof-object?", core_is_eof_object, 1, false},
+    [INTRINSIC_EOF_OBJECT] = {"eof-object", core_get_eof_object, 0},
+    [INTRINSIC_IS_EOF_OBJECT] = {"eof-object?", core_is_eof_object, 1},
 
-    [INTRINSIC_FILE_EXISTS] = {"file-exists?", core_file_exists, 1, false},
-    [INTRINSIC_DELETE_FILE] = {"delete-file", core_delete_file, 1, false},
+    [INTRINSIC_FILE_EXISTS] = {"file-exists?", core_file_exists, 1},
+    [INTRINSIC_DELETE_FILE] = {"delete-file", core_delete_file, 1},
     [INTRINSIC_CURRENT_DIRECTORY] = {"current-directory",
-                                     core_current_directory, 0, false},
+                                     core_current_directory, 0},
 
-    [INTRINSIC_BACKTRACE] = {"backtrace", core_backtrace, 0, false},
-    [INTRINSIC_RUNTIME] = {"runtime", core_runtime, 0, false},
-    [INTRINSIC_TIME_MS] = {"time-ms", core_time_ms, 0, false},
-    [INTRINSIC_SLEEP] = {"sleep", core_sleep, 1, false},
+    [INTRINSIC_BACKTRACE] = {"backtrace", core_backtrace, 0},
+    [INTRINSIC_RUNTIME] = {"runtime", core_runtime, 0},
+    [INTRINSIC_TIME_MS] = {"time-ms", core_time_ms, 0},
+    [INTRINSIC_SLEEP] = {"sleep", core_sleep, 1},
 
-    [INTRINSIC_COMPILE_FILE] = {"compile-file", core_compile_file, 1, false},
-    [INTRINSIC_COMPILE_STRING] = {"compile-string", core_compile_string, 2,
-                                  false},
+    [INTRINSIC_COMPILE_FILE] = {"compile-file", core_compile_file, 1},
+    [INTRINSIC_COMPILE_STRING] = {"compile-string", core_compile_string, 2},
 
-    [INTRINSIC_DISASSEMBLE] = {"disassemble", core_disassemble, 1, false},
-    [INTRINSIC_GET_MACRO_FN] = {"macro-fn", core_get_macro_fn, 1, false},
+    [INTRINSIC_DISASSEMBLE] = {"disassemble", core_disassemble, 1},
+    [INTRINSIC_GET_MACRO_FN] = {"macro-fn", core_get_macro_fn, 1},
 
-    [INTRINSIC_DYNAMIC_STATE] = {"dynamic-state", core_dynamic_state, 0, false},
+    [INTRINSIC_DYNAMIC_STATE] = {"dynamic-state", core_dynamic_state, 0},
     [INTRINSIC_SET_DYNAMIC_STATE] = {"set-dynamic-state!",
-                                     core_set_dynamic_state, 1, false},
+                                     core_set_dynamic_state, 1},
     [INTRINSIC_SET_PRIMITIVE_ERROR_HANDLER] = {"set-primitive-error-handler!",
                                                core_set_primitive_error_handler,
-                                               1, false},
-    [INTRINSIC_ABORT] = {"abort", core_abort, 1, false},
-    [INTRINSIC_EXIT] = {"system-exit", core_exit, 1, false},
+                                               1},
+    [INTRINSIC_ABORT] = {"abort", core_abort, 1},
+    [INTRINSIC_EXIT] = {"system-exit", core_exit, 1},
 
     // These are intrinsics, but not exposed directly as functions
-    [INTRINSIC_PERPARE_APPLY] = {NULL, core_prepare_apply, 2, false},
-    [INTRINSIC_COMPILE_TO_CLOSURE] = {NULL, core_compile_to_closure, 1, false},
+    [INTRINSIC_PERPARE_APPLY] = {NULL, core_prepare_apply, 2},
+    [INTRINSIC_COMPILE_TO_CLOSURE] = {NULL, core_compile_to_closure, 1},
 };
 
 #define BUILTIN_COUNT (sizeof(builtins) / sizeof(builtins[0]))
@@ -861,8 +866,7 @@ static void set_builtin_name(struct code_chunk *chunk, const char *name) {
 }
 
 static struct lisp_closure *make_builtin(const char *name, uint8_t index,
-                                         unsigned req_arg_count,
-                                         bool is_variadic) {
+                                         unsigned req_arg_count) {
   struct code_chunk *chunk = chunk_create();
   chunk_append_byte(chunk, OP_INTRINSIC);
   chunk_append_byte(chunk, index);
@@ -871,7 +875,6 @@ static struct lisp_closure *make_builtin(const char *name, uint8_t index,
   set_builtin_name(chunk, name);
 
   chunk->req_arg_count = req_arg_count;
-  chunk->is_variadic = is_variadic;
 
   return lisp_closure_create(chunk, 0);
 }
@@ -959,8 +962,7 @@ static void define_cl(struct lisp_env *env, struct lisp_closure *cl) {
 void define_builtins(struct lisp_env *global_env) {
   for (unsigned i = INTRINSIC_FN_START; i < INTRINSIC_FN_END; i++) {
     const struct builtin_config *b = &builtins[i];
-    define_cl(global_env,
-              make_builtin(b->name, i, b->req_arg_count, b->is_variadic));
+    define_cl(global_env, make_builtin(b->name, i, b->req_arg_count));
   }
 
   // Special builtins

@@ -11,11 +11,10 @@
 (defn! string->list (str)
   (string-foldr nil cons str))
 
-; TODO These are very inefficient as non-builtins since they allocate a lot of
-; intermediate strings
-
 (defn! list->string (lst)
-  (apply string-concat (map char->string lst)))
+  (for ((acc (make-output-string)) (lst lst (cdr lst)))
+      ((null? lst) (output-string-get acc))
+    (output-string-write-char acc (car lst))))
 
 (defmacro! defn-with-string-range! (name req-args string-arg start-arg end-arg delegate)
   `(defn-case! ~name
@@ -26,14 +25,14 @@
     ((~@req-args ~start-arg ~end-arg)
       (~delegate ~@req-args ~start-arg ~end-arg))))
 
+; TODO Implement as a bulit-in (much more efficient than copying
+; character-by-character)
 (defn-with-string-range! substring (s) s start end substring-helper)
-
 (defn! substring-helper (str start end)
   ; TODO Bounds checking
-  (for
-    ((index start (inc index))
-     (acc "" (string-concat acc (->string (string-get str index)))))
-    ((int>= index end) acc)))
+  (for ((index start (inc index)) (acc (make-output-string)))
+      ((int>= index end) (output-string-get acc))
+    (output-string-write-char acc (string-get str index))))
 
 (defn-with-string-range! string-index (s pred) s start end string-index-helper)
 (defn! string-index-helper (s pred start end)
@@ -55,6 +54,9 @@
     (char= c #\space)
     (char= c #\tab)
     (char= c #\newline)))
+
+(defn! char-newline? (c)
+  (char= c #\newline))
 
 (defn! char-non-blank? (c)
   (not (char-blank? c)))

@@ -272,24 +272,26 @@ static void str_builder_visit(struct lisp_val v, visit_callback cb, void *ctx) {
   cb(ctx, lisp_val_from_obj(builder->buf));
 }
 
-static const struct lisp_vtable STR_BUILDER_VTABLE = {
+static const struct lisp_vtable STACK_STR_BUILDER_VTABLE = {
     .name = "string-builder",
     .alloc_type = LISP_ALLOC_STACK,
     .visit_children = str_builder_visit,
     .destroy = lisp_destroy_none,
 };
 
+static const struct lisp_vtable GC_STR_BUILDER_VTABLE = {
+    .name = "string-builder",
+    .alloc_type = LISP_ALLOC_GC,
+    .visit_children = str_builder_visit,
+    .destroy = lisp_destroy_none,
+};
+
 #define STR_BUILDER_INIT_CAP 8
 
-void str_builder_init_cap_no_preserve(struct str_builder *b, size_t capacity) {
-  b->header.vt = &STR_BUILDER_VTABLE;
+static void str_builder_init_base(struct str_builder *b, size_t capacity) {
   // Include null byte
   b->capacity = capacity + 1;
   b->buf = lisp_string_alloc(b->capacity);
-}
-
-void str_builder_init_no_preserve(struct str_builder *b) {
-  str_builder_init_cap_no_preserve(b, STR_BUILDER_INIT_CAP);
 }
 
 void str_builder_init(struct str_builder *b) {
@@ -297,11 +299,29 @@ void str_builder_init(struct str_builder *b) {
 }
 
 void str_builder_init_cap(struct str_builder *b, size_t capacity) {
-  str_builder_init_cap_no_preserve(b, capacity);
+  b->header.vt = &STACK_STR_BUILDER_VTABLE;
+  str_builder_init_base(b, capacity);
   gc_push_root_obj(b);
 }
 
+struct str_builder *str_builder_create() {
+  struct str_builder *b = lisp_obj_alloc(&GC_STR_BUILDER_VTABLE, sizeof(*b));
+  str_builder_init_base(b, STR_BUILDER_INIT_CAP);
+  return b;
+}
+
+bool lisp_val_is_str_builder(struct lisp_val v) {
+  return lisp_val_vtable(v) == &GC_STR_BUILDER_VTABLE;
+}
+
+static void str_builder_ensure_buf(struct str_builder *b) {
+  if (b->buf == NULL) {
+    b->buf = lisp_string_alloc(b->capacity);
+  }
+}
+
 void str_builder_ensure_cap(struct str_builder *b, size_t added_size) {
+  str_builder_ensure_buf(b);
   size_t new_size = b->buf->length + added_size;
   if (new_size > b->capacity) {
     // TODO Avoid loop and just do max(cap*2, new_size)?
@@ -315,14 +335,31 @@ void str_builder_ensure_cap(struct str_builder *b, size_t added_size) {
   }
 }
 
-size_t str_builder_remaining_cap(const struct str_builder *b) {
+size_t str_builder_remaining_cap(struct str_builder *b) {
+  str_builder_ensure_buf(b);
   return b->capacity - b->buf->length;
 }
 
 void str_builder_include_size(struct str_builder *b, size_t added_size) {
+  str_builder_ensure_buf(b);
   size_t new_size = b->buf->length + added_size;
   assert(new_size <= b->capacity);
   b->buf->length = new_size;
+}
+
+char *str_builder_raw_buf(struct str_builder *b) {
+  str_builder_ensure_buf(b);
+  return b->buf->data;
+}
+
+char *str_builder_raw_buf_end(struct str_builder *b) {
+  str_builder_ensure_buf(b);
+  return &b->buf->data[b->buf->length];
+}
+
+const struct lisp_string *str_builder_get_str(struct str_builder *b) {
+  str_builder_ensure_buf(b);
+  return b->buf;
 }
 
 void str_builder_append(struct str_builder *b, char c) {
@@ -359,6 +396,7 @@ int str_builder_format(struct str_builder *b, const char *format, ...) {
 }
 
 int str_builder_vformat(struct str_builder *b, const char *format, va_list ap) {
+  str_builder_ensure_buf(b);
   // Try to build with existing capacity first
   char *format_buf = &b->buf->data[b->buf->length];
   size_t remaining_cap = b->capacity - b->buf->length;
@@ -392,18 +430,23 @@ int str_builder_vformat(struct str_builder *b, const char *format, va_list ap) {
   return n_chars;
 }
 
-struct lisp_string *str_build_no_preserve(struct str_builder *b) {
+static struct lisp_string *str_build_no_preserve(struct str_builder *b) {
   // Add in null byte, but don't count in string size
   str_builder_ensure_cap(b, 1);
   b->buf->data[b->buf->length] = 0;
   // TODO Reallocate the string to truncate unused space
-
-  return b->buf;
+  struct lisp_string *str = b->buf;
+  // Reset in case it's used later
+  b->buf = NULL;
+  b->capacity = STR_BUILDER_INIT_CAP;
+  return str;
 }
 
 struct lisp_string *str_build(struct str_builder *b) {
   struct lisp_string *str = str_build_no_preserve(b);
-  gc_pop_root_expect_obj(b);
+  if (b->header.vt == &STACK_STR_BUILDER_VTABLE) {
+    gc_pop_root_expect_obj(b);
+  }
   return str;
 }
 
