@@ -61,12 +61,6 @@
   (key _he-key _he-set-key!)
   (value _he-value _he-set-value!))
 
-(defn! opt-or-default (opt-arg-list default)
-  (cond
-    ((null? opt-arg-list) default)
-    ((null? (cdr opt-arg-list)) (car opt-arg-list))
-    (else (error "too many arguments"))))
-
 (def! *hash-table-min-capacity* 8)
 (def! *hash-table-default-capacity* 8)
 
@@ -77,11 +71,14 @@
     ((pow2 *hash-table-min-capacity* (bitshift pow2 1)))
     ((>= pow2 orig) pow2)))
 
-(defn! make-hash-table (hash-fn equal-fn . opt-capacity)
-  (let*
-    ((raw-cap (opt-or-default opt-capacity *hash-table-default-capacity*))
-     (rounded-cap (round-capacity raw-cap)))
-    (_build-hash-table hash-fn equal-fn 0 (make-array rounded-cap))))
+(defn! _ht-make-with-capacity (hash-fn equal-fn capacity)
+  (_build-hash-table hash-fn equal-fn 0 (make-array capacity)))
+
+(defn-case! make-hash-table
+  ((hash-fn equal-fn)
+    (_ht-make-with-capacity hash-fn equal-fn *hash-table-default-capacity*))
+  ((hash-fn equal-fn init-capacity)
+    (_ht-make-with-capacity hash-fn equal-fn init-capacity)))
 
 (defn! make-=-hash-table opt-capacity
   (apply* make-hash-table =-hash = opt-capacity))

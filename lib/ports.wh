@@ -2,12 +2,6 @@
 (def! current-output-port (make-parameter *stdout-port*))
 (def! current-error-port (make-parameter *stderr-port*))
 
-(defn! check-opt-arg (vararg-list get-default)
-  (cond
-    ((null? vararg-list) (get-default))
-    ((null? (cdr vararg-list)) (car vararg-list))
-    (else (error "too many arguments"))))
-
 (defmacro! defn-with-default-port! (name req-args port-arg default-param body)
   `(defn-case! ~name
     (~req-args (~name ~@req-args (~default-param)))
@@ -141,8 +135,6 @@
     ((int? status) status)
     (else (error "exit: invalid status code" status))))
 
-(defn! exit opt-arg
-  (cond
-    ((null? opt-arg) (system-exit 0))
-    ((null? (cdr opt-arg)) (system-exit (convert-exit-status (car opt-arg))))
-    (else (error "exit: too many arguments" opt-arg))))
+(defn-case! exit
+  (() (system-exit 0))
+  ((arg) (system-exit (conver-exit-status arg))))

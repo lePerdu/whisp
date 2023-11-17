@@ -111,45 +111,6 @@
         (~(cdr bind-pair) (cdr ~cons-sym)))
        ~@body))))
 
-(defmacro! let-if (binding if-true . opt-if-nil)
-  (let
-    ((bind-sym (car binding))
-     (bind-expr (cadr binding))
-     ; Bind to a hidden symbol first so that the specified symbol isn't bound in
-     ; the "false" branch
-     (init-bind-sym (gensym))
-     (if-nil (cond
-      ((null? opt-if-nil) nil)
-      ((null? (cdr opt-if-nil)) (car opt-if-nil))
-      (else (syntax-error "too many arguments")))))
-    `(let ((~init-bind-sym ~bind-expr))
-      (if ~init-bind-sym
-        (let ((~bind-sym ~init-bind-sym))
-          ~if-true)
-        ~if-nil))))
-
-; Version of let-cons which allows an "else" branch if the binding is nil
-; TODO Allow more than 1 pattern
-; TODO Allow nested / more complex patterns
-(defmacro! let-if-cons (binding if-cons . opt-if-nil)
-  ; TODO Check structure
-  (let
-    ((if-nil
-      (cond
-        ((null? opt-if-nil) nil)
-        ((null? (cdr opt-if-nil)) (car opt-if-nil))
-        (else (syntax-error "too many arguments"))))
-     (bind-pair (car binding))
-     (cons-sym (gensym "pair")))
-    `(let
-      ((~cons-sym ~@(cdr binding)))
-      (if (cons? ~cons-sym)
-        (let
-         ((~(car bind-pair) (car ~cons-sym))
-          (~(cdr bind-pair) (cdr ~cons-sym)))
-         ~if-cons)
-        ~if-nil))))
-
 (defmacro! letrec* (bindings . body)
   `(let ()
     ~@(map (fn (b) (cons 'def! b)) bindings)
@@ -163,51 +124,53 @@
     ((~name (fn ~(map car bindings) ~@body)))
     (~name ~@(map cadr bindings))))
 
-; () -> (nil . nil)
-; (a b) -> ((a b) . nil)
-; (a b . c) -> ((a b) . c)
-(defn! fn-case-split-arg-list (arg-list)
-  (cond
-    ((null? arg-list) '(nil . nil))
-    ((cons? arg-list)
-      (let-cons ((proper . rest) (fn-case-split-arg-list (cdr arg-list)))
-        (cons (cons (car arg-list) proper) rest)))
-    (else
-      (cons nil arg-list))))
-
-(defn! fn-case-bind-args (args-sym req-args rest-arg exprs)
-  (if (null? req-args)
-    (if (null? rest-arg)
-      `(do ~@exprs)  ; Wrap in do to properly handle multiple expressions
-      `(let ((~rest-arg ~args-sym)) ~@exprs))
-    `(let ((~(car req-args) (car ~args-sym)) (~args-sym (cdr ~args-sym)))
-      ~(fn-case-bind-args args-sym (cdr req-args) rest-arg exprs))))
-
-(defn! fn-case-branch-to-cond (args-sym arg-count-sym branch)
-  (let-cons ((req-args . rest-arg) (fn-case-split-arg-list (car branch)))
-    (let
-      ((req-arg-count (count req-args))
-       (exprs (cdr branch))
-       (comparator (if (null? rest-arg) 'int= 'int>=)))
-      `((~comparator ~arg-count-sym ~req-arg-count)
-        ~(fn-case-bind-args args-sym req-args rest-arg exprs)))))
-
-(defmacro! fn-case branches
-  (let
-    ((args-sym (gensym "args"))
-     (args-count-sym (gensym "args-count")))
-  ; TODO Find lowest required arg count and make those args
-  ; non-variadic to avoid allocating cons cells for those args
-  `(fn ~args-sym
-    (let ((~args-count-sym (count ~args-sym)))
+(defsyntax! fn-case
+  (let ()
+    ; () -> (nil . nil)
+    ; (a b) -> ((a b) . nil)
+    ; (a b . c) -> ((a b) . c)
+    (defn! fn-case-split-arg-list (arg-list)
       (cond
-        ~@(map
-          (fn (branch)
-            (fn-case-branch-to-cond
-              args-sym args-count-sym branch))
-          branches)
-        ; TODO Distinguish between not enough and too many args
-        (else (error "fn-case: no matching argument count")))))))
+        ((null? arg-list) '(nil . nil))
+        ((cons? arg-list)
+          (let-cons ((proper . rest) (fn-case-split-arg-list (cdr arg-list)))
+            (cons (cons (car arg-list) proper) rest)))
+        (else
+          (cons nil arg-list))))
+
+    (defn! fn-case-bind-args (args-sym req-args rest-arg exprs)
+      (if (null? req-args)
+        (if (null? rest-arg)
+          `(do ~@exprs)  ; Wrap in do to properly handle multiple expressions
+          `(let ((~rest-arg ~args-sym)) ~@exprs))
+        `(let ((~(car req-args) (car ~args-sym)) (~args-sym (cdr ~args-sym)))
+          ~(fn-case-bind-args args-sym (cdr req-args) rest-arg exprs))))
+
+    (defn! fn-case-branch-to-cond (args-sym arg-count-sym branch)
+      (let-cons ((req-args . rest-arg) (fn-case-split-arg-list (car branch)))
+        (let
+          ((req-arg-count (count req-args))
+           (exprs (cdr branch))
+           (comparator (if (null? rest-arg) 'int= 'int>=)))
+          `((~comparator ~arg-count-sym ~req-arg-count)
+            ~(fn-case-bind-args args-sym req-args rest-arg exprs)))))
+
+    (fn branches
+      (let
+        ((args-sym (gensym "args"))
+         (args-count-sym (gensym "args-count")))
+      ; TODO Find lowest required arg count and make those args
+      ; non-variadic to avoid allocating cons cells for those args
+      `(fn ~args-sym
+        (let ((~args-count-sym (count ~args-sym)))
+          (cond
+            ~@(map
+              (fn (branch)
+                (fn-case-branch-to-cond
+                  args-sym args-count-sym branch))
+              branches)
+            ; TODO Distinguish between not enough and too many args
+            (else (error "fn-case: no matching argument count")))))))))
 
 ; TODO Change syntax of `defn!` so that it better matches this
 ; (function name outside parens)?
@@ -219,6 +182,40 @@
 
 (defmacro! defmacro-case! (name . branches)
   `(defsyntax! ~name (fn-case ~@branches)))
+
+(defmacro-case! let-if
+  ((binding if-true) `(let-if ~binding ~if-true nil))
+  ((binding if-true if-false)
+    (let
+      ((bind-sym (car binding))
+       (bind-expr (cadr binding))
+       ; Bind to a hidden symbol first so that the specified symbol isn't bound in
+       ; the "false" branch
+       (init-bind-sym (gensym)))
+      `(let ((~init-bind-sym ~bind-expr))
+        (if ~init-bind-sym
+          (let ((~bind-sym ~init-bind-sym))
+            ~if-true)
+          ~if-false)))))
+
+; Version of let-cons which allows an "else" branch if the binding is nil
+; TODO Allow more than 1 pattern
+; TODO Allow nested / more complex patterns
+(defmacro-case! let-if-cons
+  ((binding if-cons) `(let-if-cons ~binding ~if-cons nil))
+  ((binding if-cons if-not)
+    ; TODO Check structure
+    (let
+      ((bind-pair (car binding))
+       (cons-sym (gensym "pair")))
+      `(let
+        ((~cons-sym ~@(cdr binding)))
+        (if (cons? ~cons-sym)
+          (let
+           ((~(car bind-pair) (car ~cons-sym))
+            (~(cdr bind-pair) (cdr ~cons-sym)))
+           ~if-cons)
+          ~if-not)))))
 
 ; Easier-to-use versions of call-with-escape-continuation
 
