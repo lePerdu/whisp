@@ -1,0 +1,86 @@
+(def! *generic-methods-suffix* "__methods")
+
+(defn! make-generic-methods-sym (name)
+  (string->symbol
+    (string-concat
+      (->string name)
+      *generic-methods-suffix*)))
+
+(defn! make-generic-method-entry (matcher function)
+  (cons matcher function))
+
+(defn! generic-method-entries-add (entries matcher func)
+  (cons
+    (make-generic-method-entry matcher func)
+    entries))
+
+(defn! generic-method-entry-matches (args matcher)
+  (apply matcher args))
+
+(defn! generic-method-find (method-entries . args)
+  (assoc args method-entries generic-method-entry-matches))
+
+(defn! generic-method-entry-func (entry)
+  (cdr entry))
+
+(defmacro! defgeneric! (name args)
+  (let
+    ((generic-methods-sym (make-generic-methods-sym name))
+     (found-method-sym (gensym)))
+    `(do
+      (def! ~generic-methods-sym (atom nil))
+      (defn! ~name (~@args)
+        (let
+          ((~found-method-sym
+            (generic-method-find @~generic-methods-sym ~@args)))
+          (if ~found-method-sym
+            ((generic-method-entry-func ~found-method-sym) ~@args)
+            (error ~(string-concat (->string name) ": no matching method found"))))))))
+
+(defn! generic-method-split-matcher (arg-desc)
+  (and
+    (cons? arg-desc)
+    (= (count arg-desc) 2)
+    (symbol? (cadr arg-desc))
+    (cons (car arg-desc) (cadr arg-desc))))
+
+(defn! generic-method-split-desc (arg-desc)
+  (cond
+    ((symbol? arg-desc) (cons nil arg-desc))
+    ((generic-method-split-matcher arg-desc))
+    (else
+      (syntax-error
+        "defmethod!: dispatch arg must be of the form `symbol' or `(pred? symbol)'"))))
+
+(defn! generic-method-arg-matcher (desc)
+  (car (generic-method-split-desc desc)))
+
+(defn! generic-method-arg-symbol (desc)
+  (cdr (generic-method-split-desc desc)))
+
+(defn! generic-method-split-descs (descs)
+  (cons
+    (map generic-method-arg-matcher descs)
+    (map generic-method-arg-symbol descs)))
+
+(defn! generic-method-make-matcher-expr (arg-syms matchers)
+  (if (null? matchers)
+    'true
+    (let
+      ((rest-expr
+        (generic-method-make-matcher-expr (cdr arg-syms) (cdr matchers))))
+      (if (car matchers)
+        `(and (~(car matchers) ~(car arg-syms)) ~rest-expr)
+        rest-expr))))
+
+(defn! generic-method-make-matcher-fn (matchers)
+  (let ((arg-syms (map (fn (_) (gensym)) matchers)))
+    `(fn (~@arg-syms) ~(generic-method-make-matcher-expr arg-syms matchers))))
+
+(defmacro! defmethod! (name arg-descs . body)
+  (let-cons ((matchers . arg-syms) (generic-method-split-descs arg-descs))
+    `(swap! ~(make-generic-methods-sym name)
+      (fn (entries)
+        (generic-method-entries-add entries
+          ~(generic-method-make-matcher-fn matchers)
+          (fn ~arg-syms ~@body))))))

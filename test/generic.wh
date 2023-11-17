@@ -1,0 +1,51 @@
+(defgroup! defgeneric!
+  (deftest! error-if-no-methods
+    (defgeneric! g (x))
+    (assert-error (g 1)))
+
+  ; Check that scoping works so the tests don't have to have distinct names
+  (deftest! defgeneric!-is-scoped
+    (defn! defgeneric!-in-fn ()
+      (defgeneric! g (x))
+      (defmethod! g (x) "internal"))
+    (defgeneric!-in-fn)
+    ; Symbol should not be defined
+    (assert-error (g 1)))
+  (deftest! defmethod!-allowed-in-scope
+    (defgeneric! g (x))
+    (defn! defmethod!-in-fn ()
+      (defmethod! g (x) "inner"))
+    (assert-error (g 1))
+    (defmethod!-in-fn)
+    (assert-equal "inner" (g 1)))
+
+  (deftest! fallback-method-called-if-only
+    (defgeneric! g (x))
+    (defmethod! g (x)
+      (cons "fallback" 5))
+    (assert-equal '("fallback" . 5) (g 5)))
+  (deftest! fallback-method-call-if-no-match
+    (defgeneric! g (x))
+    (defmethod! g (x) (cons "fallback" x))
+    (defmethod! g ((int? x)) (cons "int" x))
+    (assert-equal '("fallback" . #\a) (g #\a)))
+  (deftest! matching-method-called-if-only
+    (defgeneric! g (x))
+    (defmethod! g ((int? x)) (cons "int" x))
+    (assert-equal '("int" . 5) (g 5)))
+  (deftest! matching-method-if-fallback-exists
+    (defgeneric! g (x))
+    (defmethod! g (x) (cons "fallback" x))
+    (defmethod! g ((int? x)) (cons "int" x))
+    (assert-equal '("int" . 5) (g 5)))
+  (deftest! matching-method-called-if-other-method-exists
+    (defgeneric! g (x))
+    (defmethod! g ((int? x)) (cons "int" x))
+    (defmethod! g ((symbol? x)) (cons "symbol" x))
+    (assert-equal '("int" . 5) (g 5)))
+  (deftest! later-defined-matched-method-called
+    (defgeneric! g (x))
+    (defn! int>5 (x) (and (int? x) (int> x 5)))
+    (defmethod! g ((int? x)) (cons "int" x))
+    (defmethod! g ((int>5 x)) (cons ">5" x))
+    (assert-equal '(">5" . 6) (g 6))))
