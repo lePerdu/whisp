@@ -152,4 +152,38 @@
     (deftest! non-empty-array
       (def! a (array 1 2 3 4 5))
       (array-fill! a #\a)
-      (assert-array-equal (array #\a #\a #\a #\a #\a) a))))
+      (assert-array-equal (array #\a #\a #\a #\a #\a) a)))
+
+  (defgroup! array-sort!
+    (defn! compare-never (a b) (error "comparison should not be called"))
+
+    (deftest! empty-array-is-sorted
+      (def! a (array))
+      (array-sort! a compare-never)
+      (assert-array-equal (array) a))
+    (deftest! singleton-array-is-sorted
+      (def! a (array 4))
+      (array-sort! a compare-never)
+      (assert-array-equal (array 4) a))
+    (deftest! numeric-array-is-sorted
+      (def! a (array 25 43 44 28 1 25 11 41 25 18))
+      (array-sort! a <)
+      (assert-array-equal
+        (array 1 11 18 25 25 25 28 41 43 44)
+        a))
+    (deftest! already-sorted-array-is-left-sorted
+      (def! a (array 1 11 18 25 25 25 28 41 43 44))
+      (array-sort! a <)
+      (assert-array-equal (array 1 11 18 25 25 25 28 41 43 44) a))
+    (deftest! already-sorted-array-is-reverse-sorted
+      (def! a (array 1 11 18 25 25 25 28 41 43 44))
+      (array-sort! a >)
+      (assert-array-equal (array 44 43 41 28 25 25 25 18 11 1) a))
+    (deftest! array-with-duplicates-sorted
+      (def! a (array 1 5 1 2 2 1))
+      (array-sort! a >)
+      (assert-array-equal (array 5 2 2 1 1 1) a))
+    (deftest! array-with-all-duplicates-sorted
+      (def! a (array 5 5 5 5))
+      (array-sort! a <)
+      (assert-array-equal (array 5 5 5 5) a))))

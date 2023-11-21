@@ -145,3 +145,40 @@
     (let ((arr (array-alloc length)))
       (array-fill! arr fill)
       arr)))
+
+(defn! array-sort! (arr less)
+  ; The internal functions use inclusive end indices as it makes
+  ; double-ended scanning more consistent
+  (_array-sort-range! arr less 0 (dec (array-length arr))))
+
+(defn! _array-sort-range! (arr less start end)
+  (when (int< start end)
+    (let ((pivot-index (_array-sort-partition! arr less start end)))
+      (_array-sort-range! arr less start pivot-index)
+      (_array-sort-range! arr less (inc pivot-index) end))))
+
+(defn! _array-sort-pivot-index (start end)
+  (int/ (int+ start end) 2))
+
+(defn! _array-partition-find-low (arr less pivot start)
+  (if (less (array-get arr start) pivot)
+    (_array-partition-find-low arr less pivot (inc start))
+    start))
+
+(defn! _array-partition-find-high (arr less pivot end)
+  (if (less pivot (array-get arr end))
+    (_array-partition-find-high arr less pivot (dec end))
+    end))
+
+(defn! _array-sort-partition! (arr less start end)
+  (let ((pivot-val (array-get arr (_array-sort-pivot-index start end))))
+    (let-named loop ((start start) (end end))
+      (let*
+        ((low-index (_array-partition-find-low arr less pivot-val start))
+         (high-index (_array-partition-find-high arr less pivot-val end)))
+        (if (int< low-index high-index)
+          (let ((low-val (array-get arr low-index)))
+            (array-set! arr low-index (array-get arr high-index))
+            (array-set! arr high-index low-val)
+            (loop (inc low-index) (dec high-index)))
+          high-index)))))
