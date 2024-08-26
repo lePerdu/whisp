@@ -95,6 +95,8 @@ static void lisp_hash_table_resize(struct lisp_hash_table *map) {
       lisp_hash_table_do_insert(map, entry);
     }
   }
+
+  free(old_entries);
 }
 
 void lisp_hash_table_insert(struct lisp_hash_table *map,

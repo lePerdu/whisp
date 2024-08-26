@@ -1,4 +1,4 @@
-CFLAGS = -g -Og
+CFLAGS = -g -Og -fno-omit-frame-pointer -fsanitize=address
 BUILD = build/debug
 WHISP_LIB_DIR = ./lib
 
