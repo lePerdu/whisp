@@ -242,6 +242,16 @@
         acc))
     (_ht-data ht)))
 
+(defn! hash-table-map (f ht)
+  (hash-table-fold
+    (make-hash-table
+      (hash-tabel-hash-fn ht)
+      (hash-table-equal-fn ht)
+      (hash-table-count ht))
+    (fn (new-ht key value)
+      (hash-table-set! new-ht key (f value)))
+    ht))
+
 (defn! alist->hash-table (hash-fn equal-fn alist)
   (let ((ht (make-hash-table hash-fn equal-fn (count alist))))
     (for-each
