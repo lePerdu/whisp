@@ -109,7 +109,14 @@
     (deftest! symbols-unique
       (assert-not= (gensym) (gensym)))
     (deftest! unique-with-custom-name
-      (assert-not= (gensym "abc") (gensym "abc"))))
+      (assert-not= (gensym "abc") (gensym "abc")))
+    (deftest! unique-with-custom-symbol-name
+      (assert-not= (gensym 'def) (gensym 'def)))
+    (deftest! unique-with-custom-int-name
+      (assert-not= (gensym 30) (gensym 30)))
+    (deftest! unique-with-custom-name-of-different-type
+      (assert-not= (gensym "30") (gensym 30))
+      (assert-not= (gensym 'abc) (gensym "abc"))))
 
   (defgroup! comment-macro
     (deftest! comment-not-executed

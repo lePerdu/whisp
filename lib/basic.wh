@@ -87,7 +87,7 @@
           (if (null? opt-name)
             ""
             (if (null? (cdr opt-name))
-              (string-concat (car opt-name) "__")
+              (string-concat (->string (car opt-name)) "__")
               (error "gensym: too many arguments")))))
         (string->symbol
           (string-concat
