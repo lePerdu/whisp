@@ -10,11 +10,9 @@
   (fn other-args
     (apply f (concat args other-args))))
 
+; TODO: Support multiple arguments (has performance hit)?
 (defn! compose funcs
-  ; TODO What's more efficient?
-  ; - Create a single compound closure
-  ; - Create a closure which calls fold
-  (fn (x) (foldr x (fn (f acc) (f acc)) funcs)))
+  (foldl identity (fn (acc f) (fn (x) (acc (f x)))) funcs))
 
 (defmacro! pipe (expr . func-exprs)
   (if (null? func-exprs)
