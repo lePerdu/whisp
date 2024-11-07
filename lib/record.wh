@@ -3,7 +3,7 @@
   (let*
     ((name-str (->string name))
      (marker (gensym name-str))
-     (field-names (map car fields))
+     (field-names (map (fn (x) (gensym (car x))) fields))
      (type-error-message (string-concat "argument must be of type: " name-str)))
     `(do
       (defn! ~ctor-symbol (~@field-names)
@@ -38,7 +38,7 @@
   (let*
     ((name-str (->string name))
      (marker (gensym name-str))
-     (field-names (map car fields))
+     (field-names (map (fn (x) (gensym (car x))) fields))
      (type-error-message (string-concat "argument must be of type: " name-str)))
     `(do
       (defn! ~ctor-symbol (~@field-names)
