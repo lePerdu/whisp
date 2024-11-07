@@ -29,6 +29,7 @@ WHISP_LIB_SRCS_DIR = lib
 WHISP_LIB_SRC_FILES = \
 	boot.wh \
 	array.wh \
+	array-builder.wh \
 	basic.wh \
 	bool.wh \
 	exception.wh \

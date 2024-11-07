@@ -9,6 +9,7 @@
 (load "atom.wh")
 (load "string.wh")
 (load "array.wh")
+(load "array-builder.wh")
 (load "vector.wh")
 (load "record.wh")
 (load "generic.wh")

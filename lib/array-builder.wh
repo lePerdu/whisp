@@ -1,0 +1,34 @@
+(def-mutable-record! <array-builder>
+  _make-array-builder
+  array-builder?
+  (array _array-builder-array _set-array-builder-array!)
+  (size array-builder-size _set-array-builder-size!))
+
+(defn! make-array-builder (init-cap)
+  (_make-array-builder (make-array init-cap) 0))
+
+(defn! array-builder-cap (builder)
+  (array-length (_array-builder-array builder)))
+
+(defn! _array-builder-expand! (builder)
+  (let*
+    ((orig (_array-builder-array builder))
+     (orig-len (array-length orig))
+     (new (make-array (int* orig-len 2))))
+    (array-copy-sub orig new 0 orig-len 0)
+    (_set-array-builder-array! builder new)))
+
+(defn! array-builder-append! (builder elem)
+  (if (int>= (array-builder-size builder) (array-builder-cap builder))
+    (_array-builder-expand! builder))
+  (let ((size (array-builder-size builder)))
+    (array-set! (_array-builder-array builder) size elem)
+    (_set-array-builder-size! builder (inc size))))
+
+(defn! array-builder-build! (builder)
+  (let
+    ((arr (_array-builder-array builder))
+     (size (array-builder-size builder)))
+    (if (= (array-length arr) size)
+      arr
+      (array-copy arr 0 size))))

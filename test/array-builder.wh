@@ -1,0 +1,59 @@
+(defgroup! array-builder
+  (defmacro! assert-array-equal (expected actual)
+    `(assert (array-equal? ~expected ~actual) 'expected ~expected 'got ~actual))
+  (defmacro! assert-array-not-equal (expected actual)
+    `(assert (not (array-equal? ~expected ~actual)) 'expected-not ~expected))
+
+  (deftest! empty-builder-builds-empty-array
+    (assert-array-equal
+      (array)
+      (array-builder-build! (make-array-builder 0))))
+  (deftest! empty-builder-with-capacity-builds-empty-array
+    (assert-array-equal
+      (array)
+      (array-builder-build! (make-array-builder 10))))
+
+  (deftest! builds-array-with-elements-in-insert-order
+    (def! builder (make-array-builder 3))
+    (array-builder-append! builder #\c)
+    (array-builder-append! builder 1)
+    (array-builder-append! builder "abc")
+    (assert-array-equal
+      (array #\c 1 "abc")
+      (array-builder-build! builder)))
+
+  (deftest! builds-array-with-size<initial-capacity
+    (def! builder (make-array-builder 20))
+    (array-builder-append! builder 2)
+    (array-builder-append! builder 1)
+    (array-builder-append! builder 3)
+    (assert-array-equal
+      (array 2 1 3)
+      (array-builder-build! builder)))
+
+  (deftest! builds-array-with-size>initial-capacity
+    (def! builder (make-array-builder 3))
+    (array-builder-append! builder 1)
+    (array-builder-append! builder 2)
+    (array-builder-append! builder 3)
+    (array-builder-append! builder 4)
+    (array-builder-append! builder 5)
+    (assert-array-equal
+      (array 1 2 3 4 5)
+      (array-builder-build! builder)))
+
+  (deftest! capacity-grows-after-initial-exceeded
+    (def! builder (make-array-builder 3))
+    (array-builder-append! builder 1)
+    (array-builder-append! builder 2)
+    (array-builder-append! builder 3)
+    (array-builder-append! builder 4)
+    (assert (> (array-builder-cap builder) 3)))
+
+  (deftest! capacity-can-grow-by-100-times
+    (def! builder (make-array-builder 3))
+    (let-named loop ((i 0))
+      (when (int< i 300)
+        (array-builder-append! builder i)
+        (loop (inc i))))
+    (assert= 300 (array-length (array-builder-build! builder)))))
