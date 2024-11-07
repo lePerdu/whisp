@@ -16,10 +16,12 @@
   ; - Create a closure which calls fold
   (fn (x) (foldr x (fn (f acc) (f acc)) funcs)))
 
-(defn! pipe (x . funcs)
-  (if (null? funcs)
-    x
-    (apply* pipe ((car funcs) x) (cdr funcs))))
+(defmacro! pipe (expr . func-exprs)
+  (if (null? func-exprs)
+    expr
+    `(pipe
+      ~(concat (car func-exprs) (list expr))
+      ~@(cdr func-exprs))))
 
 (defmacro! fn-named (name args . body)
   `(let ((~name (fn ~args ~@body)))

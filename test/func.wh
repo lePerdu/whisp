@@ -190,9 +190,4 @@
       (assert= 'x (pipe 'x))
       (assert-equal (cons 1 2) (pipe (cons 1 2))))
     (deftest! functions-applied-from-left-to-right
-      (assert=
-        5
-        (pipe
-          2
-          (fn (x) (* x 2))
-          (fn (x) (+ x 1)))))))
+      (assert= 5 (pipe 2 (* 2) (+ 1))))))
