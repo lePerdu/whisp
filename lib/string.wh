@@ -61,6 +61,55 @@
 (defn! char-non-blank? (c)
   (not (char-blank? c)))
 
+(defn! string< (s1 s2)
+  (let*
+    ((s1-len (string-count s1))
+     (s2-len (string-count s2))
+     (min-len (min s1-len s2-len)))
+    (let-named loop ((index 0))
+      (cond
+        ((int>= index min-len) (int< s1-len s2-len))
+        ((char< (string-get s1 index) (string-get s2 index)) true)
+        ((char> (string-get s1 index) (string-get s2 index)) false)
+        (else (loop (inc index)))))))
+
+(defn! string> (s1 s2) (string< s2 s1))
+(defn! string<= (s1 s2) (not (string> s1 s2)))
+(defn! string>= (s1 s2) (not (string< s1 s2)))
+
+(defn! string-range= (s substr start end)
+  (let ((sub-len (string-count substr)))
+    (and
+      (int>= (int- end start) (string-count substr))
+      (let-named loop ((index 0))
+        (cond
+          ((= index sub-len) true)
+          ((char= (string-get s (int+ start index)) (string-get substr index))
+           (loop (inc index)))
+          (else false))))))
+
+(defn! string-prefix? (prefix s)
+  (string-range= s prefix 0 (string-count s)))
+
+(defn! string-suffix? (suffix s)
+  (let ((s-len (string-count s)) (suffix-len (string-count suffix)))
+    (and
+      (int>= s-len suffix-len)
+      (string-range=
+        s
+        suffix
+        (int- s-len suffix-len)
+        s-len))))
+
+(defn-with-string-range! string-contains (s substr) s start end string-contains-helper)
+(defn! string-contains-helper (s substr start end)
+  (let ((end-index (int- end (string-count substr))))
+    (let-named loop ((index start))
+      (cond
+        ((int> index end-index) false)
+        ((string-range= s substr index end) index)
+        (else (loop (inc index)))))))
+
 (defn! string-index-or-end (s pred)
   (or (string-index s pred) (string-count s)))
 

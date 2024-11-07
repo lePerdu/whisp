@@ -27,7 +27,7 @@
     (deftest! negative
       (assert-int-conv "-54" -54)))
 
-  (defgroup! real<->string    
+  (defgroup! real<->string
     (deftest! integral-positive
       (assert-real-conv "14.0" 14.0))
     (deftest! integral-negative
