@@ -1,0 +1,29 @@
+(defbenchgroup! list
+  (defbenchgroup! create
+    (defbench! empty
+      nil)
+    (defbench! singleton
+      (list 1))
+    (defbench! length-10
+      (list 0 1 2 3 4 5 6 7 8 9))
+    (defbench! length-1000
+      (repeat 1 1000))
+    (defbench! length-10000
+      (repeat 1 10000)))
+
+  (defbenchgroup! iter
+    (def! singleton (list 1))
+    (def! length10 (list 0 1 2 3 4 5 6 7 8 9))
+    (def! length1000 (repeat 1 1000))
+    (def! length10000 (repeat 1 10000))
+
+    (defbench! empty
+      (for-each identity nil))
+    (defbench! singleton
+      (for-each identity singleton))
+    (defbench! length-10
+      (for-each identity length10))
+    (defbench! length-1000
+      (for-each identity length1000))
+    (defbench! length-10000
+      (for-each identity length10000))))

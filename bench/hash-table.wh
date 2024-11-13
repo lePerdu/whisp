@@ -1,0 +1,58 @@
+(defbenchgroup! hash-table
+  (defn! ht-repeat (x n)
+    (let ((ht (make-=-hash-table)))
+      (for ((i 0 (inc i)))
+          ((int>= i n) ht)
+        (hash-table-set! ht i x))))
+  (defn! ht-repeat-with-cap (x n init-cap)
+    (let ((ht (make-=-hash-table init-cap)))
+      (for ((i 0 (inc i)))
+          ((int>= i n) ht)
+        (hash-table-set! ht i x))))
+
+  (defbenchgroup! create
+    (defbench! empty
+      (make-=-hash-table))
+    (defbench! singleton
+      (ht-repeat 'x 1))
+    (defbench! singleton-with-cap-1000
+      (ht-repeat-with-cap 'x 1 1000))
+    (defbench! length-10
+      (ht-repeat 'x 10))
+    (defbench! length-10-with-cap-1000
+      (ht-repeat-with-cap 'x 10 1000))
+
+    (defbench! length-1000
+      (ht-repeat 'x 1000))
+    (defbench! length-1000-with-init-cap
+      (ht-repeat-with-cap 'x 1000 1000))
+    (defbench! length-10000
+      (ht-repeat 'x 10000))
+    (defbench! length-10000-with-init-cap
+      (ht-repeat-with-cap 'x 10000 10000)))
+
+  (defbenchgroup! iter
+    (def! empty (make-=-hash-table 1))
+    (def! empty-with-cap-1000 (make-=-hash-table 1000))
+    (def! singleton (ht-repeat 'x 1))
+    (def! singleton-with-cap-1000 (make-=-hash-table 1000))
+    (def! length10 (ht-repeat 'x 10))
+    (def! length1000 (ht-repeat-with-cap 'x 1000 1000))
+    (def! length10000 (ht-repeat-with-cap 'x 10000 10000))
+    (defn! noop (k v))
+    (hash-table-set! singleton-with-cap-1000 500 'x)
+
+    (defbench! empty
+      (hash-table-for-each noop empty))
+    (defbench! empty-with-cap-1000
+      (hash-table-for-each noop empty-with-cap-1000))
+    (defbench! singleton
+      (hash-table-for-each noop singleton))
+    (defbench! singleton-with-cap-1000
+      (hash-table-for-each noop singleton-with-cap-1000))
+    (defbench! length-10
+      (hash-table-for-each noop length10))
+    (defbench! length-1000
+      (hash-table-for-each noop length1000))
+    (defbench! length-10000
+      (hash-table-for-each noop length10000))))

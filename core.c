@@ -988,4 +988,7 @@ void define_builtins(struct lisp_env *global_env) {
   // TODO Configure based on the system
   struct lisp_val path_separator = lisp_val_from_char('/');
   define_const(global_env, "*path-separator*", path_separator);
+
+  struct lisp_val clocks_per_sec = lisp_val_from_int(CLOCKS_PER_SEC);
+  define_const(global_env, "*runtime-ticks-per-second*", clocks_per_sec);
 }

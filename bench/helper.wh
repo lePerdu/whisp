@@ -1,0 +1,106 @@
+(def! *all-benchmarks* (atom nil))
+(def! *bench-group-prefix* "")
+
+(def! *benchmark-default-iters* 100)
+
+(defrecord! <benchmark>
+  make-benchmark
+  benchmark?
+  (name benchmark-name)
+  (iters benchmark-iters)
+  (func benchmark-func))
+
+(defmacro! defbenchgroup! (name . body)
+  (let ((label (->string name)))
+    `(let
+      ((*bench-group-prefix*
+        (string-concat *bench-group-prefix* ~label " > ")))
+      (do ~@body))))
+
+(defmacro! defbench! (name . body)
+  (let* ((label (->string name)) (bind-name (gensym label)))
+    `(let ((~bind-name (fn-named ~name () ~@body)))
+      (reset! *all-benchmarks*
+        (cons
+          (make-benchmark
+            (string-concat *bench-group-prefix* ~label)
+            ;; TODO: Make customizeable for longer tasks
+            *benchmark-default-iters*
+            ~bind-name)
+          @*all-benchmarks*)))))
+
+(defrecord! <bench-result>
+  make-bench-result
+  bench-result?
+  (bench bench-result-bench)
+  (ticks bench-result-ticks))
+
+(defrecord! <bench-error>
+  make-bench-error
+  bench-error?
+  (bench bench-error-bench)
+  (error bench-error-error)
+  (backtract bench-error-backtrace))
+
+(defn! run-n-times (func n)
+  (when (int> n 0)
+    (func)
+    (run-n-times func (dec n))))
+
+(defn! run-benchmark (bench)
+  (print "RUNNING" (benchmark-name bench) "... ")
+  (flush-output-port)
+  (guard
+    (err
+      (else
+        (println "ERROR")
+        (make-bench-error bench err (backtrace))))
+    (let ((start-time (runtime)))
+      ;; TODO: Time each run individually
+      ;; TODO: Compute stddev
+      (run-n-times (benchmark-func bench) *benchmark-default-iters*)
+      (let ((end-time (runtime)))
+        (println "DONE")
+        (make-bench-result bench (int- end-time start-time))))))
+
+(defn! runtime->string (result)
+  (let*
+      ((time (bench-result-ticks result))
+       (iters (benchmark-iters (bench-result-bench result)))
+       (avg-sec (/ (real time) *runtime-ticks-per-second* iters)))
+    (cond
+      ((>= avg-sec 1) (string-concat (->string avg-sec) " s"))
+      ((>= avg-sec 0.001) (string-concat (->string (* avg-sec 1000)) " ms"))
+      (else (string-concat (->string (* avg-sec 1000000)) " us")))))
+
+(defn! run-all-benchmarks ()
+  (let*
+    ((benches-in-order (reverse @*all-benchmarks*))
+     (all-runs (map run-benchmark benches-in-order))
+     (total-count (count all-runs))
+     (all-result (filter bench-result? all-runs))
+     (result-count (count all-result))
+     (all-errors (filter bench-error? all-runs))
+     (error-count (count all-errors)))
+    (newline)
+    (println "BENCHMARKS RAN:" total-count)
+    (newline)
+
+    (for-each
+      (fn (result)
+        (println
+          (benchmark-name (bench-result-bench result))
+          ":"
+          (runtime->string result)))
+      all-result)
+
+    (when (int>= error-count 0)
+      (newline)
+      (println "ERRORS:" error-count)
+      (for-each
+        (fn (error)
+          (println (benchmark-name (bench-error-bench error)) ":")
+          (println (exception->string (bench-error-error error)))
+          (print-backtrace (bench-error-backtrace error))
+          (println))
+        all-errors))))

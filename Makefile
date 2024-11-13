@@ -10,6 +10,9 @@ debug:
 test:
 	$(MAKE) -f debug.mk $@
 
+bench:
+	$(MAKE) -f release.mk $@
+
 configure:
 	$(MAKE) -f release.mk $@
 
@@ -26,4 +29,4 @@ clean:
 	$(MAKE) -f debug.mk $@
 	$(MAKE) -f release.mk $@
 
-.PHONY: all run debug test configure build-install install uninstall clean
+.PHONY: all run debug test bench configure build-install install uninstall clean

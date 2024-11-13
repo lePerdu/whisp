@@ -1,0 +1,12 @@
+(load "helper.wh")
+
+;; This has to be in a separate file, because macros from helper.wh aren't
+;; available in this file since this file was compiled before importing
+;; TODO: Fix this
+(load "noop.wh")
+(load "list.wh")
+(load "array.wh")
+(load "vector.wh")
+(load "hash-table.wh")
+
+(run-all-benchmarks)

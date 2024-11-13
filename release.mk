@@ -26,4 +26,9 @@ uninstall:
 	$(RM) $(EXEC_INSTALL)
 	$(RM) -r $(LIB_INSTALL)
 
-.PHONY: install configure uninstall
+# Use local lib folder so that benchmarks can be run with optimizations without
+# installing globally
+bench: $(EXEC)
+	WHISP_LIB_DIR=./lib eval $< bench/all.wh
+
+.PHONY: install configure uninstall bench

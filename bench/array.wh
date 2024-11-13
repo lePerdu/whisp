@@ -1,0 +1,37 @@
+(defbenchgroup! array
+  (defn! array-repeat (x n)
+    (let ((arr (make-array n)))
+      (for ((i 0 (inc i)))
+          ((int>= i n) arr)
+        (array-set! arr i x))))
+
+  (defbenchgroup! create
+    (defbench! empty
+      (make-array 0))
+    (defbench! singleton
+      (array 1))
+    (defbench! length-10
+      (array 0 1 2 3 4 5 6 7 8 9))
+
+    (defbench! length-1000
+      (array-repeat 1 1000))
+    (defbench! length-10000
+      (array-repeat 1 10000)))
+
+  (defbenchgroup! iter
+    (def! empty (make-array 0))
+    (def! singleton (array 1))
+    (def! length10 (array 0 1 2 3 4 5 6 7 8 9))
+    (def! length1000 (array-repeat 1 1000))
+    (def! length10000 (array-repeat 1 10000))
+
+    (defbench! empty
+      (array-for-each identity empty))
+    (defbench! singleton
+      (array-for-each identity singleton))
+    (defbench! length-10
+      (array-for-each identity length10))
+    (defbench! length-1000
+      (array-for-each identity length1000))
+    (defbench! length-10000
+      (array-for-each identity length10000))))
