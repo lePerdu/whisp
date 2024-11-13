@@ -56,10 +56,10 @@
 
 (def-mutable-record! <hash-entry>
   _make-hash-entry
-  _hash-entry?
-  (hash _he-hash _he-set-hash!)
-  (key _he-key _he-set-key!)
-  (value _he-value _he-set-value!))
+  hash-entry?
+  (hash _hash-entry-hash _hash-entry-set-hash!)
+  (key hash-entry-key _hash-entry-set-key!)
+  (value hash-entry-value hash-entry-set-value!))
 
 (def! *hash-table-min-capacity* 8)
 (def! *hash-table-default-capacity* 8)
@@ -118,20 +118,20 @@
 (defn! _ht-get-bucket (ht hash)
   (array-get (_ht-data ht) (_ht-bucket-index ht hash)))
 
-(defn! _he-matches (ht entry hash key)
+(defn! _hash-entry-matches (ht entry hash key)
   (and
-    (= (_he-hash entry) hash)
-    ((hash-table-equal-fn ht) (_he-key entry) key)))
+    (= (_hash-entry-hash entry) hash)
+    ((hash-table-equal-fn ht) (hash-entry-key entry) key)))
 
 (def! *hash-table-tombstone* (gensym "hash-table-tombstone"))
 
-(defn! _he-mark-deleted (entry)
-  (_he-set-hash! entry 0)
-  (_he-set-key! entry *hash-table-tombstone*))
+(defn! _hash-entry-mark-deleted (entry)
+  (_hash-entry-set-hash! entry 0)
+  (_hash-entry-set-key! entry *hash-table-tombstone*))
 
-(defn! _he-occupied? (entry)
+(defn! _hash-entry-occupied? (entry)
   (not
-    (or (null? entry) (= (_he-key entry) *hash-table-tombstone*))))
+    (or (null? entry) (= (hash-entry-key entry) *hash-table-tombstone*))))
 
 (defn! hash-table-contains? (ht key)
   (not
@@ -140,7 +140,7 @@
 (defn! hash-table-get (ht key default)
   (let ((hash (_ht-hash ht key)))
     (let-if (entry (_ht-find-entry ht hash key))
-      (_he-value entry)
+      (hash-entry-value entry)
       default)))
 
 (defn! _ht-find-entry (ht hash key)
@@ -152,7 +152,7 @@
       (let ((entry (array-get data index)))
         (cond
           ((null? entry) nil)
-          ((_he-matches ht entry hash key) entry)
+          ((_hash-entry-matches ht entry hash key) entry)
           (else
             (let ((new-index (rem (inc index) capacity)))
               (if (= new-index start-index)
@@ -165,8 +165,8 @@
 (defn! hash-table-update! (ht key updater default)
   (let ((hash (_ht-hash ht key)))
     (let-if (entry (_ht-find-entry ht hash key))
-      (_he-set-value! entry
-        (updater (_he-value entry)))
+      (hash-entry-set-value! entry
+        (updater (hash-entry-value entry)))
       (_ht-grow-and-insert! ht
         (_make-hash-entry hash key (updater default))))))
 
@@ -198,12 +198,12 @@
     (_ht-set-data! ht new-data)
     (array-for-each
       (fn (entry)
-        (if (_he-occupied? entry)
+        (if (_hash-entry-occupied? entry)
           (_ht-insert! ht entry)))
       old-data)))
 
 (defn! _ht-insert! (ht entry)
-  (let ((index (_ht-find-open-index ht (_he-hash entry))))
+  (let ((index (_ht-find-open-index ht (_hash-entry-hash entry))))
     (array-set! (_ht-data ht) index entry)))
 
 (defn! _ht-find-open-index (ht hash)
@@ -212,7 +212,7 @@
      (capacity (array-length data))
      (start-index (_ht-bucket-index ht hash)))
     (let-named loop ((index start-index))
-      (if (not (_he-occupied? (array-get data index)))
+      (if (not (_hash-entry-occupied? (array-get data index)))
         index
         (let ((new-index (rem (inc index) capacity)))
           (if (= new-index start-index)
@@ -223,22 +223,38 @@
   (let ((hash (_ht-hash ht key)))
     (let-if (entry (_ht-find-entry ht hash key))
       (do
-        (_he-mark-deleted entry)
+        (_hash-entry-mark-deleted entry)
         (_ht-set-count! ht (dec (hash-table-count ht)))))))
+
+(defn! hash-table-for-each-entry (f ht)
+  (array-for-each
+    (fn (entry)
+      (if (_hash-entry-occupied? entry)
+        (f entry)))
+    (_ht-data ht)))
 
 (defn! hash-table-for-each (f ht)
   (array-for-each
     (fn (entry)
-      (if (_he-occupied? entry)
-        (f (_he-key entry) (_he-value entry))))
+      (if (_hash-entry-occupied? entry)
+        (f (hash-entry-key entry) (hash-entry-value entry))))
+    (_ht-data ht)))
+
+(defn! hash-table-fold-entries (init f ht)
+  (array-foldl
+    init
+    (fn (acc entry)
+      (if (_hash-entry-occupied? entry)
+        (f acc entry)
+        acc))
     (_ht-data ht)))
 
 (defn! hash-table-fold (init f ht)
   (array-foldl
     init
     (fn (acc entry)
-      (if (_he-occupied? entry)
-        (f acc (_he-key entry) (_he-value entry))
+      (if (_hash-entry-occupied? entry)
+        (f acc (hash-entry-key entry) (hash-entry-value entry))
         acc))
     (_ht-data ht)))
 
