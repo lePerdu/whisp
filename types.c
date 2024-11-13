@@ -288,25 +288,26 @@ static const struct lisp_vtable GC_STR_BUILDER_VTABLE = {
 
 #define STR_BUILDER_INIT_CAP 8
 
-static void str_builder_init_base(struct str_builder *b, size_t capacity) {
-  // Include null byte
-  b->capacity = capacity + 1;
-  b->buf = lisp_string_alloc(b->capacity);
-}
-
 void str_builder_init(struct str_builder *b) {
   str_builder_init_cap(b, STR_BUILDER_INIT_CAP);
 }
 
 void str_builder_init_cap(struct str_builder *b, size_t capacity) {
   b->header.vt = &STACK_STR_BUILDER_VTABLE;
-  str_builder_init_base(b, capacity);
+  // Include null byte
+  b->capacity = capacity + 1;
+  b->buf = lisp_string_alloc(b->capacity);
   gc_push_root_obj(b);
 }
 
 struct str_builder *str_builder_create() {
+  size_t capacity = STR_BUILDER_INIT_CAP + 1;
+  struct lisp_string *buf = lisp_string_alloc(capacity);
+  gc_push_root_obj(buf);
   struct str_builder *b = lisp_obj_alloc(&GC_STR_BUILDER_VTABLE, sizeof(*b));
-  str_builder_init_base(b, STR_BUILDER_INIT_CAP);
+  b->capacity = capacity;
+  b->buf = buf;
+  gc_pop_root_expect_obj(buf);
   return b;
 }
 
