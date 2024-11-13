@@ -982,7 +982,7 @@ void define_builtins(struct lisp_env *global_env) {
                lisp_val_from_obj(lisp_output_file_port_create(stderr)));
 
   struct lisp_val library_path =
-      lisp_val_from_obj(lisp_string_create_cstr(WHISP_LIB_DIR));
+      lisp_val_from_obj(lisp_string_create_cstr(get_whisp_lib_dir()));
   define_const(global_env, "*library-path*", library_path);
 
   // TODO Configure based on the system

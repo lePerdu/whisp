@@ -10,6 +10,7 @@ SRCS = \
 	main.c \
 	bytecode.c \
 	compiler.c \
+	config.c \
 	core.c \
 	env.c \
 	eval.c \

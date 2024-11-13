@@ -1,6 +1,8 @@
 #ifndef CONFIG_H_
 #define CONFIG_H_
 
-#define WHISP_LIB_DIR "%WHISP_LIB_DIR%"
+#define WHISP_DEFAULT_LIB_DIR "%WHISP_LIB_DIR%"
+
+const char *get_whisp_lib_dir(void);
 
 #endif

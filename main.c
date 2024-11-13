@@ -89,11 +89,13 @@ static struct lisp_vm *setup_vm(int argc, char **argv) {
   return vm;
 }
 
-#define STARTUP_FILENAME (WHISP_LIB_DIR "/boot.wh")
+#define STARTUP_FILENAME "boot.wh"
 
-static enum eval_status load_file(struct lisp_vm *vm, const char *filename) {
-  struct lisp_closure *compiled =
-      compile_file(vm, lisp_string_create_cstr(filename));
+static enum eval_status load_file(struct lisp_vm *vm,
+                                  struct lisp_string *filename) {
+  gc_push_root_obj(filename);
+  struct lisp_closure *compiled = compile_file(vm, filename);
+  gc_pop_root_expect_obj(filename);
   if (compiled == NULL) {
     return EV_EXCEPTION;
   }
@@ -101,7 +103,7 @@ static enum eval_status load_file(struct lisp_vm *vm, const char *filename) {
   return eval_closure(vm, compiled);
 }
 
-static void run_file(struct lisp_vm *vm, const char *filename) {
+static void run_file(struct lisp_vm *vm, struct lisp_string *filename) {
   enum eval_status res = load_file(vm, filename);
   if (res == EV_EXCEPTION) {
     struct lisp_string *printed_exc =
@@ -115,7 +117,13 @@ static void run_file(struct lisp_vm *vm, const char *filename) {
 }
 
 static void load_startup_file(struct lisp_vm *vm) {
-  run_file(vm, STARTUP_FILENAME);
+  struct str_builder b;
+  str_builder_init(&b);
+  str_builder_concat_cstr(&b, get_whisp_lib_dir());
+  str_builder_append(&b, '/');
+  str_builder_concat_cstr(&b, STARTUP_FILENAME);
+
+  run_file(vm, str_build(&b));
 }
 
 static void rep(struct lisp_vm *vm, struct lisp_string *input) {
