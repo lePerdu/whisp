@@ -49,6 +49,30 @@
       ((pred (string-get s end-index)) end-index)
       (else (string-rindex-helper s pred start end-index)))))
 
+(defn! char-inc (c n)
+  (int->char (int+ (char->int c) n)))
+(defn! char-dec (c n)
+  (int->char (int+ (char->int c) n)))
+(defn! char- (c1 c2)
+  (int- (char->int c1) (char->int c2)))
+
+(defn! char-upper? (c) (and (char<= #\A c) (char<= c #\Z)))
+(defn! char-lower? (c) (and (char<= #\a c) (char<= c #\z)))
+
+(def! *char-lower-minus-upper* (char- #\a #\A))
+(defn! char-lower (c)
+  (if (char-upper? c)
+    (char-inc c *char-lower-minus-upper*)
+    c))
+(defn! char-upper (c)
+  (if (char-lower? c)
+    (char-dec c *char-lower-minus-upper*)
+    c))
+
+(defn! char-alpha? (c) (or (char-upper? c) (char-lower? c)))
+(defn! char-digit? (c) (and (char<= #\0 c) (char<= c #\9)))
+(defn! char-alphanum? (c) (or (char-alpha? c) (char-digit? c)))
+
 (defn! char-blank? (c)
   (or
     (char= c #\space)
