@@ -65,7 +65,7 @@
 (def! *hash-table-default-capacity* 8)
 
 ;; Round capacity to the nearest power of 2
-(defn! round-capacity (orig)
+(defn! _round-capacity (orig)
   ; TODO Is there some bit magic to make this more efficient?
   (for
     ((pow2 *hash-table-min-capacity* (bitshift pow2 1)))
@@ -78,7 +78,7 @@
   ((hash-fn equal-fn)
     (_ht-make-with-capacity hash-fn equal-fn *hash-table-default-capacity*))
   ((hash-fn equal-fn init-capacity)
-    (_ht-make-with-capacity hash-fn equal-fn init-capacity)))
+    (_ht-make-with-capacity hash-fn equal-fn (_round-capacity init-capacity))))
 
 (defn! make-=-hash-table opt-capacity
   (apply* make-hash-table =-hash = opt-capacity))
@@ -87,7 +87,7 @@
   (apply* make-hash-table equal-hash equal? opt-capacity))
 
 (defn! make-==-hash-table opt-capacity
-  (apply* make-hash-tabel ==-hash == opt-capacity))
+  (apply* make-hash-table ==-hash == opt-capacity))
 
 (defn! hash-table-capacity (ht)
   (array-length (_ht-data ht)))
