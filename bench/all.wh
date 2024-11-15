@@ -2,6 +2,7 @@
 
 (defbench! no-op)
 
+(load "func.wh")
 (load "list.wh")
 (load "array.wh")
 (load "vector.wh")

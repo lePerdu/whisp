@@ -1,0 +1,64 @@
+(defbenchgroup! func
+  (defn! noop ())
+  (defn! const-return () 42)
+
+  (def! 100-args (repeat 1 100))
+  ; TODO: This doesn't work if it's defined in the 'nary group
+  (def! 1000-args (repeat 1 1000))
+
+  (defn! 1-arg (a))
+  (defn! 5-arg (a b c d e))
+  (defn! 10-arg (a b c d e f g h i j))
+  (def! 100-arg
+    (eval `(fn ~(map gensym 100-args))))
+  (defn! nary args)
+  ; Use a macro to generate code as if written by hand
+  (defmacro! gen-call-with-100-args (fn-sym)
+    (cons fn-sym (repeat 1 100)))
+
+  (defbench! call-noop (noop))
+  (defbench! call-const-return (const-return))
+  (defbench! call-1-arg (1-arg 1))
+  (defbench! call-5-arg (5-arg 1 2 3 4 5))
+  (defbench! call-10-arg (10-arg 1 2 3 4 5 6 7 8 9 10))
+  (defbench! call-100-arg (gen-call-with-100-args 100-arg))
+
+  (defbenchgroup! call-nary-with-fixed-arguments
+    (defbench! 0-args (nary))
+    (defbench! 1-arg (nary 1))
+    (defbench! 5-arg (nary 1 2 3 4 5))
+    (defbench! 10-arg (nary 1 2 3 4 5 6 7 8 9 10))
+    (defbench! 100-arg (gen-call-with-100-args nary)))
+
+  (defbenchgroup! apply
+    (defbenchgroup! fixed
+      (defbench! call-0-arg (apply noop nil))
+      (defbench! call-1-arg (apply 1-arg '(1)))
+      (defbench! call-5-arg (apply 5-arg '(1 2 3 4 5)))
+      (defbench! call-10-arg (apply 10-arg '(1 2 3 4 5 6 7 8 9 10)))
+      (defbench! call-100-arg (apply 100-arg 100-args)))
+    (defbenchgroup! nary
+      (defbench! call-0-arg (apply nary nil))
+      (defbench! call-1-arg (apply nary '(1)))
+      (defbench! call-5-arg (apply nary '(1 2 3 4 5)))
+      (defbench! call-10-arg (apply nary '(1 2 3 4 5 6 7 8 9 10)))
+      (defbench! call-100-arg (apply 100-arg 100-args))
+      ; TODO: These work slightly differently because they capture the args
+      ; variables instead of having inline constant references. Maybe the code
+      ; can be generated via a macro to have the list built into the function?
+      (defbench! call-100-arg (apply nary 100-args)))
+      (defbench! call-1000-arg (apply nary 1000-args)))
+
+  (defbenchgroup! call-composed
+    (def! compose-2-1-arg (compose 1-arg 1-arg))
+    (def! 10-1-arg (repeat 1-arg 10))
+    (def! compose-10-1-arg (apply compose 10-1-arg))
+    (def! 100-1-arg (repeat 1-arg 100))
+    (def! compose-100-1-arg (apply compose 100-1-arg))
+    (def! 1000-1-arg (repeat 1-arg 1000))
+    (def! compose-1000-1-arg (apply compose 1000-1-arg))
+
+    (defbench! 2-levels (compose-2-1-arg 1))
+    (defbench! 10-levels (compose-10-1-arg 1))
+    (defbench! 100-levels (compose-100-1-arg 1))
+    (defbench! 1000-levels (compose-1000-1-arg 1))))
