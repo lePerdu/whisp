@@ -1,0 +1,27 @@
+; TODO Is there a good way to make the default value track (current-directory)
+; if it changes?
+(def! load-path (make-parameter (current-directory)))
+
+(defn! resolve-load-path (path)
+  (if (path-absolute? path)
+    path
+    (path-join (load-path) path)))
+
+;; Imperative load function for use in REPL
+;; In files, include is usually better since it can import macro definitions
+(defn! load (filename)
+  (let*
+    ((full-path (resolve-load-path filename))
+     (new-load-path (path-directory full-path)))
+    (parameterize ((load-path new-load-path))
+      ((compile-file full-path)))))
+
+;; Macro version of load which can import macro definitions
+(defmacro! include (filename)
+  ;; TODO: Update load-path inside included content
+  ;; Might need tighter compiler integration
+  (let*
+    ; Figure out paths and do IO at expand time
+    ((full-path (resolve-load-path filename))
+     (contents (parse-file full-path)))
+    `(do ~@contents)))

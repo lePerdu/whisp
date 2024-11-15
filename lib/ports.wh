@@ -207,7 +207,7 @@
   (apply print args)
   (newline))
 
-;; Misc file operations
+;; Path operations
 
 (defn! path-join parts
   (apply string-concat
@@ -222,16 +222,13 @@
     ; Full path if there is no slash
     path))
 
-; TODO Is there a good way to make the default value track (current-directory)
-; if it changes?
-(def! load-path (make-parameter (current-directory)))
+(defn! path-absolute? (path)
+  (and (not (string-null? path)) (path-separator? (string-get path 0))))
 
-(defn! load (filename)
-  (let*
-    ((full-path (path-join (load-path) filename))
-     (new-load-path (path-directory full-path)))
-    (parameterize ((load-path new-load-path))
-      ((compile-file full-path)))))
+(defn! path-relative? (path)
+  (not (path-absolute? path)))
+
+;; Exit functions
 
 (defn! convert-exit-status (status)
   (cond

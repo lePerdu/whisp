@@ -92,6 +92,29 @@ struct lisp_string *read_line(FILE *stream) {
   }
 }
 
+struct parse_output *parse_file(struct lisp_vm *vm, struct lisp_string *filename) {
+  gc_push_root_obj(filename);
+  struct lisp_string *contents = read_file(vm, lisp_string_as_cstr(filename));
+  gc_pop_root_expect_obj(filename);
+
+  if (contents == NULL) {
+    // Exception is set by read_file
+    return NULL;
+  }
+
+  gc_push_root_obj(contents);
+  struct parse_output *parsed =
+      read_str_many(filename, lisp_string_as_cstr(contents));
+  gc_pop_root_expect_obj(contents);
+
+  if (parsed->status == P_ERROR) {
+    vm_raise_exception(vm, lisp_val_from_obj(parse_error_format(parsed)));
+    return NULL;
+  }
+
+  return parsed;
+}
+
 struct lisp_closure *compile_file(struct lisp_vm *vm,
                                   struct lisp_string *filename) {
   gc_push_root_obj(filename);

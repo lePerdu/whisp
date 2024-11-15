@@ -518,6 +518,18 @@ DEF_BUILTIN(core_current_directory) {
   BUILTIN_RETURN(lisp_val_from_obj(get_current_directory()));
 }
 
+DEF_BUILTIN(core_parse_file) {
+  REF_OBJ_ARG(struct lisp_string, filename, lisp_val_is_string, 0);
+
+  struct parse_output *parsed = parse_file(vm, filename);
+  if (parsed == NULL) {
+    return EV_EXCEPTION;
+  }
+
+  CLEAR_ARGS(1);
+  BUILTIN_RETURN(parsed->datum);
+}
+
 DEF_BUILTIN(core_compile_file) {
   REF_OBJ_ARG(struct lisp_string, filename, lisp_val_is_string, 0);
 
@@ -833,6 +845,7 @@ static const struct builtin_config builtins[] = {
     [INTRINSIC_TIME_MS] = {"time-ms", core_time_ms, 0},
     [INTRINSIC_SLEEP] = {"sleep", core_sleep, 1},
 
+    [INTRINSIC_PARSE_FILE] = {"parse-file", core_parse_file, 1},
     [INTRINSIC_COMPILE_FILE] = {"compile-file", core_compile_file, 1},
     [INTRINSIC_COMPILE_STRING] = {"compile-string", core_compile_string, 2},
 

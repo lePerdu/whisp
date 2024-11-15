@@ -13,6 +13,11 @@
 struct lisp_string *read_file(struct lisp_vm *vm, const char *filename);
 
 /**
+ * Read and parse contents of a file.
+ */
+struct parse_output *parse_file(struct lisp_vm *vm, struct lisp_string *filename);
+
+/**
  * Compile the contents of a file into an executable closure.
  */
 struct lisp_closure *compile_file(struct lisp_vm *vm,

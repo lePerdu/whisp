@@ -41,6 +41,7 @@ WHISP_LIB_SRC_FILES = \
 	list.wh \
 	macros.wh \
 	math.wh \
+	module.wh \
 	ports.wh \
 	ratio.wh \
 	record.wh \

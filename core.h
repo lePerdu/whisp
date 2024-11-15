@@ -130,8 +130,12 @@ enum intrinsic_id {
   INTRINSIC_ABORT,
   INTRINSIC_EXIT,
 
+  // Helpers for bootstrapping
+  // These can probably be removed/changed once there is a self-hosted compiler
+  INTRINSIC_PARSE_FILE,
   INTRINSIC_COMPILE_FILE,
   INTRINSIC_COMPILE_STRING,
+
   INTRINSIC_DISASSEMBLE,
   INTRINSIC_GET_MACRO_FN,
 
