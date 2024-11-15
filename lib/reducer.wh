@@ -1,0 +1,390 @@
+(defrecord! <reducer>
+  make-reducer
+  reducer?
+  (step reducer-step-fn reducer-with-step-fn)
+  (complete reducer-complete-fn reducer-with-complete-fn))
+
+(defrecord! <reduced>
+  reduced
+  reduced?
+  (value reduced-value))
+
+(defn! unreduced (r)
+  (if (reduced? r)
+    (reduced-value r)
+    r))
+
+(defn! ensure-reduced (r)
+  (if (reduced? r)
+    r
+    (reduced r)))
+
+(defn! reducer-step (r result input)
+  ((reducer-step-fn r) result input))
+
+(defn! reducer-complete (r result)
+  ((reducer-complete-fn r) result))
+
+(defn! r/map (f)
+  (fn (red)
+    (reducer-with-step-fn red
+      (fn (result input) (reducer-step red result (f input))))))
+
+(defn! r/filter (pred)
+  (fn (red)
+    (reducer-with-step-fn red
+      (fn (result input)
+        (if (pred input)
+          (reducer-step red result input)
+          result)))))
+
+(defn! r/take (n)
+  (fn (red)
+    (let ((pos (atom 0)))
+      (reducer-with-step-fn red
+        (fn (result input)
+          (if (int<= (swap! pos inc) n)
+            (reducer-step red result input)
+            (reduced result)))))))
+
+(defn! r/take-while (pred)
+  (fn (red)
+    (reducer-with-step-fn red
+      (fn (result input)
+        (if (pred input)
+          (reducer-step red result input)
+          (reduced result))))))
+
+(defn! r/drop (n)
+  (fn (red)
+    (let ((pos (atom 0)))
+      (reducer-with-step-fn red
+        (fn (result input)
+          (if (int>= @pos n)
+            (reducer-step red result input)
+            (do
+              (swap! pos inc)
+              result)))))))
+
+(defn! r/drop-while (pred)
+  (fn (red)
+    (reducer-with-step-fn red
+      (fn (result input)
+        (if (pred input)
+          result
+          (reducer-step red result input))))))
+
+(def! _dedup-tombstone (gensym "dedup-tombstone"))
+(defn! r/dedup-by (compare)
+  (fn (red)
+    (let ((prev (atom _dedup-tombstone)))
+      (reducer-with-step-fn red
+        (fn (result input)
+          (if (compare @prev input)
+            result
+            (do
+              (reset! prev input)
+              (reducer-step red result input))))))))
+
+(defn-case! r/dedup
+  (() (r/dedup-by =))
+  ((compare) (r/dedup-by compare)))
+
+;; Double-wrap the value so it can pass through 2 layers of r/transduce
+(defn! double-reduced (r)
+  (if (reduced? r)
+    (reduced r)
+    r))
+
+;; Concatenate a sequence of reducer functions (such as produced by r/list and
+;; r/range) into a single stream
+(defn! r/concat (red)
+  (reducer-with-step-fn red
+    (fn (result input)
+      (r/reduce
+        identity
+        (fn (inner-result inner-input)
+          (double-reduced
+            (reducer-step red inner-result inner-input)))
+        result
+        input))))
+
+; TODO Group into vectors or arrays?
+
+(def! _partition-init-state (cons 0 nil))
+(defn! r/partition (n)
+  (fn (red)
+    ; Store (length . group) to avoid re-computing length
+    (let ((state (atom _partition-init-state)))
+      (make-reducer
+        (fn (result input)
+          (let*
+            ((cur @state)
+             (prev-count (car cur))
+             (prev-group (cdr cur))
+             (count (inc prev-count))
+             (group (cons input prev-group)))
+            (if (int< count n)
+              (do
+                (reset! state (cons count group))
+                result)
+              (let ((next-result (reducer-step red result (reverse group))))
+                (reset! state _partition-init-state)
+                next-result))))
+        (fn (result)
+          (reducer-complete red
+            (let-if (group (cdr @state))
+              (unreduced (reducer-step red result (reverse group)))
+              result)))))))
+
+(defn! r/group-by (compare)
+  (fn (red)
+    (let ((group (atom nil)))
+      (make-reducer
+        (fn (result input)
+          (let ((cur @group))
+            (if (or (null? cur) (compare (car cur) input))
+              (do
+                (reset! group (cons input cur))
+                result)
+              (let ((next-result (reducer-step red result (reverse cur))))
+                ; Don't start a new group if the reduction is complete
+                (reset! group
+                  (if (reduced? next-result) nil (list input)))
+                next-result))))
+        (fn (result)
+          (reducer-complete red
+            (if (null? @group)
+              result
+              (unreduced
+                (reducer-step red result (reverse @group))))))))))
+
+(defn! r/interpose (sep)
+  (fn (red)
+    (let ((started (atom false)))
+      (r/completing
+        (fn (result input)
+          (if @started
+            (let ((sep-result (reducer-step red result sep)))
+              (if (reduced? sep-result)
+                (reduced-value sep-result)
+                (reducer-step red sep-result input)))
+            (do
+              (reset! started true)
+              (reducer-step red result input))))))))
+
+(defn! r/completing (f)
+  (make-reducer f identity))
+
+(defn! r/transduce (xform f init redux)
+  (let ((r (xform f)))
+    (reducer-complete r
+      (redux (reducer-step-fn r) init))))
+
+(defn! r/reduce (xform f init redux)
+  (r/transduce xform (r/completing f) init redux))
+
+(def! find-first-reducer
+  (r/completing
+    (fn (_result input) (reduced input))))
+
+(defn! r/first (xform default redux)
+  (r/transduce xform find-first-reducer default redux))
+
+(defn! r/for-each (xform f redux)
+  (r/transduce
+    xform
+    (r/completing (fn (_result input) (f input) nil))
+    nil
+    redux))
+
+(def! count-reducer
+  (r/completing
+    (fn (result _input) (inc result))))
+(defn! r/count (xform redux)
+  (r/transduce xform count-reducer 0 redux))
+
+(defn! r/empty (f init) init)
+
+(defn! range-reduce-loop (f acc value end step)
+  (if (int>= value end)
+    acc
+    (let ((result (f acc value)))
+      (if (reduced? result)
+        (reduced-value result)
+        (range-reduce-loop f result (int+ value step) end step)))))
+
+(defn-case! r/range
+  ((end) (fn (f init) (range-reduce-loop f init 0 end 1)))
+  ((start end) (fn (f init) (range-reduce-loop f init start end 1)))
+  ((start end step) (fn (f init) (range-reduce-loop f init start end step))))
+
+;; Returns a reducible made by applying xform to redux.
+;;
+;; Behaves like (r/list (r/into-list ...)), but does not create a temporary
+;; list. If the educiton is reduced multiple times, it will re-run the
+;; transformation chain each time.
+(defn! r/eduction (xform redux)
+  (fn (f init)
+    (r/reduce xform f init redux)))
+
+(defn! list-reduce-loop (f init l)
+  (if (null? l)
+    init
+    (let ((result (f init (car l))))
+      (if (reduced? result)
+        (reduced-value result)
+        (list-reduce-loop f result (cdr l))))))
+(defn! r/list (l) (fn (f init) (list-reduce-loop f init l)))
+
+(defn! list-reduce-right-loop (f init l)
+  (let/ec return
+    (let-named rec ((result init) (l l))
+      (if (null? l)
+        result
+        (let ((next-result (rec result (cdr l))))
+          (if (reduced? next-result)
+            (return (reduced-value next-result))
+            (f next-result (car l))))))))
+(defn! r/rev-list (l) (fn (f init) (list-reduce-right-loop f init l)))
+
+(defn! snoc (l x) (cons x l))
+(def! list-appender
+  (make-reducer snoc reverse))
+(defn! r/into-list (xform redux)
+  (r/transduce xform list-appender nil redux))
+
+(def! rev-list-appender (r/completing snoc))
+(defn! r/into-rev-list (xform redux)
+  (r/transduce xform rev-list-appender nil redux))
+
+(defmacro! def-linear-reducers!
+  (reduce-name reduce-right-name get-length get-index)
+  (let
+    ((f-sym (gensym))
+     (result-sym (gensym))
+     (coll-sym (gensym))
+     (len-sym (gensym))
+     (loop-sym (gensym))
+     (i-sym (gensym)))
+    `(do
+      (defn! ~reduce-name (~coll-sym)
+        (fn (~f-sym ~result-sym)
+          (let ((~len-sym (~get-length ~coll-sym)))
+            (let-named ~loop-sym ((~i-sym 0) (~result-sym ~result-sym))
+              (if (= ~i-sym (~get-length ~coll-sym))
+                ~result-sym
+                (let
+                  ((~result-sym
+                    (~f-sym ~result-sym (~get-index ~coll-sym ~i-sym))))
+                  (if (reduced? ~result-sym)
+                    (reduced-value ~result-sym)
+                    (~loop-sym (inc ~i-sym) ~result-sym))))))))
+      (defn! ~reduce-right-name (~coll-sym)
+        (fn (~f-sym ~result-sym)
+          (let-named ~loop-sym
+            ((~i-sym (~get-length ~coll-sym)) (~result-sym ~result-sym))
+            (if (= ~i-sym 0)
+              ~result-sym
+              (let*
+                ((~i-sym (dec ~i-sym))
+                 (~result-sym
+                  (~f-sym ~result-sym (~get-index ~coll-sym ~i-sym))))
+                (if (reduced? ~result-sym)
+                  (reduced-value ~result-sym)
+                  (~loop-sym ~i-sym ~result-sym))))))))))
+
+(def-linear-reducers! r/array r/rev-array array-length array-get)
+
+(def! array-appender
+  (make-reducer
+    (fn (result input) (array-builder-append! result input) result)
+    array-builder-build!))
+(defn! r/into-array (size-hint xform redux)
+  (r/transduce
+    xform
+    array-appender
+    (if (array-builder? size-hint)
+      size-hint
+      (make-array-builder size-hint))
+    redux))
+
+(def-linear-reducers! r/vector r/rev-vector vector-length vector-get)
+
+(def! r/completing-vector-append (r/completing vector-append))
+(defn-case! r/into-vector
+  ((xform redux) (r/transduce xform r/completing-vector-append empty-vector redux))
+  ((init xform redux) (r/transduce xform r/completing-vector-append init redux)))
+
+(def-linear-reducers! r/string r/rev-string string-count string-get)
+
+(defn! hash-table-reduce-loop (f init table)
+  (let/ec return
+    (hash-table-fold-entries
+      (fn (result entry)
+        (let ((next-result (f result entry)))
+          (if (reduced? next-result)
+            (return (reduced-value next-result))
+            next-result))))
+      init
+      table))
+(defn! r/hash-table-entries (table)
+  (fn (f init) (hash-table-reduce-loop f init table)))
+(defn! r/hash-table-keys (table)
+  (fn (f init)
+    (hash-table-reduce-loop
+      (fn (entry) (f (hash-entry-key entry)))
+      init
+      table)))
+(defn! r/hash-table-values (table)
+  (fn (f init)
+    (hash-table-reduce-loop
+      (fn (entry) (f (hash-entry-value entry)))
+      init
+      table)))
+(defn! r/hash-table-pairs (table)
+  (fn (f init)
+    (hash-table-reduce-loop
+      (fn (entry) (f (cons (hash-entry-key entry) (hash-entry-value entry))))
+      init
+      table)))
+
+(defn! r/into-hash-table (init-table xform to-key to-value redux)
+  (r/reduce
+    xform
+    (fn (result input)
+      (hash-table-set! result (to-key input) (to-value input))
+      result)
+    init-table
+    redux))
+
+(def! char-appender
+  (make-reducer
+    (fn (output-string ch)
+      (output-string-write-char output-string ch)
+      output-string)
+    output-string-get))
+
+(defn! r/into-string (xform redux)
+  (r/transduce xform char-appender (make-output-string) redux))
+
+(def! string-appender
+  (make-reducer
+    (fn (output-string str)
+      (output-string-write-string output-string str)
+      output-string)
+    output-string-get))
+
+(defn! r/concat-into-string (xform redux)
+  (r/transduce xform string-appender (make-output-string) redux))
+
+(defn! input-port-lines-reduce-loop (f init port)
+  (let ((line (input-port-read-line port)))
+    (if (eof-object? line)
+      init
+      (let ((result (f init line)))
+        (if (reduced? result)
+          (reduced-value result)
+          (input-port-lines-reduce-loop f result port))))))
+(defn! r/input-port-lines (port)
+  (fn (f init) (input-port-lines-reduce-loop f init port)))

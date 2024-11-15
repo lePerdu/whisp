@@ -45,6 +45,7 @@ WHISP_LIB_SRC_FILES = \
 	ports.wh \
 	ratio.wh \
 	record.wh \
+	reducer.wh \
 	repl.wh \
 	startup.wh \
 	stream.wh \

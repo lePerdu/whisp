@@ -30,6 +30,7 @@
 (load-library "ports.wh")
 (load-library "exception.wh")
 (load-library "module.wh")
+(load-library "reducer.wh")
 (load-library "stream.wh")
 (load-library "repl.wh")
 (load-library "startup.wh")
