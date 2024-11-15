@@ -9,6 +9,7 @@
 (defgeneric! input-port-read-char (port))
 (defgeneric! input-port-peek-char (port))
 (defgeneric! input-port-read-string (port n))
+(defgeneric! input-port-read-string-all (port))
 (defgeneric! input-port-read-line (port))
 (defgeneric! close-input-port (port))
 
@@ -18,6 +19,22 @@
 (defgeneric! output-port-write-string (port s))
 (defgeneric! output-port-flush (port))
 (defgeneric! close-output-port (port))
+
+;; Default implementation for read-string-all via read-string
+(def! *read-string-all-chunk-size* 4096)
+(defmethod! input-port-read-string-all (port)
+  (let ((buffer (make-output-string)))
+    (let-named loop ()
+      ; TODO: Make default impl (input-port-read-string port max-int)?
+      ; TODO: Method to read directly from file into output-string
+      ; to avoid re-allocating each chunk
+      ; TODO: Grow read size each time?
+      (let ((chunk (input-port-read-string port *read-string-all-chunk-size*)))
+        (if (eof-object? chunk)
+          (output-string-get buffer)
+          (do
+            (output-string-write-string buffer chunk)
+            (loop)))))))
 
 ;; File I/O
 
@@ -83,6 +100,16 @@
      (read-end (min end (int+ pos n)))
      (str (substring buf pos read-end)))
     (_set-input-string-pos! port read-end)
+    (if (string-null? str)
+      (eof-object)
+      str)))
+(defmethod! input-port-read-string-all ((input-string? port))
+  (let*
+    ((pos (_input-string-pos port))
+     (buf (_input-string-buffer port))
+     (end (string-count buf))
+     (str (substring buf pos end)))
+    (_set-input-string-pos! port end)
     (if (string-null? str)
       (eof-object)
       str)))
