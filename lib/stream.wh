@@ -1,0 +1,107 @@
+(def-mutable-record! <promise-state>
+  _make-promise-state
+  _promise-state?
+  (done? _promise-state-done? _set-promise-state-done?!)
+  (value _promise-state-value _set-promise-state-value!))
+
+(defn! promise? (p)
+  (and (atom? p) (_promise-state? @p)))
+
+(defn! make-promise (value)
+  (if (promise? value)
+    value
+    (atom (_make-promise-state true value))))
+
+(defn! _promise-link! (outer inner)
+  (let ((outer-state @outer) (inner-state @inner))
+    (_set-promise-state-done?! outer-state (_promise-state-done? inner-state))
+    (_set-promise-state-value! outer-state (_promise-state-value inner-state))
+    (reset! inner outer-state)))
+
+(defn! force (promise)
+  (let*
+    ((state @promise)
+     (done? (_promise-state-done? state))
+     (value (_promise-state-value state)))
+    (if done?
+      value
+      (let* ((inner (value)) (state* @promise))
+        ; let* to ensure execution order
+        (if (not (_promise-state-done? state*))
+          (let ((inner-state @inner))
+            ; TODO: Figure out why (reset! outer inner-state) doesn't work
+            (_set-promise-state-done?! state* (_promise-state-done? inner-state))
+            (_set-promise-state-value! state* (_promise-state-value inner-state))
+            (reset! inner state*)))
+        (force promise)))))
+
+(defmacro! delay-force (expr)
+  `(atom (_make-promise-state false (fn () ~expr))))
+
+(defmacro! delay (expr)
+  `(delay-force (make-promise ~expr)))
+
+(def! stream-nil (make-promise nil))
+(defmacro! stream-cons (a b) `(delay (cons ~a ~b)))
+
+(defn! head (stream) (car (force stream)))
+(defn! tail (stream) (cdr (force stream)))
+
+(defn! stream-filter (p? s)
+  (delay-force
+    (let-if-cons ((h . t) (force s))
+      (if (p? h)
+        (stream-cons h (stream-filter p? t))
+        (stream-filter p? t))
+      stream-nil)))
+
+(defn! stream-take (n s)
+  (if (int<= n 0)
+    stream-nil
+    (delay-force
+      (let-if-cons ((h . t) (force s))
+        (stream-cons h (stream-take (dec n) t))
+        stream-nil))))
+
+(defn! stream-drop (n s)
+  (if (int<= n 0)
+    s
+    (delay-force
+      (let-if-cons ((h . t) (force s))
+        (stream-drop (dec n) t)
+        stream-nil))))
+
+(defn! stream-map (f s)
+  (delay-force
+    (let-if-cons ((h . t) (force s))
+      (stream-cons (f h) (stream-map f t))
+      stream-nil)))
+
+(defn! stream-reduce (f init s)
+  (let-if-cons ((h . t) (force s))
+    (let ((result (f init h)))
+      (if (reduced? result)
+        result
+        (stream-reduce f result t)))
+    init))
+
+(defn! r/stream (s) (fn (f init) (stream-reduce f init s)))
+
+(defn! stream-repeat (x)
+  (stream-cons x (stream-repeat x)))
+
+(defn! stream-iter (f)
+  (stream-cons (f) (stream-iter f)))
+
+(defn! stream-generate (f init)
+  (delay
+    (let ((next (f init)))
+      (cons next (stream-generate f next)))))
+
+(defn! stream-ints (from)
+  (stream-cons from (stream-ints (inc from))))
+
+(defn! stream-nth (index s)
+  (if (int= index 0)
+    (head s)
+    (stream-nth (dec index) (tail s))))

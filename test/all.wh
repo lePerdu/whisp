@@ -17,5 +17,6 @@
 (load "fluid.wh")
 (load "exception.wh")
 (load "continuation.wh")
+(load "stream.wh")
 
 (run-all-tests)

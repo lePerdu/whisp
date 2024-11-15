@@ -1,0 +1,66 @@
+; Test cases taken from SRFI-45
+(defgroup! delay
+  (defgroup! memoization
+    (deftest! runs-once-when-forced-multiple
+      (def! called (atom 0))
+      (def! s (delay (do (reset! called (inc @called)) 1)))
+      (assert= 1 (force s))
+      (assert= 1 (force s))
+      (assert= 1 @called))
+
+    (deftest! runs-once-when-forced-multiple-times-in-same-expr
+      (def! called (atom 0))
+      (def! s (delay (do (reset! called (inc @called)) 1)))
+      (assert= 2 (+ (force s) (force s)))
+      (assert= 1 @called))
+
+    (deftest! runs-once-when-forced-multiple-nested-times
+      (def! called (atom 0))
+      (def! r (delay (do (reset! called (inc @called)) 1)))
+      (def! s (delay-force r))
+      (def! t (delay-force s))
+      (assert= 1 (force t))
+      (assert= 1 (force r))
+      (assert= 1 @called)))
+
+  (defgroup! reentrancy
+    (deftest! runs-once-when-forced-inside-self
+      (def! first? (atom true))
+      (def! f
+        (delay
+          (if @first?
+            (do
+              (reset! first? false)
+              (force f))
+            'second)))
+      (assert= 'second (force f)))
+
+    (deftest! runs-once-when-forced-inside-self-multiple-nested-times
+      (def! called (atom 0))
+      (def! p
+        (delay
+          (do
+            (reset! called (inc @called))
+            (if (int> @called @x)
+              @called
+              (force p)))))
+      (def! x (atom 5))
+      (assert= 6 (force p))
+      (reset! x 10)
+      (assert= 6 (force p)))
+
+    (deftest! runs-once-when-forced-inside-self-at-non-tail-position
+      (def! called (atom 5))
+      (def! p
+        (delay
+          (if (int<= @called 0)
+            @called
+            (do
+              (reset! called (int- @called 1))
+              (force p)
+              (reset! called (int+ @called 2))
+              @called))))
+      (assert= 0 (force p))
+      (assert= 10 @called)
+      (assert= 0 (force p))
+      (assert= 10 @called))))

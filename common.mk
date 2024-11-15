@@ -47,6 +47,7 @@ WHISP_LIB_SRC_FILES = \
 	record.wh \
 	repl.wh \
 	startup.wh \
+	stream.wh \
 	string.wh \
 	vector.wh
 WHISP_LIB_SRCS = $(WHISP_LIB_SRC_FILES:%=$(WHISP_LIB_SRCS_DIR)/%)
