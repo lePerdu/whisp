@@ -1513,12 +1513,13 @@ struct lisp_closure *compile_top_level(struct lisp_vm *vm,
   // Create a separate VM for macro expansion since `eval_apply` cannot be
   // called in the parent VM (it is only allowed to be called at the top-level
   // execution frame).
-  // The new VM shares the global environment, so they are at least partially
-  // synchronized
+  // The new VM shares the global environment and dynamic state, so they are at
+  // least partially synchronized
   gc_push_root(ast);
 
   gc_push_root_obj(metadata);
-  struct lisp_vm *compiler_vm = vm_create(vm->global_env);
+  struct lisp_vm *compiler_vm =
+      vm_create(vm->global_env, vm_get_dynamic_state(vm));
   gc_pop_root_expect_obj(metadata);
 
   struct compiler_ctx *ctx =

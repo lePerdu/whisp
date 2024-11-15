@@ -46,6 +46,7 @@ static void vm_visit_children(struct lisp_val v, visit_callback cb, void *ctx) {
   struct lisp_vm *vm = lisp_val_as_obj(v);
 
   cb(ctx, lisp_val_from_obj(vm->global_env));
+  cb(ctx, vm->global_dynamic_state);
   for (unsigned i = 0; i < vm->call_frames.size; i++) {
     stack_frame_visit(&vm->call_frames.data[i], cb, ctx);
   }
@@ -69,10 +70,12 @@ static const struct lisp_vtable VM_VTABLE = {
     .destroy = vm_destroy,
 };
 
-struct lisp_vm *vm_create(struct lisp_env *global_env) {
+struct lisp_vm *vm_create(struct lisp_env *global_env,
+                          struct lisp_val dynamic_state) {
   gc_push_root_obj(global_env);
   struct lisp_vm *vm = lisp_obj_alloc(&VM_VTABLE, sizeof(*vm));
   vm->global_env = global_env;
+  vm->global_dynamic_state = dynamic_state;
   vm->call_frames = CALL_STACK_EMPTY;
   vm->stack = VAL_ARRAY_EMPTY;
   vm->primitive_error_handler = LISP_VAL_NIL;
@@ -150,18 +153,15 @@ void vm_stack_frame_skip_delete(struct lisp_vm *vm, unsigned skip_n,
 void vm_create_stack_frame(struct lisp_vm *vm, struct lisp_closure *func,
                            unsigned arg_count) {
   assert(arg_count <= active_frame_size(vm));
-  struct stack_frame *cur_frame = vm_current_frame(vm);
   unsigned new_fp = vm->stack.size - arg_count;
 
-  call_stack_push(
-      &vm->call_frames,
-      (struct stack_frame){
-          .frame_pointer = new_fp,
-          .func = func,
-          .instr_pointer = 0,
-          .dynamic_state =
-              cur_frame != NULL ? cur_frame->dynamic_state : LISP_VAL_NIL,
-      });
+  call_stack_push(&vm->call_frames,
+                  (struct stack_frame){
+                      .frame_pointer = new_fp,
+                      .func = func,
+                      .instr_pointer = 0,
+                      .dynamic_state = vm_get_dynamic_state(vm),
+                  });
 }
 
 void vm_replace_stack_frame(struct lisp_vm *vm, struct lisp_closure *func) {

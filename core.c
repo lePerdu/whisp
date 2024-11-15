@@ -627,7 +627,7 @@ DEF_BUILTIN(core_get_macro_fn) {
 // TODO Make these dynamic state functions bytecode instructions?
 
 DEF_BUILTIN(core_dynamic_state) {
-  BUILTIN_RETURN(vm_current_frame(vm)->dynamic_state);
+  BUILTIN_RETURN(vm_get_dynamic_state(vm));
 }
 
 DEF_BUILTIN(core_set_dynamic_state) {

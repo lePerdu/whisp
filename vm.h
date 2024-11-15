@@ -2,6 +2,7 @@
 #define VM_H_
 
 #include <stdbool.h>
+#include <time.h>
 
 #include "types.h"
 #include "val_array.h"
@@ -35,6 +36,7 @@ struct lisp_vm {
 
   // TODO Store global env as a base call frame?
   struct lisp_env *global_env;
+  struct lisp_val global_dynamic_state;
   struct call_stack call_frames;
   struct val_array stack;
 
@@ -43,7 +45,8 @@ struct lisp_vm {
   struct lisp_val current_exception;
 };
 
-struct lisp_vm *vm_create(struct lisp_env *global_env);
+struct lisp_vm *vm_create(struct lisp_env *global_env,
+                          struct lisp_val dynamic_state);
 
 static inline struct lisp_val vm_current_exception(const struct lisp_vm *vm) {
   return vm->current_exception;
@@ -117,6 +120,11 @@ void vm_stack_frame_return(struct lisp_vm *vm);
  * Return from a specified frame.
  */
 void vm_stack_frame_return_from(struct lisp_vm *vm, unsigned frame_index);
+
+static inline struct lisp_val vm_get_dynamic_state(struct lisp_vm *vm) {
+  struct stack_frame *cur = vm_current_frame(vm);
+  return cur != NULL ? cur->dynamic_state : vm->global_dynamic_state;
+}
 
 /**
  * Jump to a set exception handler and setup for running it:

@@ -75,7 +75,7 @@ static struct lisp_val create_argv_list(int argc, char *argv[]) {
 static struct lisp_vm *setup_vm(int argc, char **argv) {
   init_global_compile_state();
 
-  struct lisp_vm *vm = vm_create(lisp_env_create());
+  struct lisp_vm *vm = vm_create(lisp_env_create(), LISP_VAL_NIL);
   // Save the VM permanently
   gc_push_root_obj(vm);
 
